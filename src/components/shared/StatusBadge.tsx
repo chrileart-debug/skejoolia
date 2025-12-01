@@ -32,7 +32,7 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
 };
 
 export function StatusBadge({ status, showDot = true, className }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] || statusConfig.pending;
 
   return (
     <span
@@ -50,7 +50,8 @@ export function StatusBadge({ status, showDot = true, className }: StatusBadgePr
             status === "offline" && "bg-muted-foreground",
             status === "pending" && "bg-warning",
             status === "confirmed" && "bg-primary",
-            status === "completed" && "bg-success"
+            status === "completed" && "bg-success",
+            !statusConfig[status] && "bg-warning"
           )}
         />
       )}
