@@ -125,7 +125,7 @@ export default function Schedule() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.client || !formData.service || !formData.date || !formData.time) {
+    if (!formData.service || !formData.date || !formData.time) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
@@ -139,7 +139,7 @@ export default function Schedule() {
       .from("agendamentos")
       .insert({
         user_id: user.id,
-        nome_cliente: formData.client,
+        nome_cliente: formData.client || null,
         telefone_cliente: formData.phone || null,
         id_corte: formData.service,
         dia_do_corte: formData.date,
@@ -334,9 +334,9 @@ export default function Schedule() {
 
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <Label>Cliente *</Label>
+              <Label>Cliente</Label>
               <Input
-                placeholder="Nome do cliente"
+                placeholder="Nome do cliente (opcional)"
                 value={formData.client}
                 onChange={(e) =>
                   setFormData({ ...formData, client: e.target.value })
