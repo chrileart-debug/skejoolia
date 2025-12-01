@@ -266,6 +266,24 @@ export type Database = {
         }
         Relationships: []
       }
+      memoria: {
+        Row: {
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          id?: number
+          message?: Json
+          session_id?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
           cep: string | null
