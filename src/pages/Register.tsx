@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Scissors, Eye, EyeOff, Mail, Lock, User, Phone, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Register() {
   const navigate = useNavigate();
+  const { signUp, user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -18,25 +21,76 @@ export default function Register() {
     password: "",
   });
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      navigate("/dashboard");
+    }
+  }, [user, loading, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
 
-    // Validação simples
     if (!formData.name || !formData.phone || !formData.email || !formData.barbershopName || !formData.password) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    setIsLoading(true);
+
+    // Sign up with metadata
+    const { error } = await signUp(formData.email, formData.password, {
+      nome: formData.name,
+      numero: formData.phone,
+      nome_empresa: formData.barbershopName,
+    });
+
+    if (error) {
+      if (error.message.includes("User already registered")) {
+        toast.error("Este e-mail já está cadastrado");
+      } else {
+        toast.error(error.message);
+      }
       setIsLoading(false);
       return;
     }
 
-    // Simula cadastro
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Create user_settings record
+    const { data: { user: newUser } } = await supabase.auth.getUser();
+    
+    if (newUser) {
+      const { error: settingsError } = await supabase
+        .from("user_settings")
+        .insert({
+          user_id: newUser.id,
+          nome: formData.name,
+          numero: formData.phone,
+          email: formData.email,
+          nome_empresa: formData.barbershopName,
+        });
 
-    toast.success("Conta criada com sucesso!");
+      if (settingsError) {
+        console.error("Error creating user settings:", settingsError);
+      }
+    }
+
+    toast.success("Conta criada com sucesso! Verifique seu e-mail para confirmar.");
     navigate("/dashboard");
-
     setIsLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -131,7 +185,7 @@ export default function Register() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                   className="pl-10 pr-10 h-12"
                   value={formData.password}
                   onChange={(e) =>

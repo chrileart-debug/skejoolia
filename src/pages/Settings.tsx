@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,31 +22,90 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Settings() {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: "João Silva",
-    phone: "(11) 99999-9999",
-    company: "Barbearia do João",
-    niche: "Barbearia",
-    subNiche: "Cortes masculinos",
-    cnpj: "12.345.678/0001-90",
-    address: "Rua das Flores, 123",
-    city: "São Paulo",
-    state: "SP",
-    email: "joao@barbearia.com",
+    name: "",
+    phone: "",
+    company: "",
+    niche: "",
+    subNiche: "",
+    cnpj: "",
+    address: "",
+    city: "",
+    state: "",
+    email: "",
   });
 
+  // Load user settings
+  useEffect(() => {
+    if (user) {
+      loadUserSettings();
+    }
+  }, [user]);
+
+  const loadUserSettings = async () => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (data) {
+      setFormData({
+        name: data.nome || "",
+        phone: data.numero || "",
+        company: data.nome_empresa || "",
+        niche: data.nicho || "",
+        subNiche: data.subnicho || "",
+        cnpj: data.cnpj || "",
+        address: data.endereco || "",
+        city: data.cidade || "",
+        state: data.estado || "",
+        email: data.email || user.email || "",
+      });
+    } else {
+      setFormData(prev => ({ ...prev, email: user.email || "" }));
+    }
+  };
+
   const handleSave = async () => {
+    if (!user) return;
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast.success("Configurações salvas com sucesso");
+
+    const { error } = await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: user.id,
+        nome: formData.name,
+        numero: formData.phone,
+        nome_empresa: formData.company,
+        nicho: formData.niche,
+        subnicho: formData.subNiche,
+        cnpj: formData.cnpj,
+        endereco: formData.address,
+        cidade: formData.city,
+        estado: formData.state,
+        email: formData.email,
+      });
+
+    if (error) {
+      toast.error("Erro ao salvar configurações");
+    } else {
+      toast.success("Configurações salvas com sucesso");
+    }
     setIsLoading(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     toast.success("Logout realizado");
     navigate("/");
   };
