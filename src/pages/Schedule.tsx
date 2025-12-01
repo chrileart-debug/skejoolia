@@ -135,7 +135,50 @@ export default function Schedule() {
       return;
     }
 
-    const { data, error } = await supabase
+    let clientId: string | null = null;
+
+    // Se tiver nome do cliente, busca ou cria automaticamente na tabela clientes
+    if (formData.client) {
+      // Primeiro, busca cliente existente por nome e telefone
+      const { data: existingClient } = await supabase
+        .from("clientes")
+        .select("client_id")
+        .eq("user_id", user.id)
+        .eq("nome", formData.client)
+        .maybeSingle();
+
+      if (existingClient) {
+        clientId = existingClient.client_id;
+        
+        // Atualiza telefone se fornecido
+        if (formData.phone) {
+          await supabase
+            .from("clientes")
+            .update({ telefone: formData.phone })
+            .eq("client_id", clientId);
+        }
+      } else {
+        // Cria novo cliente automaticamente
+        const { data: newClient, error: clientError } = await supabase
+          .from("clientes")
+          .insert({
+            user_id: user.id,
+            nome: formData.client,
+            telefone: formData.phone || null,
+          })
+          .select("client_id")
+          .single();
+
+        if (clientError) {
+          console.error("Error creating client:", clientError);
+          toast.error("Erro ao criar cliente");
+          return;
+        }
+        clientId = newClient.client_id;
+      }
+    }
+
+    const { error } = await supabase
       .from("agendamentos")
       .insert({
         user_id: user.id,
@@ -145,9 +188,8 @@ export default function Schedule() {
         dia_do_corte: formData.date,
         horario_corte: formData.time,
         status: "pending",
-      })
-      .select()
-      .single();
+        client_id: clientId,
+      });
 
     if (error) {
       console.error("Error creating appointment:", error);
