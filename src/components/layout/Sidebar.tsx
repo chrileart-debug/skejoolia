@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Bot,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
@@ -30,6 +30,13 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <aside
@@ -82,7 +89,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             "w-full justify-start text-muted-foreground hover:text-destructive",
             collapsed && "justify-center px-2"
           )}
-          onClick={() => window.location.href = "/"}
+          onClick={handleLogout}
         >
           <LogOut className="w-5 h-5" />
           {!collapsed && <span className="ml-3">Sair</span>}

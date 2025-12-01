@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Scissors, Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { signIn, user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -15,22 +17,49 @@ export default function Login() {
     password: "",
   });
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      navigate("/dashboard");
+    }
+  }, [user, loading, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    // Simula autenticação
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    if (formData.email && formData.password) {
-      toast.success("Login realizado com sucesso!");
-      navigate("/dashboard");
-    } else {
+    
+    if (!formData.email || !formData.password) {
       toast.error("Preencha todos os campos");
+      return;
     }
 
+    setIsLoading(true);
+
+    const { error } = await signIn(formData.email, formData.password);
+
+    if (error) {
+      if (error.message.includes("Invalid login credentials")) {
+        toast.error("E-mail ou senha incorretos");
+      } else if (error.message.includes("Email not confirmed")) {
+        toast.error("Confirme seu e-mail antes de fazer login");
+      } else {
+        toast.error(error.message);
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    toast.success("Login realizado com sucesso!");
+    navigate("/dashboard");
     setIsLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -93,22 +122,6 @@ export default function Login() {
                   )}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-input accent-primary"
-                />
-                <span className="text-muted-foreground">Lembrar de mim</span>
-              </label>
-              <Link
-                to="/forgot-password"
-                className="text-sm text-primary hover:underline"
-              >
-                Esqueceu a senha?
-              </Link>
             </div>
 
             <Button
