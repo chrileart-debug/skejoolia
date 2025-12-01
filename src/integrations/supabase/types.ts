@@ -143,7 +143,7 @@ export type Database = {
           created_at: string
           faturamento_total: number | null
           id_agente: string | null
-          nome: string
+          nome: string | null
           telefone: string | null
           total_cortes: number | null
           updated_at: string
@@ -154,7 +154,7 @@ export type Database = {
           created_at?: string
           faturamento_total?: number | null
           id_agente?: string | null
-          nome: string
+          nome?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
@@ -165,7 +165,7 @@ export type Database = {
           created_at?: string
           faturamento_total?: number | null
           id_agente?: string | null
-          nome?: string
+          nome?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
