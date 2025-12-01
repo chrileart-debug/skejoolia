@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -13,8 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon } from "lucide-react";
+import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Service {
   id: string;
@@ -25,51 +27,52 @@ interface Service {
   agentEnabled: boolean;
 }
 
-const mockServices: Service[] = [
-  {
-    id: "1",
-    name: "Corte Degradê",
-    description: "Corte moderno com degradê nas laterais",
-    price: 45,
-    image: null,
-    agentEnabled: true,
-  },
-  {
-    id: "2",
-    name: "Barba Completa",
-    description: "Modelagem e hidratação da barba",
-    price: 35,
-    image: null,
-    agentEnabled: true,
-  },
-  {
-    id: "3",
-    name: "Corte + Barba",
-    description: "Combo completo de corte e barba",
-    price: 70,
-    image: null,
-    agentEnabled: true,
-  },
-  {
-    id: "4",
-    name: "Barba Lenhador",
-    description: "Barba volumosa com aparação especial",
-    price: 50,
-    image: null,
-    agentEnabled: false,
-  },
-];
-
 export default function Services() {
-  const [services, setServices] = useState<Service[]>(mockServices);
+  const { user } = useAuth();
+  const [services, setServices] = useState<Service[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     price: "",
     agentEnabled: true,
   });
+
+  useEffect(() => {
+    if (user) {
+      fetchServices();
+    }
+  }, [user]);
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("cortes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const mappedServices: Service[] = (data || []).map((item) => ({
+        id: item.id_corte,
+        name: item.nome_corte,
+        description: item.descricao || "",
+        price: Number(item.preco_corte),
+        image: item.image_corte,
+        agentEnabled: item.agente_pode_usar ?? true,
+      }));
+
+      setServices(mappedServices);
+    } catch (error) {
+      console.error("Erro ao carregar serviços:", error);
+      toast.error("Erro ao carregar serviços");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -97,56 +100,123 @@ export default function Services() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setServices(services.filter((s) => s.id !== id));
-    toast.success("Serviço removido com sucesso");
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("cortes")
+        .delete()
+        .eq("id_corte", id);
+
+      if (error) throw error;
+
+      setServices(services.filter((s) => s.id !== id));
+      toast.success("Serviço removido com sucesso");
+    } catch (error) {
+      console.error("Erro ao remover serviço:", error);
+      toast.error("Erro ao remover serviço");
+    }
   };
 
-  const handleToggleAgent = (id: string) => {
-    setServices(
-      services.map((s) =>
-        s.id === id ? { ...s, agentEnabled: !s.agentEnabled } : s
-      )
-    );
-    toast.success("Configuração atualizada");
+  const handleToggleAgent = async (id: string) => {
+    const service = services.find((s) => s.id === id);
+    if (!service) return;
+
+    try {
+      const { error } = await supabase
+        .from("cortes")
+        .update({ agente_pode_usar: !service.agentEnabled })
+        .eq("id_corte", id);
+
+      if (error) throw error;
+
+      setServices(
+        services.map((s) =>
+          s.id === id ? { ...s, agentEnabled: !s.agentEnabled } : s
+        )
+      );
+      toast.success("Configuração atualizada");
+    } catch (error) {
+      console.error("Erro ao atualizar configuração:", error);
+      toast.error("Erro ao atualizar configuração");
+    }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.price) {
       toast.error("Preencha os campos obrigatórios");
       return;
     }
 
-    if (editingService) {
-      setServices(
-        services.map((s) =>
-          s.id === editingService.id
-            ? {
-                ...s,
-                name: formData.name,
-                description: formData.description,
-                price: parseFloat(formData.price),
-                agentEnabled: formData.agentEnabled,
-              }
-            : s
-        )
-      );
-      toast.success("Serviço atualizado com sucesso");
-    } else {
-      const newService: Service = {
-        id: Date.now().toString(),
-        name: formData.name,
-        description: formData.description,
-        price: parseFloat(formData.price),
-        image: null,
-        agentEnabled: formData.agentEnabled,
-      };
-      setServices([...services, newService]);
-      toast.success("Serviço criado com sucesso");
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
     }
 
-    setIsDialogOpen(false);
-    resetForm();
+    setIsSaving(true);
+
+    try {
+      if (editingService) {
+        const { error } = await supabase
+          .from("cortes")
+          .update({
+            nome_corte: formData.name,
+            descricao: formData.description,
+            preco_corte: parseFloat(formData.price),
+            agente_pode_usar: formData.agentEnabled,
+          })
+          .eq("id_corte", editingService.id);
+
+        if (error) throw error;
+
+        setServices(
+          services.map((s) =>
+            s.id === editingService.id
+              ? {
+                  ...s,
+                  name: formData.name,
+                  description: formData.description,
+                  price: parseFloat(formData.price),
+                  agentEnabled: formData.agentEnabled,
+                }
+              : s
+          )
+        );
+        toast.success("Serviço atualizado com sucesso");
+      } else {
+        const { data, error } = await supabase
+          .from("cortes")
+          .insert({
+            user_id: user.id,
+            nome_corte: formData.name,
+            descricao: formData.description,
+            preco_corte: parseFloat(formData.price),
+            agente_pode_usar: formData.agentEnabled,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const newService: Service = {
+          id: data.id_corte,
+          name: data.nome_corte,
+          description: data.descricao || "",
+          price: Number(data.preco_corte),
+          image: data.image_corte,
+          agentEnabled: data.agente_pode_usar ?? true,
+        };
+        setServices([newService, ...services]);
+        toast.success("Serviço criado com sucesso");
+      }
+
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Erro ao salvar serviço:", error);
+      toast.error("Erro ao salvar serviço");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatPrice = (value: string) => {
@@ -154,6 +224,17 @@ export default function Services() {
     const floatValue = parseFloat(numericValue) / 100;
     return floatValue.toFixed(2);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Header title="Serviços" subtitle="Gerencie os cortes e serviços" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -329,11 +410,18 @@ export default function Services() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => setIsDialogOpen(false)}
+                disabled={isSaving}
               >
                 Cancelar
               </Button>
-              <Button className="flex-1" onClick={handleSubmit}>
-                {editingService ? "Salvar" : "Adicionar"}
+              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : editingService ? (
+                  "Salvar"
+                ) : (
+                  "Adicionar"
+                )}
               </Button>
             </div>
           </div>
