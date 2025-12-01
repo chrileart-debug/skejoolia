@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -30,79 +30,87 @@ import {
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Appointment {
-  id: string;
-  client: string;
-  service: string;
-  date: string;
-  time: string;
-  status: "pending" | "confirmed" | "completed";
+  id_agendamento: string;
+  nome_cliente: string | null;
+  telefone_cliente: string | null;
+  dia_do_corte: string;
+  horario_corte: string;
+  status: string | null;
+  id_corte: string | null;
+  client_id: string | null;
 }
 
-const mockAppointments: Appointment[] = [
-  {
-    id: "1",
-    client: "Carlos Silva",
-    service: "Corte + Barba",
-    date: "2024-01-15",
-    time: "09:00",
-    status: "confirmed",
-  },
-  {
-    id: "2",
-    client: "Pedro Santos",
-    service: "Corte Degradê",
-    date: "2024-01-15",
-    time: "10:00",
-    status: "pending",
-  },
-  {
-    id: "3",
-    client: "Lucas Oliveira",
-    service: "Barba Completa",
-    date: "2024-01-15",
-    time: "11:00",
-    status: "confirmed",
-  },
-  {
-    id: "4",
-    client: "Marcos Souza",
-    service: "Corte Degradê",
-    date: "2024-01-15",
-    time: "14:00",
-    status: "completed",
-  },
-  {
-    id: "5",
-    client: "João Pereira",
-    service: "Corte + Barba",
-    date: "2024-01-15",
-    time: "15:30",
-    status: "confirmed",
-  },
-];
-
-const services = [
-  "Corte Degradê",
-  "Barba Completa",
-  "Corte + Barba",
-  "Barba Lenhador",
-];
+interface Corte {
+  id_corte: string;
+  nome_corte: string;
+}
 
 export default function Schedule() {
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const { user } = useAuth();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Corte[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     client: "",
+    phone: "",
     service: "",
     date: "",
     time: "",
   });
 
   const bookingLink = "barber.app/agendar/barbearia-do-ze";
+
+  // Fetch appointments from Supabase
+  const fetchAppointments = async () => {
+    if (!user) return;
+
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("dia_do_corte", dateStr)
+      .order("horario_corte", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching appointments:", error);
+      toast.error("Erro ao carregar agendamentos");
+    } else {
+      setAppointments(data || []);
+    }
+    setLoading(false);
+  };
+
+  // Fetch services from Supabase
+  const fetchServices = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("cortes")
+      .select("id_corte, nome_corte")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Error fetching services:", error);
+    } else {
+      setServices(data || []);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchAppointments();
+      fetchServices();
+    }
+  }, [user, selectedDate]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(`https://${bookingLink}`);
@@ -112,31 +120,60 @@ export default function Schedule() {
   };
 
   const handleCreate = () => {
-    setFormData({ client: "", service: "", date: "", time: "" });
+    setFormData({ client: "", phone: "", service: "", date: "", time: "" });
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.client || !formData.service || !formData.date || !formData.time) {
-      toast.error("Preencha todos os campos");
+      toast.error("Preencha todos os campos obrigatórios");
       return;
     }
 
-    const newAppointment: Appointment = {
-      id: Date.now().toString(),
-      ...formData,
-      status: "pending",
-    };
-    setAppointments([...appointments, newAppointment]);
-    toast.success("Agendamento criado com sucesso");
-    setIsDialogOpen(false);
+    if (!user) {
+      toast.error("Você precisa estar logado");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("agendamentos")
+      .insert({
+        user_id: user.id,
+        nome_cliente: formData.client,
+        telefone_cliente: formData.phone || null,
+        id_corte: formData.service,
+        dia_do_corte: formData.date,
+        horario_corte: formData.time,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating appointment:", error);
+      toast.error("Erro ao criar agendamento");
+    } else {
+      toast.success("Agendamento criado com sucesso");
+      setIsDialogOpen(false);
+      fetchAppointments();
+    }
   };
 
-  const handleStatusChange = (id: string, status: Appointment["status"]) => {
-    setAppointments(
-      appointments.map((a) => (a.id === id ? { ...a, status } : a))
-    );
-    toast.success("Status atualizado");
+  const handleStatusChange = async (id: string, status: string) => {
+    const { error } = await supabase
+      .from("agendamentos")
+      .update({ status })
+      .eq("id_agendamento", id);
+
+    if (error) {
+      console.error("Error updating status:", error);
+      toast.error("Erro ao atualizar status");
+    } else {
+      setAppointments(
+        appointments.map((a) => (a.id_agendamento === id ? { ...a, status } : a))
+      );
+      toast.success("Status atualizado");
+    }
   };
 
   const formatDate = (date: Date) => {
@@ -151,6 +188,12 @@ export default function Schedule() {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + (direction === "next" ? 1 : -1));
     setSelectedDate(newDate);
+  };
+
+  const getServiceName = (id_corte: string | null) => {
+    if (!id_corte) return "Serviço não definido";
+    const service = services.find((s) => s.id_corte === id_corte);
+    return service?.nome_corte || "Serviço não encontrado";
   };
 
   return (
@@ -210,7 +253,12 @@ export default function Schedule() {
 
         {/* Appointments List */}
         <div className="space-y-3">
-          {appointments.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Carregando...</p>
+            </div>
+          ) : appointments.length === 0 ? (
             <div className="text-center py-12">
               <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
@@ -220,7 +268,7 @@ export default function Schedule() {
           ) : (
             appointments.map((appointment, index) => (
               <div
-                key={appointment.id}
+                key={appointment.id_agendamento}
                 className="bg-card rounded-2xl shadow-card p-4 hover:shadow-card-hover transition-all duration-300 animate-slide-up"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
@@ -229,7 +277,7 @@ export default function Schedule() {
                     {/* Time */}
                     <div className="text-center min-w-[60px]">
                       <p className="text-lg font-bold text-foreground">
-                        {appointment.time}
+                        {appointment.horario_corte?.slice(0, 5)}
                       </p>
                     </div>
 
@@ -243,10 +291,10 @@ export default function Schedule() {
                       </div>
                       <div>
                         <p className="font-medium text-foreground">
-                          {appointment.client}
+                          {appointment.nome_cliente || "Cliente não informado"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {appointment.service}
+                          {getServiceName(appointment.id_corte)}
                         </p>
                       </div>
                     </div>
@@ -254,16 +302,13 @@ export default function Schedule() {
 
                   {/* Status */}
                   <Select
-                    value={appointment.status}
+                    value={appointment.status || "pending"}
                     onValueChange={(value) =>
-                      handleStatusChange(
-                        appointment.id,
-                        value as Appointment["status"]
-                      )
+                      handleStatusChange(appointment.id_agendamento, value)
                     }
                   >
                     <SelectTrigger className="w-auto border-0 bg-transparent p-0 h-auto">
-                      <StatusBadge status={appointment.status} />
+                      <StatusBadge status={appointment.status as "pending" | "confirmed" | "completed" || "pending"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pendente</SelectItem>
@@ -300,6 +345,17 @@ export default function Schedule() {
             </div>
 
             <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="Telefone do cliente"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>Serviço *</Label>
               <Select
                 value={formData.service}
@@ -312,8 +368,8 @@ export default function Schedule() {
                 </SelectTrigger>
                 <SelectContent>
                   {services.map((service) => (
-                    <SelectItem key={service} value={service}>
-                      {service}
+                    <SelectItem key={service.id_corte} value={service.id_corte}>
+                      {service.nome_corte}
                     </SelectItem>
                   ))}
                 </SelectContent>
