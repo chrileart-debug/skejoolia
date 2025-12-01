@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -27,9 +27,18 @@ import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode } fr
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { z } from "zod";
 
 const WEBHOOK_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp";
 const POLLING_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp_status";
+const MAX_INTEGRATIONS = 3;
+const QR_TIMEOUT_MS = 120000; // 2 minutes
+
+// Validation schema
+const integrationSchema = z.object({
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  numero: z.string().min(10, "Número deve ter pelo menos 10 dígitos"),
+});
 
 interface Integration {
   id: string;
@@ -38,10 +47,124 @@ interface Integration {
   numero: string;
   email: string | null;
   instancia: string | null;
+  instance_id: string | null;
   status: string | null;
+  vinculado_em: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// Format phone number in Brazilian format: 55 11 99999-9999
+const formatPhoneNumber = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
+  
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)} ${digits.slice(2)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
+  
+  return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 9)}-${digits.slice(9, 13)}`;
+};
+
+// Remove formatting from phone number
+const sanitizePhoneNumber = (value: string): string => {
+  return value.replace(/\D/g, "");
+};
+
+// Generate instance name: {email_prefix}_{sanitized_number}
+const generateInstanciaName = (email: string, numero: string): string => {
+  const emailPrefix = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cleanNumero = sanitizePhoneNumber(numero);
+  return `${emailPrefix}_${cleanNumero}`;
+};
+
+// Extract QR code from various response formats
+const extractQRCode = (data: any): string | null => {
+  // If it's a string starting with data:image
+  if (typeof data === "string" && data.startsWith("data:image")) {
+    return data;
+  }
+  
+  // If it's a pure base64 string
+  if (typeof data === "string" && data.length > 100) {
+    return `data:image/png;base64,${data}`;
+  }
+  
+  // If it's an array, get first element
+  if (Array.isArray(data) && data.length > 0) {
+    const first = data[0];
+    if (first.qrcode) {
+      return first.qrcode.startsWith("data:") ? first.qrcode : `data:image/png;base64,${first.qrcode}`;
+    }
+    if (first.base64) {
+      return first.base64.startsWith("data:") ? first.base64 : `data:image/png;base64,${first.base64}`;
+    }
+  }
+  
+  // If it's an object with qrcode or base64 field
+  if (data && typeof data === "object") {
+    if (data.qrcode) {
+      return data.qrcode.startsWith("data:") ? data.qrcode : `data:image/png;base64,${data.qrcode}`;
+    }
+    if (data.base64) {
+      return data.base64.startsWith("data:") ? data.base64 : `data:image/png;base64,${data.base64}`;
+    }
+    if (data.qr_code) {
+      return data.qr_code.startsWith("data:") ? data.qr_code : `data:image/png;base64,${data.qr_code}`;
+    }
+  }
+  
+  return null;
+};
+
+// Extract instance data from n8n response
+const extractInstanceData = (data: any): { instanceId: string | null; instanceName: string | null } => {
+  // If it's a string, use it as instanceName
+  if (typeof data === "string") {
+    return { instanceId: null, instanceName: data };
+  }
+  
+  // If it's an array, get first element
+  if (Array.isArray(data) && data.length > 0) {
+    const first = data[0];
+    return {
+      instanceId: first.instance?.instanceId || first.instanceId || null,
+      instanceName: first.instance?.instanceName || first.instanceName || null,
+    };
+  }
+  
+  // If it's an object
+  if (data && typeof data === "object") {
+    return {
+      instanceId: data.instance?.instanceId || data.instanceId || null,
+      instanceName: data.instance?.instanceName || data.instanceName || null,
+    };
+  }
+  
+  return { instanceId: null, instanceName: null };
+};
+
+// Check connection status from response
+const isConnected = (data: any): boolean => {
+  // String response
+  if (typeof data === "string") {
+    return data.toLowerCase() === "open" || data.toLowerCase() === "connected";
+  }
+  
+  // Array response
+  if (Array.isArray(data) && data.length > 0) {
+    const first = data[0];
+    const state = first.state || first.instance?.state || first.status;
+    return state === "open" || state === "connected";
+  }
+  
+  // Object response
+  if (data && typeof data === "object") {
+    const state = data.state || data.instance?.state || data.status;
+    return state === "open" || state === "connected";
+  }
+  
+  return false;
+};
 
 export default function Integrations() {
   const { user } = useAuth();
@@ -56,8 +179,12 @@ export default function Integrations() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [countdown, setCountdown] = useState(120);
+  const [formErrors, setFormErrors] = useState<{ nome?: string; numero?: string }>({});
+  
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingCountRef = useRef(0);
+  const pollingStartTimeRef = useRef<number>(0);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   
   const [formData, setFormData] = useState({
     nome: "",
@@ -65,7 +192,7 @@ export default function Integrations() {
   });
 
   // Fetch integrations from Supabase
-  const fetchIntegrations = async () => {
+  const fetchIntegrations = useCallback(async () => {
     if (!user) return;
     
     const { data, error } = await supabase
@@ -80,62 +207,120 @@ export default function Integrations() {
       setIntegrations(data || []);
     }
     setIsLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchIntegrations();
-  }, [user]);
+  }, [fetchIntegrations]);
 
-  // Cleanup polling on unmount
+  // Listen for whatsapp:updated events
+  useEffect(() => {
+    const handleUpdate = () => fetchIntegrations();
+    window.addEventListener("whatsapp:updated", handleUpdate);
+    return () => window.removeEventListener("whatsapp:updated", handleUpdate);
+  }, [fetchIntegrations]);
+
+  // Cleanup polling and countdown on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
+      if (pollingRef.current) clearTimeout(pollingRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
 
-  const generateInstanciaName = (nome: string, numero: string, email: string) => {
-    const cleanNome = nome.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const cleanNumero = numero.replace(/\D/g, "");
-    const cleanEmail = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-    return `${cleanNome}-${cleanNumero}-${cleanEmail}`;
-  };
-
   const resetForm = () => {
     setFormData({ nome: "", numero: "" });
+    setFormErrors({});
   };
 
   const handleCreate = () => {
+    // Check limit
+    if (integrations.length >= MAX_INTEGRATIONS) {
+      toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
+      return;
+    }
     resetForm();
     setIsCreateDialogOpen(true);
   };
 
+  const handlePhoneChange = (value: string) => {
+    const formatted = formatPhoneNumber(value);
+    setFormData({ ...formData, numero: formatted });
+    setFormErrors({ ...formErrors, numero: undefined });
+  };
+
+  const validateForm = (): boolean => {
+    const cleanNumero = sanitizePhoneNumber(formData.numero);
+    const result = integrationSchema.safeParse({
+      nome: formData.nome,
+      numero: cleanNumero,
+    });
+
+    if (!result.success) {
+      const errors: { nome?: string; numero?: string } = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0] === "nome") errors.nome = err.message;
+        if (err.path[0] === "numero") errors.numero = err.message;
+      });
+      setFormErrors(errors);
+      return false;
+    }
+    return true;
+  };
+
   // 1. Create Integration
   const handleSubmitCreate = async () => {
-    if (!formData.nome || !formData.numero) {
-      toast.error("Preencha todos os campos");
-      return;
-    }
-
+    if (!validateForm()) return;
+    
     if (!user?.email) {
       toast.error("Usuário não autenticado");
       return;
     }
 
+    // Check limit again
+    if (integrations.length >= MAX_INTEGRATIONS) {
+      toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
+      return;
+    }
+
     setIsCreating(true);
-    const instancia = generateInstanciaName(formData.nome, formData.numero, user.email);
+    const cleanNumero = sanitizePhoneNumber(formData.numero);
+    let instancia = generateInstanciaName(user.email, cleanNumero);
+    
+    // Check if instance name already exists, add timestamp if needed
+    const existing = integrations.find((i) => i.instancia === instancia);
+    if (existing) {
+      instancia = `${instancia}_${Date.now()}`;
+    }
 
     try {
-      // Insert into Supabase first
+      // Call n8n webhook first to create instance
+      const response = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "whatsapp.integration.create",
+          instancia: instancia,
+        }),
+      });
+
+      const webhookData = await response.json();
+      console.log("Webhook create response:", webhookData);
+      
+      // Extract instance data from response
+      const { instanceId, instanceName } = extractInstanceData(webhookData);
+      const finalInstancia = instanceName || instancia;
+      
+      // Insert into Supabase
       const { data: insertedData, error: insertError } = await supabase
         .from("integracao_whatsapp")
         .insert({
           user_id: user.id,
           nome: formData.nome,
-          numero: formData.numero,
+          numero: cleanNumero,
           email: user.email,
-          instancia: instancia,
+          instancia: finalInstancia,
+          instance_id: instanceId,
           status: "pendente",
         })
         .select()
@@ -143,29 +328,11 @@ export default function Integrations() {
 
       if (insertError) throw insertError;
 
-      // Send webhook to create instance
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "whatsapp.integration.create",
-          id_integracao: insertedData.id,
-          user_id: user.id,
-          instancia: instancia,
-        }),
-      });
-
-      const webhookData = await response.json();
-      console.log("Webhook create response:", webhookData);
-
-      if (webhookData.success) {
-        toast.success("Integração criada com sucesso");
-        fetchIntegrations();
-      } else {
-        // If webhook fails, delete the record
-        await supabase.from("integracao_whatsapp").delete().eq("id", insertedData.id);
-        throw new Error(webhookData.message || "Erro ao criar instância");
-      }
+      // Dispatch global event
+      window.dispatchEvent(new CustomEvent("whatsapp:updated"));
+      
+      toast.success("Integração criada com sucesso");
+      fetchIntegrations();
     } catch (error: any) {
       console.error("Error creating integration:", error);
       toast.error(error.message || "Erro ao criar integração");
@@ -181,17 +348,22 @@ export default function Integrations() {
     setSelectedIntegration(integration);
     setIsConnecting(true);
     setQrCodeData(null);
+    setCountdown(120);
     setIsQRDialogOpen(true);
-    pollingCountRef.current = 0;
+    pollingStartTimeRef.current = Date.now();
 
     try {
+      // Update status to "conectando"
+      await supabase
+        .from("integracao_whatsapp")
+        .update({ status: "conectando" })
+        .eq("id", integration.id);
+
       const response = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event: "whatsapp.integration.connect",
-          id_integracao: integration.id,
-          user_id: user?.id,
           instancia: integration.instancia,
         }),
       });
@@ -199,19 +371,14 @@ export default function Integrations() {
       const data = await response.json();
       console.log("Webhook connect response:", data);
 
-      if (data.success && data.qr_code) {
-        setQrCodeData(data.qr_code);
-        
-        // Update status to "conectando"
-        await supabase
-          .from("integracao_whatsapp")
-          .update({ status: "conectando" })
-          .eq("id", integration.id);
-
-        // Start polling
-        startPolling(integration);
+      const qrCode = extractQRCode(data);
+      
+      if (qrCode) {
+        setQrCodeData(qrCode);
+        startCountdown();
+        startSmartPolling(integration);
       } else {
-        throw new Error(data.message || "Erro ao gerar QR Code");
+        throw new Error("QR Code não recebido");
       }
     } catch (error: any) {
       console.error("Error connecting:", error);
@@ -222,21 +389,41 @@ export default function Integrations() {
     }
   };
 
-  // 3. Polling for connection status
-  const startPolling = (integration: Integration) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
+  // Start countdown timer
+  const startCountdown = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-    pollingRef.current = setInterval(async () => {
-      pollingCountRef.current += 1;
+  // 3. Smart Polling with 3 phases
+  const startSmartPolling = (integration: Integration) => {
+    if (pollingRef.current) clearTimeout(pollingRef.current);
+
+    const poll = async () => {
+      const elapsed = Date.now() - pollingStartTimeRef.current;
       
-      // Stop after ~2 minutes (4 polls at 30s each)
-      if (pollingCountRef.current > 4) {
-        clearInterval(pollingRef.current!);
+      // Stop after 2 minutes
+      if (elapsed >= QR_TIMEOUT_MS) {
+        clearTimeout(pollingRef.current!);
         pollingRef.current = null;
+        
+        await supabase
+          .from("integracao_whatsapp")
+          .update({ status: "desconectado" })
+          .eq("id", integration.id);
+        
         toast.error("Tempo esgotado. Tente conectar novamente.");
         setIsQRDialogOpen(false);
+        fetchIntegrations();
         return;
       }
 
@@ -245,8 +432,6 @@ export default function Integrations() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            id_integracao: integration.id,
-            user_id: user?.id,
             instancia: integration.instancia,
           }),
         });
@@ -254,9 +439,10 @@ export default function Integrations() {
         const data = await response.json();
         console.log("Polling response:", data);
 
-        if (data.success && data.status === "conectado") {
-          clearInterval(pollingRef.current!);
+        if (isConnected(data)) {
+          clearTimeout(pollingRef.current!);
           pollingRef.current = null;
+          if (countdownRef.current) clearInterval(countdownRef.current);
           
           // Update status in Supabase
           await supabase
@@ -264,14 +450,34 @@ export default function Integrations() {
             .update({ status: "conectado" })
             .eq("id", integration.id);
 
+          window.dispatchEvent(new CustomEvent("whatsapp:updated"));
           toast.success("WhatsApp conectado com sucesso!");
           setIsQRDialogOpen(false);
           fetchIntegrations();
+          return;
         }
       } catch (error) {
         console.error("Polling error:", error);
       }
-    }, 30000); // 30 seconds
+
+      // Determine next polling interval based on elapsed time
+      let nextInterval: number;
+      if (elapsed < 10000) {
+        // Phase 1: 0-10s, poll every 2s
+        nextInterval = 2000;
+      } else if (elapsed < 30000) {
+        // Phase 2: 10-30s, poll every 3s
+        nextInterval = 3000;
+      } else {
+        // Phase 3: 30s+, poll every 2s
+        nextInterval = 2000;
+      }
+
+      pollingRef.current = setTimeout(poll, nextInterval);
+    };
+
+    // Start first poll after 2 seconds
+    pollingRef.current = setTimeout(poll, 2000);
   };
 
   // 4. Disconnect
@@ -279,19 +485,14 @@ export default function Integrations() {
     setIsDisconnecting(true);
 
     try {
-      const response = await fetch(WEBHOOK_URL, {
+      await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event: "whatsapp.integration.disconnect",
-          id_integracao: integration.id,
-          user_id: user?.id,
           instancia: integration.instancia,
         }),
       });
-
-      const data = await response.json();
-      console.log("Webhook disconnect response:", data);
 
       // Update status in Supabase
       await supabase
@@ -299,6 +500,7 @@ export default function Integrations() {
         .update({ status: "desconectado" })
         .eq("id", integration.id);
 
+      window.dispatchEvent(new CustomEvent("whatsapp:updated"));
       toast.success("WhatsApp desconectado");
       fetchIntegrations();
     } catch (error: any) {
@@ -310,7 +512,18 @@ export default function Integrations() {
   };
 
   // 5. Delete
-  const handleDeleteClick = (integration: Integration) => {
+  const handleDeleteClick = async (integration: Integration) => {
+    // Check if integration is being used by any agent
+    const { data: agents } = await supabase
+      .from("agentes")
+      .select("id_agente")
+      .eq("whatsapp_id", integration.id);
+
+    if (agents && agents.length > 0) {
+      toast.error("Esta integração está vinculada a um agente. Desvincule primeiro.");
+      return;
+    }
+
     setSelectedIntegration(integration);
     setIsDeleteDialogOpen(true);
   };
@@ -322,18 +535,14 @@ export default function Integrations() {
 
     try {
       // Send webhook to delete instance
-      const response = await fetch(WEBHOOK_URL, {
+      await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event: "whatsapp.integration.delete",
-          id_integracao: selectedIntegration.id,
           instancia: selectedIntegration.instancia,
         }),
       });
-
-      const data = await response.json();
-      console.log("Webhook delete response:", data);
 
       // Delete from Supabase
       const { error } = await supabase
@@ -343,6 +552,7 @@ export default function Integrations() {
 
       if (error) throw error;
 
+      window.dispatchEvent(new CustomEvent("whatsapp:updated"));
       toast.success("Integração excluída com sucesso");
       fetchIntegrations();
     } catch (error: any) {
@@ -357,12 +567,17 @@ export default function Integrations() {
 
   const handleCloseQRDialog = () => {
     if (pollingRef.current) {
-      clearInterval(pollingRef.current);
+      clearTimeout(pollingRef.current);
       pollingRef.current = null;
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
     }
     setIsQRDialogOpen(false);
     setQrCodeData(null);
     setSelectedIntegration(null);
+    setCountdown(120);
   };
 
   const getStatusForBadge = (status: string | null): "online" | "offline" | "pending" => {
@@ -379,6 +594,12 @@ export default function Integrations() {
       case "desconectado": return "Desconectado";
       default: return "Offline";
     }
+  };
+
+  const formatCountdown = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   if (isLoading) {
@@ -443,7 +664,7 @@ export default function Integrations() {
                       </h3>
                       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <Phone className="w-3.5 h-3.5" />
-                        {integration.numero}
+                        {formatPhoneNumber(integration.numero)}
                       </div>
                     </div>
                   </div>
@@ -495,7 +716,7 @@ export default function Integrations() {
         )}
       </div>
 
-      {integrations.length > 0 && (
+      {integrations.length > 0 && integrations.length < MAX_INTEGRATIONS && (
         <FAB onClick={handleCreate} label="Nova Integração" />
       )}
 
@@ -515,24 +736,30 @@ export default function Integrations() {
               <Input
                 placeholder="Ex: WhatsApp Principal"
                 value={formData.nome}
-                onChange={(e) =>
-                  setFormData({ ...formData, nome: e.target.value })
-                }
+                onChange={(e) => {
+                  setFormData({ ...formData, nome: e.target.value });
+                  setFormErrors({ ...formErrors, nome: undefined });
+                }}
               />
+              {formErrors.nome && (
+                <p className="text-xs text-destructive">{formErrors.nome}</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label>Número do WhatsApp *</Label>
               <Input
-                placeholder="5511999999999"
+                placeholder="55 11 99999-9999"
                 value={formData.numero}
-                onChange={(e) =>
-                  setFormData({ ...formData, numero: e.target.value })
-                }
+                onChange={(e) => handlePhoneChange(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Apenas números, com código do país (ex: 5511999999999)
-              </p>
+              {formErrors.numero ? (
+                <p className="text-xs text-destructive">{formErrors.numero}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Com código do país (ex: 55 11 99999-9999)
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -595,8 +822,11 @@ export default function Integrations() {
                   <p className="text-sm text-muted-foreground">
                     Aguardando conexão...
                   </p>
+                  <p className="text-lg font-semibold text-primary mt-2">
+                    {formatCountdown(countdown)}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    O QR Code expira em 2 minutos
+                    Tempo restante
                   </p>
                 </div>
                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
