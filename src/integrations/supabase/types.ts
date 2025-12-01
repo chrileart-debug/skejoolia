@@ -14,7 +14,289 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agendamentos: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          dia_do_corte: string
+          horario_corte: string
+          id_agendamento: string
+          id_corte: string | null
+          nome_cliente: string | null
+          status: string | null
+          telefone_cliente: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          dia_do_corte: string
+          horario_corte: string
+          id_agendamento?: string
+          id_corte?: string | null
+          nome_cliente?: string | null
+          status?: string | null
+          telefone_cliente?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          dia_do_corte?: string
+          horario_corte?: string
+          id_agendamento?: string
+          id_corte?: string | null
+          nome_cliente?: string | null
+          status?: string | null
+          telefone_cliente?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamentos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "agendamentos_id_corte_fkey"
+            columns: ["id_corte"]
+            isOneToOne: false
+            referencedRelation: "cortes"
+            referencedColumns: ["id_corte"]
+          },
+        ]
+      }
+      agentes: {
+        Row: {
+          ativo: boolean | null
+          created_at: string
+          funcao: string | null
+          horario_trabalho: Json | null
+          id_agente: string
+          limite_caracteres: number | null
+          nome: string
+          objetivo: string | null
+          restricoes: string | null
+          sexo: string | null
+          tom_de_voz: string | null
+          updated_at: string
+          user_id: string
+          whatsapp_id: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string
+          funcao?: string | null
+          horario_trabalho?: Json | null
+          id_agente?: string
+          limite_caracteres?: number | null
+          nome: string
+          objetivo?: string | null
+          restricoes?: string | null
+          sexo?: string | null
+          tom_de_voz?: string | null
+          updated_at?: string
+          user_id: string
+          whatsapp_id?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string
+          funcao?: string | null
+          horario_trabalho?: Json | null
+          id_agente?: string
+          limite_caracteres?: number | null
+          nome?: string
+          objetivo?: string | null
+          restricoes?: string | null
+          sexo?: string | null
+          tom_de_voz?: string | null
+          updated_at?: string
+          user_id?: string
+          whatsapp_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agentes_whatsapp_id_fkey"
+            columns: ["whatsapp_id"]
+            isOneToOne: false
+            referencedRelation: "integracao_whatsapp"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes: {
+        Row: {
+          client_id: string
+          created_at: string
+          faturamento_total: number | null
+          id_agente: string | null
+          nome: string
+          telefone: string | null
+          total_cortes: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string
+          created_at?: string
+          faturamento_total?: number | null
+          id_agente?: string | null
+          nome: string
+          telefone?: string | null
+          total_cortes?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          faturamento_total?: number | null
+          id_agente?: string | null
+          nome?: string
+          telefone?: string | null
+          total_cortes?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clientes_id_agente_fkey"
+            columns: ["id_agente"]
+            isOneToOne: false
+            referencedRelation: "agentes"
+            referencedColumns: ["id_agente"]
+          },
+        ]
+      }
+      cortes: {
+        Row: {
+          agente_pode_usar: boolean | null
+          created_at: string
+          descricao: string | null
+          id_corte: string
+          image_corte: string | null
+          nome_corte: string
+          preco_corte: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agente_pode_usar?: boolean | null
+          created_at?: string
+          descricao?: string | null
+          id_corte?: string
+          image_corte?: string | null
+          nome_corte: string
+          preco_corte?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agente_pode_usar?: boolean | null
+          created_at?: string
+          descricao?: string | null
+          id_corte?: string
+          image_corte?: string | null
+          nome_corte?: string
+          preco_corte?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      integracao_whatsapp: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          instancia: string | null
+          nome: string
+          numero: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          instancia?: string | null
+          nome: string
+          numero: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          instancia?: string | null
+          nome?: string
+          numero?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          cep: string | null
+          cidade: string | null
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          endereco: string | null
+          estado: string | null
+          nicho: string | null
+          nome: string | null
+          nome_empresa: string | null
+          numero: string | null
+          subnicho: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
+          nicho?: string | null
+          nome?: string | null
+          nome_empresa?: string | null
+          numero?: string | null
+          subnicho?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
+          nicho?: string | null
+          nome?: string | null
+          nome_empresa?: string | null
+          numero?: string | null
+          subnicho?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
