@@ -125,6 +125,13 @@ export type Database = {
             foreignKeyName: "agentes_whatsapp_id_fkey"
             columns: ["whatsapp_id"]
             isOneToOne: false
+            referencedRelation: "agentes_integracoes_view"
+            referencedColumns: ["integracao_id"]
+          },
+          {
+            foreignKeyName: "agentes_whatsapp_id_fkey"
+            columns: ["whatsapp_id"]
+            isOneToOne: false
             referencedRelation: "integracao_whatsapp"
             referencedColumns: ["id"]
           },
@@ -170,6 +177,13 @@ export type Database = {
             columns: ["id_agente"]
             isOneToOne: false
             referencedRelation: "agentes"
+            referencedColumns: ["id_agente"]
+          },
+          {
+            foreignKeyName: "clientes_id_agente_fkey"
+            columns: ["id_agente"]
+            isOneToOne: false
+            referencedRelation: "agentes_integracoes_view"
             referencedColumns: ["id_agente"]
           },
         ]
@@ -305,7 +319,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      agentes_integracoes_view: {
+        Row: {
+          agente_created_at: string | null
+          agente_nome: string | null
+          agente_updated_at: string | null
+          ativo: boolean | null
+          email: string | null
+          funcao: string | null
+          horario_trabalho: Json | null
+          id_agente: string | null
+          instance_id: string | null
+          instancia: string | null
+          integracao_created_at: string | null
+          integracao_id: string | null
+          integracao_nome: string | null
+          integracao_status: string | null
+          integracao_updated_at: string | null
+          limite_caracteres: number | null
+          numero: string | null
+          objetivo: string | null
+          restricoes: string | null
+          sexo: string | null
+          tom_de_voz: string | null
+          user_id: string | null
+          vinculado_em: string | null
+          whatsapp_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agentes_whatsapp_id_fkey"
+            columns: ["whatsapp_id"]
+            isOneToOne: false
+            referencedRelation: "agentes_integracoes_view"
+            referencedColumns: ["integracao_id"]
+          },
+          {
+            foreignKeyName: "agentes_whatsapp_id_fkey"
+            columns: ["whatsapp_id"]
+            isOneToOne: false
+            referencedRelation: "integracao_whatsapp"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       get_available_integracoes_whatsapp: {
