@@ -215,34 +215,40 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          instance_id: string | null
           instancia: string | null
           nome: string
           numero: string
           status: string | null
           updated_at: string
           user_id: string
+          vinculado_em: string | null
         }
         Insert: {
           created_at?: string
           email?: string | null
           id?: string
+          instance_id?: string | null
           instancia?: string | null
           nome: string
           numero: string
           status?: string | null
           updated_at?: string
           user_id: string
+          vinculado_em?: string | null
         }
         Update: {
           created_at?: string
           email?: string | null
           id?: string
+          instance_id?: string | null
           instancia?: string | null
           nome?: string
           numero?: string
           status?: string | null
           updated_at?: string
           user_id?: string
+          vinculado_em?: string | null
         }
         Relationships: []
       }
@@ -302,7 +308,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_available_integracoes_whatsapp: {
+        Args: { p_current_agent_id?: string; p_user_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          instance_id: string
+          instancia: string
+          nome: string
+          numero: string
+          status: string
+          updated_at: string
+          user_id: string
+          vinculado_em: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
