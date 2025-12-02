@@ -177,6 +177,15 @@ export default function Agents() {
 
   const handleDelete = async (id: string) => {
     try {
+      // Primeiro limpa o vinculado_em da integração vinculada a este agente
+      const agentToDelete = agents.find((a) => a.id === id);
+      if (agentToDelete?.whatsappId) {
+        await supabase
+          .from("integracao_whatsapp")
+          .update({ vinculado_em: null })
+          .eq("id", agentToDelete.whatsappId);
+      }
+
       const { error } = await supabase
         .from("agentes")
         .delete()
@@ -219,12 +228,28 @@ export default function Agents() {
       };
 
       if (editingAgent) {
+        // Se o whatsapp_id antigo é diferente do novo, limpa o vinculado_em antigo
+        if (editingAgent.whatsappId && editingAgent.whatsappId !== formData.whatsappId) {
+          await supabase
+            .from("integracao_whatsapp")
+            .update({ vinculado_em: null })
+            .eq("id", editingAgent.whatsappId);
+        }
+
         const { error } = await supabase
           .from("agentes")
           .update(agentData)
           .eq("id_agente", editingAgent.id);
 
         if (error) throw error;
+
+        // Atualiza o vinculado_em da nova integração
+        if (formData.whatsappId) {
+          await supabase
+            .from("integracao_whatsapp")
+            .update({ vinculado_em: editingAgent.id })
+            .eq("id", formData.whatsappId);
+        }
 
         setAgents(
           agents.map((a) =>
@@ -256,6 +281,14 @@ export default function Agents() {
           .single();
 
         if (error) throw error;
+
+        // Atualiza o vinculado_em da integração com o ID do novo agente
+        if (formData.whatsappId) {
+          await supabase
+            .from("integracao_whatsapp")
+            .update({ vinculado_em: data.id_agente })
+            .eq("id", formData.whatsappId);
+        }
 
         const newAgent: Agent = {
           id: data.id_agente,
