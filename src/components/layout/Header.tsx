@@ -1,4 +1,4 @@
-import { Bell, Search, Settings, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
@@ -31,22 +31,13 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-destructive" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
+        <div className="flex items-center">
+          <button
             onClick={() => navigate("/settings")}
-            className="hidden lg:flex"
+            className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity"
           >
-            <Settings className="w-5 h-5" />
-          </Button>
-          <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
             JP
-          </div>
+          </button>
         </div>
       </div>
     </header>

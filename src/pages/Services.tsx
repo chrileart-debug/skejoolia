@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -30,7 +31,12 @@ interface Service {
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
+interface OutletContextType {
+  onMenuClick: () => void;
+}
+
 export default function Services() {
+  const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -366,7 +372,7 @@ export default function Services() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Serviços" subtitle="Gerencie os cortes e serviços" />
+        <Header title="Serviços" subtitle="Gerencie os cortes e serviços" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -376,7 +382,7 @@ export default function Services() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Serviços" subtitle="Gerencie os cortes e serviços" />
+      <Header title="Serviços" subtitle="Gerencie os cortes e serviços" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6">
         {services.length === 0 ? (

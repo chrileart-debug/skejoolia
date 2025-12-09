@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
+import { useOutletContext } from "react-router-dom";
 import {
   Scissors,
   DollarSign,
@@ -15,7 +16,12 @@ import {
 import { format, startOfDay, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+interface OutletContextType {
+  onMenuClick: () => void;
+}
+
 export default function Dashboard() {
+  const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
@@ -111,6 +117,7 @@ export default function Dashboard() {
       <Header
         title="Dashboard"
         subtitle="Visão geral da sua barbearia"
+        onMenuClick={onMenuClick}
       />
 
       <div className="p-4 lg:p-6 space-y-6">
