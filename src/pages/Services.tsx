@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2 } from "lucide-react";
+import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,6 +27,9 @@ interface Service {
   agentEnabled: boolean;
 }
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 export default function Services() {
   const { user } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
@@ -34,6 +37,10 @@ export default function Services() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -82,6 +89,8 @@ export default function Services() {
       agentEnabled: true,
     });
     setEditingService(null);
+    setPendingFile(null);
+    setPreviewUrl(null);
   };
 
   const handleCreate = () => {
@@ -97,7 +106,128 @@ export default function Services() {
       price: service.price.toString(),
       agentEnabled: service.agentEnabled,
     });
+    setPreviewUrl(service.image);
+    setPendingFile(null);
     setIsDialogOpen(true);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error("Formato inválido. Use JPG, PNG ou WEBP.");
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("Arquivo muito grande. Máximo 50MB.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    setPendingFile(file);
+
+    // If editing existing service, upload immediately
+    if (editingService && user) {
+      uploadImage(file, editingService.id);
+    }
+  };
+
+  const uploadImage = async (file: File, serviceId: string): Promise<string | null> => {
+    if (!user) return null;
+    setIsUploading(true);
+
+    try {
+      const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const filePath = `${user.id}/servicos/${serviceId}.${extension}`;
+
+      // Delete existing images for this service
+      const { data: existingFiles } = await supabase.storage
+        .from("midia-imagens-cortes")
+        .list(`${user.id}/servicos`);
+
+      if (existingFiles) {
+        const filesToDelete = existingFiles
+          .filter((f) => f.name.startsWith(serviceId))
+          .map((f) => `${user.id}/servicos/${f.name}`);
+
+        if (filesToDelete.length > 0) {
+          await supabase.storage.from("midia-imagens-cortes").remove(filesToDelete);
+        }
+      }
+
+      // Upload new image
+      const { error: uploadError } = await supabase.storage
+        .from("midia-imagens-cortes")
+        .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("midia-imagens-cortes")
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update database
+      await supabase
+        .from("cortes")
+        .update({ image_corte: publicUrl })
+        .eq("id_corte", serviceId);
+
+      setPreviewUrl(publicUrl);
+      setServices((prev) =>
+        prev.map((s) => (s.id === serviceId ? { ...s, image: publicUrl } : s))
+      );
+      toast.success("Imagem enviada com sucesso");
+      return publicUrl;
+    } catch (error) {
+      console.error("Erro ao enviar imagem:", error);
+      toast.error("Erro ao enviar imagem");
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!editingService || !user) {
+      setPreviewUrl(null);
+      setPendingFile(null);
+      return;
+    }
+
+    try {
+      const { data: files } = await supabase.storage
+        .from("midia-imagens-cortes")
+        .list(`${user.id}/servicos`);
+
+      if (files) {
+        const filesToDelete = files
+          .filter((f) => f.name.startsWith(editingService.id))
+          .map((f) => `${user.id}/servicos/${f.name}`);
+
+        if (filesToDelete.length > 0) {
+          await supabase.storage.from("midia-imagens-cortes").remove(filesToDelete);
+        }
+      }
+
+      await supabase
+        .from("cortes")
+        .update({ image_corte: null })
+        .eq("id_corte", editingService.id);
+
+      setPreviewUrl(null);
+      setServices((prev) =>
+        prev.map((s) => (s.id === editingService.id ? { ...s, image: null } : s))
+      );
+      toast.success("Imagem removida");
+    } catch (error) {
+      console.error("Erro ao remover imagem:", error);
+      toast.error("Erro ao remover imagem");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -183,6 +313,7 @@ export default function Services() {
         );
         toast.success("Serviço atualizado com sucesso");
       } else {
+        // Create service first
         const { data, error } = await supabase
           .from("cortes")
           .insert({
@@ -197,12 +328,19 @@ export default function Services() {
 
         if (error) throw error;
 
+        let imageUrl: string | null = null;
+
+        // If there's a pending file, upload it now
+        if (pendingFile) {
+          imageUrl = await uploadImage(pendingFile, data.id_corte);
+        }
+
         const newService: Service = {
           id: data.id_corte,
           name: data.nome_corte,
           description: data.descricao || "",
           price: Number(data.preco_corte),
-          image: data.image_corte,
+          image: imageUrl || data.image_corte,
           agentEnabled: data.agente_pode_usar ?? true,
         };
         setServices([newService, ...services]);
@@ -261,9 +399,17 @@ export default function Services() {
                 key={service.id}
                 className="bg-card rounded-2xl shadow-card overflow-hidden hover:shadow-card-hover transition-all duration-300 animate-fade-in"
               >
-                {/* Image placeholder */}
-                <div className="h-32 bg-muted flex items-center justify-center">
-                  <ImageIcon className="w-12 h-12 text-muted-foreground/50" />
+                {/* Service Image */}
+                <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
+                  {service.image ? (
+                    <img
+                      src={service.image}
+                      alt={service.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-12 h-12 text-muted-foreground/50" />
+                  )}
                 </div>
 
                 <div className="p-5">
@@ -339,15 +485,74 @@ export default function Services() {
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
-            {/* Image upload placeholder */}
+            {/* Image upload */}
             <div className="space-y-2">
               <Label>Imagem</Label>
-              <div className="h-32 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
-                <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                <span className="text-sm text-muted-foreground">
-                  Clique para adicionar
-                </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <div
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+                className={`
+                  relative h-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
+                  ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
+                  ${isUploading ? "pointer-events-none" : ""}
+                `}
+              >
+                {previewUrl ? (
+                  <>
+                    <img
+                      src={previewUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    {!isUploading && (
+                      <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                        >
+                          <Upload className="w-5 h-5 text-white" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveImage();
+                          }}
+                          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                        >
+                          <X className="w-5 h-5 text-white" />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+                    <span className="text-sm text-muted-foreground">
+                      Clique para adicionar
+                    </span>
+                  </div>
+                )}
+
+                {isUploading && (
+                  <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                )}
               </div>
+              <p className="text-xs text-muted-foreground text-center">
+                JPG, PNG ou WEBP (máx. 50MB)
+              </p>
             </div>
 
             <div className="space-y-2">
