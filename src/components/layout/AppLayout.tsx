@@ -37,7 +37,8 @@ export function AppLayout() {
 
       <main
         className={cn(
-          "flex-1 min-h-screen pb-20 lg:pb-0 transition-all duration-300"
+          "flex-1 min-h-screen pb-20 lg:pb-0 transition-all duration-300 overflow-y-auto",
+          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
         )}
       >
         <Outlet context={{ onMenuClick: handleMobileMenuToggle }} />
