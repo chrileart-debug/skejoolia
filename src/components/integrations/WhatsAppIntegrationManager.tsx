@@ -1,12 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useOutletContext } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
-import { EmptyState } from "@/components/shared/EmptyState";
-import { FAB } from "@/components/shared/FAB";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Bot } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -41,7 +37,7 @@ const integrationSchema = z.object({
   numero: z.string().min(10, "Número deve ter pelo menos 10 dígitos"),
 });
 
-interface Integration {
+export interface Integration {
   id: string;
   user_id: string;
   nome: string;
@@ -55,13 +51,8 @@ interface Integration {
   updated_at: string;
 }
 
-interface Agent {
-  id_agente: string;
-  nome: string;
-}
-
 // Format phone number in Brazilian format: 55 11 99999-9999
-const formatPhoneNumber = (value: string): string => {
+export const formatPhoneNumber = (value: string): string => {
   const digits = value.replace(/\D/g, "");
   
   if (digits.length <= 2) return digits;
@@ -85,17 +76,14 @@ const generateInstanciaName = (email: string, numero: string): string => {
 
 // Extract QR code from various response formats
 const extractQRCode = (data: any): string | null => {
-  // If it's a string starting with data:image
   if (typeof data === "string" && data.startsWith("data:image")) {
     return data;
   }
   
-  // If it's a pure base64 string
   if (typeof data === "string" && data.length > 100) {
     return `data:image/png;base64,${data}`;
   }
   
-  // If it's an array, get first element
   if (Array.isArray(data) && data.length > 0) {
     const first = data[0];
     if (first.qrcode) {
@@ -106,7 +94,6 @@ const extractQRCode = (data: any): string | null => {
     }
   }
   
-  // If it's an object with qrcode or base64 field
   if (data && typeof data === "object") {
     if (data.qrcode) {
       return data.qrcode.startsWith("data:") ? data.qrcode : `data:image/png;base64,${data.qrcode}`;
@@ -124,12 +111,10 @@ const extractQRCode = (data: any): string | null => {
 
 // Extract instance data from n8n response
 const extractInstanceData = (data: any): { instanceId: string | null; instanceName: string | null } => {
-  // If it's a string, use it as instanceName
   if (typeof data === "string") {
     return { instanceId: null, instanceName: data };
   }
   
-  // If it's an array, get first element
   if (Array.isArray(data) && data.length > 0) {
     const first = data[0];
     return {
@@ -138,7 +123,6 @@ const extractInstanceData = (data: any): { instanceId: string | null; instanceNa
     };
   }
   
-  // If it's an object
   if (data && typeof data === "object") {
     return {
       instanceId: data.instance?.instanceId || data.instanceId || null,
@@ -151,19 +135,16 @@ const extractInstanceData = (data: any): { instanceId: string | null; instanceNa
 
 // Check connection status from response
 const isConnected = (data: any): boolean => {
-  // String response
   if (typeof data === "string") {
     return data.toLowerCase() === "open" || data.toLowerCase() === "connected";
   }
   
-  // Array response
   if (Array.isArray(data) && data.length > 0) {
     const first = data[0];
     const state = first.state || first.instance?.state || first.status;
     return state === "open" || state === "connected";
   }
   
-  // Object response
   if (data && typeof data === "object") {
     const state = data.state || data.instance?.state || data.status;
     return state === "open" || state === "connected";
@@ -172,15 +153,41 @@ const isConnected = (data: any): boolean => {
   return false;
 };
 
-interface OutletContextType {
-  onMenuClick: () => void;
+export const getStatusForBadge = (status: string | null): "online" | "offline" | "pending" => {
+  if (status === "conectado") return "online";
+  if (status === "conectando" || status === "pendente") return "pending";
+  return "offline";
+};
+
+export const getStatusLabel = (status: string | null): string => {
+  switch (status) {
+    case "conectado": return "Conectado";
+    case "conectando": return "Conectando...";
+    case "pendente": return "Pendente";
+    case "desconectado": return "Desconectado";
+    default: return "Offline";
+  }
+};
+
+interface WhatsAppIntegrationManagerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelectIntegration?: (integration: Integration) => void;
+  selectedIntegrationId?: string | null;
+  currentAgentId?: string | null;
+  mode?: "select" | "manage"; // select = for agent linking, manage = full management
 }
 
-export default function Integrations() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+export function WhatsAppIntegrationManager({
+  open,
+  onOpenChange,
+  onSelectIntegration,
+  selectedIntegrationId,
+  currentAgentId,
+  mode = "select",
+}: WhatsAppIntegrationManagerProps) {
   const { user } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isQRDialogOpen, setIsQRDialogOpen] = useState(false);
@@ -203,51 +210,50 @@ export default function Integrations() {
     numero: "",
   });
 
-  // Fetch integrations from Supabase
+  // Fetch available integrations (not linked to other agents)
   const fetchIntegrations = useCallback(async () => {
     if (!user) return;
     
-    const { data, error } = await supabase
-      .from("integracao_whatsapp")
-      .select("*")
-      .order("created_at", { ascending: false });
-    
-    if (error) {
+    try {
+      // Fetch all integrations
+      const { data: allIntegrations, error } = await supabase
+        .from("integracao_whatsapp")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      
+      // Filter to show only integrations that are:
+      // 1. Not linked to any agent (vinculado_em is null)
+      // 2. OR linked to the current agent being edited
+      const availableIntegrations = (allIntegrations || []).filter((integration) => {
+        if (!integration.vinculado_em) return true;
+        if (currentAgentId && integration.vinculado_em === currentAgentId) return true;
+        return false;
+      });
+      
+      setIntegrations(availableIntegrations);
+    } catch (error) {
       console.error("Error fetching integrations:", error);
       toast.error("Erro ao carregar integrações");
-    } else {
-      setIntegrations(data || []);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [user]);
-
-  // Fetch agents to show which agent is linked
-  const fetchAgents = useCallback(async () => {
-    if (!user) return;
-    
-    const { data, error } = await supabase
-      .from("agentes")
-      .select("id_agente, nome");
-    
-    if (!error && data) {
-      setAgents(data);
-    }
-  }, [user]);
+  }, [user, currentAgentId]);
 
   useEffect(() => {
-    fetchIntegrations();
-    fetchAgents();
-  }, [fetchIntegrations, fetchAgents]);
+    if (open) {
+      setIsLoading(true);
+      fetchIntegrations();
+    }
+  }, [open, fetchIntegrations]);
 
   // Listen for whatsapp:updated events
   useEffect(() => {
-    const handleUpdate = () => {
-      fetchIntegrations();
-      fetchAgents();
-    };
+    const handleUpdate = () => fetchIntegrations();
     window.addEventListener("whatsapp:updated", handleUpdate);
     return () => window.removeEventListener("whatsapp:updated", handleUpdate);
-  }, [fetchIntegrations, fetchAgents]);
+  }, [fetchIntegrations]);
 
   // Cleanup polling and countdown on unmount
   useEffect(() => {
@@ -263,8 +269,8 @@ export default function Integrations() {
   };
 
   const handleCreate = () => {
-    // Check limit
-    if (integrations.length >= MAX_INTEGRATIONS) {
+    const allIntegrations = integrations.length;
+    if (allIntegrations >= MAX_INTEGRATIONS) {
       toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
       return;
     }
@@ -297,7 +303,7 @@ export default function Integrations() {
     return true;
   };
 
-  // 1. Create Integration
+  // Create Integration
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
     
@@ -306,17 +312,11 @@ export default function Integrations() {
       return;
     }
 
-    // Check limit again
-    if (integrations.length >= MAX_INTEGRATIONS) {
-      toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
-      return;
-    }
-
     setIsCreating(true);
     const cleanNumero = sanitizePhoneNumber(formData.numero);
     let instancia = generateInstanciaName(user.email, cleanNumero);
     
-    // Check if instance name already exists, add timestamp if needed
+    // Check if instance name already exists
     const existing = integrations.find((i) => i.instancia === instancia);
     if (existing) {
       instancia = `${instancia}_${Date.now()}`;
@@ -336,7 +336,6 @@ export default function Integrations() {
       const webhookData = await response.json();
       console.log("Webhook create response:", webhookData);
       
-      // Extract instance data from response
       const { instanceId, instanceName } = extractInstanceData(webhookData);
       const finalInstancia = instanceName || instancia;
       
@@ -357,7 +356,6 @@ export default function Integrations() {
 
       if (insertError) throw insertError;
 
-      // Dispatch global event
       window.dispatchEvent(new CustomEvent("whatsapp:updated"));
       
       toast.success("Integração criada com sucesso");
@@ -372,7 +370,7 @@ export default function Integrations() {
     }
   };
 
-  // 2. Connect (QR Code)
+  // Connect (QR Code)
   const handleConnect = async (integration: Integration) => {
     setSelectedIntegration(integration);
     setIsConnecting(true);
@@ -382,7 +380,6 @@ export default function Integrations() {
     pollingStartTimeRef.current = Date.now();
 
     try {
-      // Update status to "conectando"
       await supabase
         .from("integracao_whatsapp")
         .update({ status: "conectando" })
@@ -433,14 +430,13 @@ export default function Integrations() {
     }, 1000);
   };
 
-  // 3. Smart Polling with 3 phases
+  // Smart Polling
   const startSmartPolling = (integration: Integration) => {
     if (pollingRef.current) clearTimeout(pollingRef.current);
 
     const poll = async () => {
       const elapsed = Date.now() - pollingStartTimeRef.current;
       
-      // Stop after 2 minutes
       if (elapsed >= QR_TIMEOUT_MS) {
         clearTimeout(pollingRef.current!);
         pollingRef.current = null;
@@ -473,7 +469,6 @@ export default function Integrations() {
           pollingRef.current = null;
           if (countdownRef.current) clearInterval(countdownRef.current);
           
-          // Update status in Supabase
           await supabase
             .from("integracao_whatsapp")
             .update({ status: "conectado" })
@@ -489,27 +484,22 @@ export default function Integrations() {
         console.error("Polling error:", error);
       }
 
-      // Determine next polling interval based on elapsed time
       let nextInterval: number;
       if (elapsed < 10000) {
-        // Phase 1: 0-10s, poll every 2s
         nextInterval = 2000;
       } else if (elapsed < 30000) {
-        // Phase 2: 10-30s, poll every 3s
         nextInterval = 3000;
       } else {
-        // Phase 3: 30s+, poll every 2s
         nextInterval = 2000;
       }
 
       pollingRef.current = setTimeout(poll, nextInterval);
     };
 
-    // Start first poll after 2 seconds
     pollingRef.current = setTimeout(poll, 2000);
   };
 
-  // 4. Disconnect
+  // Disconnect
   const handleDisconnect = async (integration: Integration) => {
     setIsDisconnecting(true);
 
@@ -523,7 +513,6 @@ export default function Integrations() {
         }),
       });
 
-      // Update status in Supabase
       await supabase
         .from("integracao_whatsapp")
         .update({ status: "desconectado" })
@@ -540,15 +529,15 @@ export default function Integrations() {
     }
   };
 
-  // 5. Delete
+  // Delete
   const handleDeleteClick = async (integration: Integration) => {
     // Check if integration is being used by any agent
-    const { data: linkedAgents } = await supabase
+    const { data: agents } = await supabase
       .from("agentes")
       .select("id_agente")
       .eq("whatsapp_id", integration.id);
 
-    if (linkedAgents && linkedAgents.length > 0) {
+    if (agents && agents.length > 0) {
       toast.error("Esta integração está vinculada a um agente. Desvincule primeiro.");
       return;
     }
@@ -563,7 +552,6 @@ export default function Integrations() {
     setIsDeleting(true);
 
     try {
-      // Send webhook to delete instance
       await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -573,7 +561,6 @@ export default function Integrations() {
         }),
       });
 
-      // Delete from Supabase
       const { error } = await supabase
         .from("integracao_whatsapp")
         .delete()
@@ -609,167 +596,181 @@ export default function Integrations() {
     setCountdown(120);
   };
 
-  const getStatusForBadge = (status: string | null): "online" | "offline" | "pending" => {
-    if (status === "conectado") return "online";
-    if (status === "conectando" || status === "pendente") return "pending";
-    return "offline";
-  };
-
-  const getStatusLabel = (status: string | null): string => {
-    switch (status) {
-      case "conectado": return "Conectado";
-      case "conectando": return "Conectando...";
-      case "pendente": return "Pendente";
-      case "desconectado": return "Desconectado";
-      default: return "Offline";
-    }
-  };
-
   const formatCountdown = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const getLinkedAgentName = (integrationId: string): string | null => {
-    const integration = integrations.find(i => i.id === integrationId);
-    if (!integration?.vinculado_em) return null;
-    const agent = agents.find(a => a.id_agente === integration.vinculado_em);
-    return agent?.nome || null;
+  const handleSelectIntegration = (integration: Integration) => {
+    if (onSelectIntegration) {
+      onSelectIntegration(integration);
+      onOpenChange(false);
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen">
-        <Header title="Integrações" subtitle="Gerencie suas conexões com WhatsApp" onMenuClick={onMenuClick} />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </div>
-    );
-  }
+  const handleClearSelection = () => {
+    if (onSelectIntegration) {
+      onSelectIntegration(null as any);
+      onOpenChange(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen">
-      <Header
-        title="Integrações"
-        subtitle="Gerencie suas conexões com WhatsApp"
-        onMenuClick={onMenuClick}
-      />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              {mode === "select" ? "Selecionar WhatsApp" : "Gerenciar Integrações"}
+            </DialogTitle>
+            <DialogDescription>
+              {mode === "select" 
+                ? "Selecione uma integração WhatsApp ou crie uma nova."
+                : "Gerencie suas conexões com WhatsApp."}
+            </DialogDescription>
+          </DialogHeader>
 
-      <div className="p-4 lg:p-6">
-        {integrations.length === 0 ? (
-          <EmptyState
-            icon={<MessageSquare className="w-10 h-10 text-muted-foreground" />}
-            title="Nenhuma integração configurada"
-            description="Conecte seu WhatsApp para começar a receber agendamentos automaticamente."
-            action={
-              <Button onClick={handleCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Integração
-              </Button>
-            }
-            className="min-h-[60vh]"
-          />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {integrations.map((integration) => {
-              const linkedAgentName = getLinkedAgentName(integration.id);
-              
-              return (
-                <div
-                  key={integration.id}
-                  className="bg-card rounded-2xl shadow-card p-5 hover:shadow-card-hover transition-all duration-300 animate-fade-in"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
+          <div className="space-y-4 pt-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : integrations.length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">Nenhuma integração disponível</p>
+                <Button onClick={handleCreate}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Integração
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* List of integrations */}
+                <div className="space-y-3">
+                  {integrations.map((integration) => {
+                    const isSelected = selectedIntegrationId === integration.id;
+                    const isLinkedToOther = integration.vinculado_em && integration.vinculado_em !== currentAgentId;
+                    
+                    return (
                       <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                          integration.status === "conectado"
-                            ? "bg-success/10"
-                            : "bg-muted"
+                        key={integration.id}
+                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                          isSelected 
+                            ? "border-primary bg-primary/5" 
+                            : "border-border hover:border-primary/50"
                         }`}
                       >
-                        <MessageSquare
-                          className={`w-6 h-6 ${
-                            integration.status === "conectado"
-                              ? "text-success"
-                              : "text-muted-foreground"
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground">
-                          {integration.nome}
-                        </h3>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Phone className="w-3.5 h-3.5" />
-                          {formatPhoneNumber(integration.numero)}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              integration.status === "conectado"
+                                ? "bg-success/10"
+                                : "bg-muted"
+                            }`}
+                          >
+                            <MessageSquare
+                              className={`w-5 h-5 ${
+                                integration.status === "conectado"
+                                  ? "text-success"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">{integration.nome}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone className="w-3 h-3" />
+                              {formatPhoneNumber(integration.numero)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={getStatusForBadge(integration.status)} />
+                          
+                          {mode === "select" ? (
+                            <Button
+                              size="sm"
+                              variant={isSelected ? "default" : "outline"}
+                              onClick={() => handleSelectIntegration(integration)}
+                              disabled={integration.status !== "conectado"}
+                            >
+                              {isSelected ? (
+                                <>
+                                  <Check className="w-4 h-4 mr-1" />
+                                  Selecionado
+                                </>
+                              ) : (
+                                "Selecionar"
+                              )}
+                            </Button>
+                          ) : (
+                            <div className="flex gap-1">
+                              {integration.status === "conectado" ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDisconnect(integration)}
+                                  disabled={isDisconnecting}
+                                >
+                                  <Unlink className="w-4 h-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleConnect(integration)}
+                                  disabled={isConnecting}
+                                >
+                                  <Link2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteClick(integration)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-4">
-                    <StatusBadge status={getStatusForBadge(integration.status)} />
-                    <span className="text-xs text-muted-foreground">
-                      {getStatusLabel(integration.status)}
-                    </span>
-                  </div>
-
-                  {/* Show linked agent */}
-                  {linkedAgentName && (
-                    <div className="flex items-center gap-2 mb-4 p-2 rounded-lg bg-primary/5 border border-primary/10">
-                      <Bot className="w-4 h-4 text-primary" />
-                      <span className="text-sm text-foreground">
-                        Vinculado a: <span className="font-medium">{linkedAgentName}</span>
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    {integration.status === "conectado" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDisconnect(integration)}
-                        disabled={isDisconnecting}
-                      >
-                        <Unlink className="w-4 h-4 mr-1" />
-                        Desconectar
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleConnect(integration)}
-                        disabled={isConnecting}
-                      >
-                        <Link2 className="w-4 h-4 mr-1" />
-                        Conectar
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDeleteClick(integration)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      {integrations.length > 0 && integrations.length < MAX_INTEGRATIONS && (
-        <FAB onClick={handleCreate} label="Nova Integração" />
-      )}
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-2">
+                  {integrations.length < MAX_INTEGRATIONS && (
+                    <Button variant="outline" className="flex-1" onClick={handleCreate}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nova Integração
+                    </Button>
+                  )}
+                  
+                  {mode === "select" && selectedIntegrationId && (
+                    <Button variant="ghost" className="flex-1" onClick={handleClearSelection}>
+                      Remover Seleção
+                    </Button>
+                  )}
+                </div>
+
+                {/* Connection info for select mode */}
+                {mode === "select" && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Apenas integrações conectadas podem ser vinculadas a agentes.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Integration Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -923,6 +924,6 @@ export default function Integrations() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
