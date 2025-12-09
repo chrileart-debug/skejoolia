@@ -24,6 +24,13 @@ import { Bot, Plus, Edit2, Trash2, Phone, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { Json } from "@/integrations/supabase/types";
+import {
+  WorkScheduleEditor,
+  WorkSchedule,
+  DEFAULT_WORK_SCHEDULE,
+  parseWorkSchedule,
+} from "@/components/agents/WorkScheduleEditor";
 
 interface Agent {
   id: string;
@@ -34,7 +41,7 @@ interface Agent {
   objective: string;
   charLimit: number | null;
   restrictions: string;
-  workHours: string;
+  workSchedule: WorkSchedule;
   whatsappId: string | null;
   status: "online" | "offline";
 }
@@ -62,7 +69,7 @@ export default function Agents() {
     objective: "",
     charLimit: "Não há limitação",
     restrictions: "",
-    workHours: "",
+    workSchedule: { ...DEFAULT_WORK_SCHEDULE } as WorkSchedule,
     whatsappId: "",
   });
 
@@ -91,7 +98,7 @@ export default function Agents() {
         objective: item.objetivo || "",
         charLimit: item.limite_caracteres,
         restrictions: item.restricoes || "",
-        workHours: item.horario_trabalho ? JSON.stringify(item.horario_trabalho) : "",
+        workSchedule: parseWorkSchedule(item.horario_trabalho),
         whatsappId: item.whatsapp_id,
         status: item.ativo ? "online" : "offline",
       }));
@@ -148,7 +155,7 @@ export default function Agents() {
       objective: "",
       charLimit: "Não há limitação",
       restrictions: "",
-      workHours: "",
+      workSchedule: { ...DEFAULT_WORK_SCHEDULE },
       whatsappId: "",
     });
     setEditingAgent(null);
@@ -169,7 +176,7 @@ export default function Agents() {
       objective: agent.objective,
       charLimit: getCharLimitLabel(agent.charLimit),
       restrictions: agent.restrictions,
-      workHours: agent.workHours,
+      workSchedule: agent.workSchedule,
       whatsappId: agent.whatsappId || "",
     });
     setIsDialogOpen(true);
@@ -223,7 +230,7 @@ export default function Agents() {
         objetivo: formData.objective || null,
         limite_caracteres: getCharLimitValue(formData.charLimit),
         restricoes: formData.restrictions || null,
-        horario_trabalho: formData.workHours ? { horario: formData.workHours } : null,
+        horario_trabalho: formData.workSchedule as unknown as Json,
         whatsapp_id: formData.whatsappId || null,
       };
 
@@ -263,7 +270,7 @@ export default function Agents() {
                   objective: formData.objective,
                   charLimit: getCharLimitValue(formData.charLimit),
                   restrictions: formData.restrictions,
-                  workHours: formData.workHours,
+                  workSchedule: formData.workSchedule,
                   whatsappId: formData.whatsappId || null,
                 }
               : a
@@ -299,7 +306,7 @@ export default function Agents() {
           objective: data.objetivo || "",
           charLimit: data.limite_caracteres,
           restrictions: data.restricoes || "",
-          workHours: data.horario_trabalho ? JSON.stringify(data.horario_trabalho) : "",
+          workSchedule: parseWorkSchedule(data.horario_trabalho),
           whatsappId: data.whatsapp_id,
           status: data.ativo ? "online" : "offline",
         };
@@ -388,12 +395,14 @@ export default function Agents() {
                       <span className="text-foreground">{agent.voiceTone}</span>
                     </div>
                   )}
-                  {agent.workHours && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">Horário:</span>
-                      <span className="text-foreground">{agent.workHours}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Dias ativos:</span>
+                    <span className="text-foreground">
+                      {Object.entries(agent.workSchedule)
+                        .filter(([, val]) => val.enabled)
+                        .length} dias
+                    </span>
+                  </div>
                   {getWhatsAppNumber(agent.whatsappId) && (
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="w-4 h-4 text-muted-foreground" />
@@ -547,16 +556,12 @@ export default function Agents() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Horário de trabalho</Label>
-              <Input
-                placeholder="Ex: 09:00 - 18:00"
-                value={formData.workHours}
-                onChange={(e) =>
-                  setFormData({ ...formData, workHours: e.target.value })
-                }
-              />
-            </div>
+            <WorkScheduleEditor
+              value={formData.workSchedule}
+              onChange={(schedule) =>
+                setFormData({ ...formData, workSchedule: schedule })
+              }
+            />
 
             <div className="space-y-2">
               <Label>Número do WhatsApp</Label>
