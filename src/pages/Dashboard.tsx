@@ -13,32 +13,39 @@ import {
   Clock,
   User,
 } from "lucide-react";
-import { format, startOfDay, startOfMonth, endOfMonth } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns";
 
 interface OutletContextType {
   onMenuClick: () => void;
 }
 
+// Helper to format time from ISO string
+const formatTimeFromISO = (isoString: string): string => {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+};
+
 export default function Dashboard() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const today = new Date();
-  const todayStr = format(today, "yyyy-MM-dd");
-  const monthStart = format(startOfMonth(today), "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(today), "yyyy-MM-dd");
+  const todayStart = startOfDay(today).toISOString();
+  const todayEnd = endOfDay(today).toISOString();
+  const monthStart = startOfMonth(today).toISOString();
+  const monthEnd = endOfMonth(today).toISOString();
 
   // Fetch today's appointments
   const { data: todayAppointments = [] } = useQuery({
-    queryKey: ["appointments-today", user?.id, todayStr],
+    queryKey: ["appointments-today", user?.id, todayStart],
     queryFn: async () => {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("agendamentos")
         .select("*, cortes(nome_corte, preco_corte)")
         .eq("user_id", user.id)
-        .eq("dia_do_corte", todayStr)
-        .order("horario_corte", { ascending: true });
+        .gte("start_time", todayStart)
+        .lte("start_time", todayEnd)
+        .order("start_time", { ascending: true });
       if (error) throw error;
       return data || [];
     },
@@ -54,8 +61,8 @@ export default function Dashboard() {
         .from("agendamentos")
         .select("*, cortes(nome_corte, preco_corte)")
         .eq("user_id", user.id)
-        .gte("dia_do_corte", monthStart)
-        .lte("dia_do_corte", monthEnd);
+        .gte("start_time", monthStart)
+        .lte("start_time", monthEnd);
       if (error) throw error;
       return data || [];
     },
@@ -96,14 +103,10 @@ export default function Dashboard() {
   );
 
   // Get next appointment (upcoming from now)
-  const now = format(new Date(), "HH:mm:ss");
+  const now = new Date().toISOString();
   const nextAppointment = todayAppointments.find(
-    (apt) => apt.horario_corte >= now && (apt.status === "pending" || apt.status === "confirmed")
+    (apt) => apt.start_time >= now && (apt.status === "pending" || apt.status === "confirmed")
   );
-
-  const formatTime = (time: string) => {
-    return time.substring(0, 5);
-  };
 
   const getStatusForBadge = (status: string | null) => {
     if (status === "confirmed") return "confirmed";
@@ -189,7 +192,7 @@ export default function Dashboard() {
                       <div className="text-right hidden sm:block">
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />
-                          {formatTime(appointment.horario_corte)}
+                          {formatTimeFromISO(appointment.start_time)}
                         </div>
                       </div>
                       <StatusBadge status={getStatusForBadge(appointment.status)} />
@@ -220,7 +223,7 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-4 h-4" />
-                    <span>{formatTime(nextAppointment.horario_corte)}</span>
+                    <span>{formatTimeFromISO(nextAppointment.start_time)}</span>
                   </div>
                 </div>
               ) : (

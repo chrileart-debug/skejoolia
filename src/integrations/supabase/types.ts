@@ -18,11 +18,11 @@ export type Database = {
         Row: {
           client_id: string | null
           created_at: string
-          dia_do_corte: string
-          horario_corte: string
+          end_time: string | null
           id_agendamento: string
           id_corte: string | null
           nome_cliente: string | null
+          start_time: string
           status: string | null
           telefone_cliente: string | null
           updated_at: string
@@ -31,11 +31,11 @@ export type Database = {
         Insert: {
           client_id?: string | null
           created_at?: string
-          dia_do_corte: string
-          horario_corte: string
+          end_time?: string | null
           id_agendamento?: string
           id_corte?: string | null
           nome_cliente?: string | null
+          start_time: string
           status?: string | null
           telefone_cliente?: string | null
           updated_at?: string
@@ -44,11 +44,11 @@ export type Database = {
         Update: {
           client_id?: string | null
           created_at?: string
-          dia_do_corte?: string
-          horario_corte?: string
+          end_time?: string | null
           id_agendamento?: string
           id_corte?: string | null
           nome_cliente?: string | null
+          start_time?: string
           status?: string | null
           telefone_cliente?: string | null
           updated_at?: string
