@@ -63,10 +63,10 @@ const getDateFromISO = (isoString: string): string => {
   return date.toISOString().split("T")[0];
 };
 
-// Helper to create ISO datetime from date and time strings
+// Helper to create ISO datetime from date and time strings with Brasília timezone
 const createISODateTime = (dateStr: string, timeStr: string): string => {
-  const dateTime = new Date(`${dateStr}T${timeStr}:00`);
-  return dateTime.toISOString();
+  // Format: YYYY-MM-DDTHH:MM:SS-03:00 (Brasília timezone)
+  return `${dateStr}T${timeStr}:00-03:00`;
 };
 
 export default function Schedule() {
@@ -200,11 +200,12 @@ export default function Schedule() {
       }
     }
 
-    // Create start_time and end_time (default 1 hour duration)
+    // Create start_time and end_time (default 1 hour duration) with Brasília timezone
     const startTime = createISODateTime(formData.date, formData.time);
-    const endDate = new Date(startTime);
-    endDate.setHours(endDate.getHours() + 1);
-    const endTime = endDate.toISOString();
+    // Calculate end_time by adding 1 hour to the time
+    const [hours, minutes] = formData.time.split(":").map(Number);
+    const endHours = String((hours + 1) % 24).padStart(2, "0");
+    const endTime = `${formData.date}T${endHours}:${String(minutes).padStart(2, "0")}:00-03:00`;
 
     const { error } = await supabase
       .from("agendamentos")
