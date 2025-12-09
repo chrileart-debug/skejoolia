@@ -67,11 +67,12 @@ const sanitizePhoneNumber = (value: string): string => {
   return value.replace(/\D/g, "");
 };
 
-// Generate instance name: {email_prefix}_{sanitized_number}
-const generateInstanciaName = (email: string, numero: string): string => {
-  const emailPrefix = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+// Generate instance name: {nome}-{numero}-{email} using dashes as separators
+const generateInstanciaName = (nome: string, numero: string, email: string): string => {
+  const cleanNome = nome.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   const cleanNumero = sanitizePhoneNumber(numero);
-  return `${emailPrefix}_${cleanNumero}`;
+  const cleanEmail = email.toLowerCase().replace(/[^a-z0-9@.]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `${cleanNome}-${cleanNumero}-${cleanEmail}`;
 };
 
 // Extract QR code from various response formats
@@ -314,12 +315,12 @@ export function WhatsAppIntegrationManager({
 
     setIsCreating(true);
     const cleanNumero = sanitizePhoneNumber(formData.numero);
-    let instancia = generateInstanciaName(user.email, cleanNumero);
+    let instancia = generateInstanciaName(formData.nome, cleanNumero, user.email);
     
     // Check if instance name already exists
     const existing = integrations.find((i) => i.instancia === instancia);
     if (existing) {
-      instancia = `${instancia}_${Date.now()}`;
+      instancia = `${instancia}-${Date.now()}`;
     }
 
     try {
