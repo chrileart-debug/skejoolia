@@ -25,7 +25,6 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,8 +35,8 @@ interface Appointment {
   id_agendamento: string;
   nome_cliente: string | null;
   telefone_cliente: string | null;
-  dia_do_corte: string;
-  horario_corte: string;
+  start_time: string;
+  end_time: string | null;
   status: string | null;
   id_corte: string | null;
   client_id: string | null;
@@ -51,6 +50,24 @@ interface Corte {
 interface OutletContextType {
   onMenuClick: () => void;
 }
+
+// Helper to format time from ISO string
+const formatTimeFromISO = (isoString: string): string => {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+};
+
+// Helper to get date string (YYYY-MM-DD) from ISO string
+const getDateFromISO = (isoString: string): string => {
+  const date = new Date(isoString);
+  return date.toISOString().split("T")[0];
+};
+
+// Helper to create ISO datetime from date and time strings
+const createISODateTime = (dateStr: string, timeStr: string): string => {
+  const dateTime = new Date(`${dateStr}T${timeStr}:00`);
+  return dateTime.toISOString();
+};
 
 export default function Schedule() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
@@ -70,15 +87,15 @@ export default function Schedule() {
     time: "",
   });
 
-  // Get first and last day of month for fetching
+  // Get first and last day of month for fetching (ISO format with timezone)
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+    const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 999);
     return {
-      start: firstDay.toISOString().split('T')[0],
-      end: lastDay.toISOString().split('T')[0],
+      start: firstDay.toISOString(),
+      end: lastDay.toISOString(),
     };
   };
 
@@ -92,9 +109,9 @@ export default function Schedule() {
       .from("agendamentos")
       .select("*")
       .eq("user_id", user.id)
-      .gte("dia_do_corte", start)
-      .lte("dia_do_corte", end)
-      .order("horario_corte", { ascending: true });
+      .gte("start_time", start)
+      .lte("start_time", end)
+      .order("start_time", { ascending: true });
 
     if (error) {
       console.error("Error fetching appointments:", error);
@@ -183,6 +200,12 @@ export default function Schedule() {
       }
     }
 
+    // Create start_time and end_time (default 1 hour duration)
+    const startTime = createISODateTime(formData.date, formData.time);
+    const endDate = new Date(startTime);
+    endDate.setHours(endDate.getHours() + 1);
+    const endTime = endDate.toISOString();
+
     const { error } = await supabase
       .from("agendamentos")
       .insert({
@@ -190,8 +213,8 @@ export default function Schedule() {
         nome_cliente: formData.client || null,
         telefone_cliente: formData.phone || null,
         id_corte: formData.service,
-        dia_do_corte: formData.date,
-        horario_corte: formData.time,
+        start_time: startTime,
+        end_time: endTime,
         status: "pending",
         client_id: clientId,
       });
@@ -286,7 +309,7 @@ export default function Schedule() {
 
   const getAppointmentsForDay = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
-    return appointments.filter((a) => a.dia_do_corte === dateStr);
+    return appointments.filter((a) => getDateFromISO(a.start_time) === dateStr);
   };
 
   const handleDayClick = (date: Date) => {
@@ -397,7 +420,7 @@ export default function Schedule() {
                                 !apt.status && "bg-muted text-muted-foreground"
                               )}
                             >
-                              <span className="font-medium">{apt.horario_corte?.slice(0, 5)}</span>
+                              <span className="font-medium">{formatTimeFromISO(apt.start_time)}</span>
                               <span className="hidden lg:inline"> - {apt.nome_cliente || "Cliente"}</span>
                             </div>
                           ))}
@@ -459,7 +482,7 @@ export default function Schedule() {
                       <div className="flex items-center gap-3">
                         <div className="text-center min-w-[50px]">
                           <p className="text-lg font-bold text-foreground">
-                            {appointment.horario_corte?.slice(0, 5)}
+                            {formatTimeFromISO(appointment.start_time)}
                           </p>
                         </div>
                         <div className="w-px h-10 bg-border" />
