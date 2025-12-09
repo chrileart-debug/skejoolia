@@ -49,6 +49,8 @@ export interface Integration {
   vinculado_em: string | null;
   created_at: string;
   updated_at: string;
+  // Added for showing linked agent name
+  linked_agent_name?: string | null;
 }
 
 // Format phone number in Brazilian format: 55 11 99999-9999
@@ -211,7 +213,7 @@ export function WhatsAppIntegrationManager({
     numero: "",
   });
 
-  // Fetch available integrations (not linked to other agents)
+  // Fetch ALL integrations and include linked agent names
   const fetchIntegrations = useCallback(async () => {
     if (!user) return;
     
@@ -223,24 +225,33 @@ export function WhatsAppIntegrationManager({
         .order("created_at", { ascending: false });
       
       if (error) throw error;
-      
-      // Filter to show only integrations that are:
-      // 1. Not linked to any agent (vinculado_em is null)
-      // 2. OR linked to the current agent being edited
-      const availableIntegrations = (allIntegrations || []).filter((integration) => {
-        if (!integration.vinculado_em) return true;
-        if (currentAgentId && integration.vinculado_em === currentAgentId) return true;
-        return false;
+
+      // Fetch all agents to get names for linked integrations
+      const { data: agents } = await supabase
+        .from("agentes")
+        .select("id_agente, nome");
+
+      // Map integrations with linked agent names
+      const integrationsWithAgentNames = (allIntegrations || []).map((integration) => {
+        let linkedAgentName: string | null = null;
+        if (integration.vinculado_em && agents) {
+          const linkedAgent = agents.find((a) => a.id_agente === integration.vinculado_em);
+          linkedAgentName = linkedAgent?.nome || null;
+        }
+        return {
+          ...integration,
+          linked_agent_name: linkedAgentName,
+        };
       });
       
-      setIntegrations(availableIntegrations);
+      setIntegrations(integrationsWithAgentNames);
     } catch (error) {
       console.error("Error fetching integrations:", error);
       toast.error("Erro ao carregar integrações");
     } finally {
       setIsLoading(false);
     }
-  }, [user, currentAgentId]);
+  }, [user]);
 
   useEffect(() => {
     if (open) {
@@ -653,91 +664,116 @@ export function WhatsAppIntegrationManager({
                 <div className="space-y-3">
                   {integrations.map((integration) => {
                     const isSelected = selectedIntegrationId === integration.id;
+                    const isLinkedToCurrentAgent = integration.vinculado_em === currentAgentId;
                     const isLinkedToOther = integration.vinculado_em && integration.vinculado_em !== currentAgentId;
+                    const canSelect = integration.status === "conectado" && (!integration.vinculado_em || isLinkedToCurrentAgent);
                     
                     return (
                       <div
                         key={integration.id}
-                        className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                        className={`p-4 rounded-xl border transition-all ${
                           isSelected 
                             ? "border-primary bg-primary/5" 
+                            : isLinkedToOther
+                            ? "border-border bg-muted/30"
                             : "border-border hover:border-primary/50"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                              integration.status === "conectado"
-                                ? "bg-success/10"
-                                : "bg-muted"
-                            }`}
-                          >
-                            <MessageSquare
-                              className={`w-5 h-5 ${
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                                 integration.status === "conectado"
-                                  ? "text-success"
-                                  : "text-muted-foreground"
+                                  ? "bg-success/10"
+                                  : "bg-muted"
                               }`}
-                            />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{integration.nome}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Phone className="w-3 h-3" />
-                              {formatPhoneNumber(integration.numero)}
+                            >
+                              <MessageSquare
+                                className={`w-5 h-5 ${
+                                  integration.status === "conectado"
+                                    ? "text-success"
+                                    : "text-muted-foreground"
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{integration.nome}</p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Phone className="w-3 h-3" />
+                                {formatPhoneNumber(integration.numero)}
+                              </div>
                             </div>
                           </div>
+
+                          <StatusBadge status={getStatusForBadge(integration.status)} />
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={getStatusForBadge(integration.status)} />
-                          
-                          {mode === "select" ? (
+                        {/* Linked agent indicator */}
+                        {isLinkedToOther && integration.linked_agent_name && (
+                          <div className="mt-2 px-3 py-1.5 bg-warning/10 text-warning rounded-lg text-xs flex items-center gap-1.5">
+                            <Link2 className="w-3 h-3" />
+                            Vinculado a: <span className="font-medium">{integration.linked_agent_name}</span>
+                          </div>
+                        )}
+
+                        {/* Action buttons - always show management options */}
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                          {/* Connect/Disconnect buttons */}
+                          {integration.status === "conectado" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDisconnect(integration)}
+                              disabled={isDisconnecting}
+                              className="text-warning border-warning/30 hover:bg-warning/10"
+                            >
+                              <Unlink className="w-4 h-4 mr-1" />
+                              Desconectar
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleConnect(integration)}
+                              disabled={isConnecting}
+                            >
+                              <QrCode className="w-4 h-4 mr-1" />
+                              Conectar
+                            </Button>
+                          )}
+
+                          {/* Delete button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteClick(integration)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+
+                          {/* Spacer */}
+                          <div className="flex-1" />
+
+                          {/* Select button - only in select mode */}
+                          {mode === "select" && (
                             <Button
                               size="sm"
                               variant={isSelected ? "default" : "outline"}
                               onClick={() => handleSelectIntegration(integration)}
-                              disabled={integration.status !== "conectado"}
+                              disabled={!canSelect}
                             >
                               {isSelected ? (
                                 <>
                                   <Check className="w-4 h-4 mr-1" />
                                   Selecionado
                                 </>
+                              ) : isLinkedToOther ? (
+                                "Ocupado"
                               ) : (
                                 "Selecionar"
                               )}
                             </Button>
-                          ) : (
-                            <div className="flex gap-1">
-                              {integration.status === "conectado" ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDisconnect(integration)}
-                                  disabled={isDisconnecting}
-                                >
-                                  <Unlink className="w-4 h-4" />
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleConnect(integration)}
-                                  disabled={isConnecting}
-                                >
-                                  <Link2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteClick(integration)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
                           )}
                         </div>
                       </div>
@@ -764,7 +800,7 @@ export function WhatsAppIntegrationManager({
                 {/* Connection info for select mode */}
                 {mode === "select" && (
                   <p className="text-xs text-muted-foreground text-center">
-                    Apenas integrações conectadas podem ser vinculadas a agentes.
+                    Apenas integrações conectadas e não vinculadas a outros agentes podem ser selecionadas.
                   </p>
                 )}
               </>
