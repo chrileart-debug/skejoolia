@@ -51,22 +51,49 @@ interface OutletContextType {
   onMenuClick: () => void;
 }
 
-// Helper to format time from ISO string
+const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
+
+// Helper to format time from ISO string - always displays in Brasília timezone
 const formatTimeFromISO = (isoString: string): string => {
   const date = new Date(isoString);
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString("pt-BR", { 
+    hour: "2-digit", 
+    minute: "2-digit",
+    timeZone: BRASILIA_TIMEZONE 
+  });
 };
 
-// Helper to get date string (YYYY-MM-DD) from ISO string
+// Helper to get date string (YYYY-MM-DD) from ISO string - always in Brasília timezone
 const getDateFromISO = (isoString: string): string => {
   const date = new Date(isoString);
-  return date.toISOString().split("T")[0];
+  // Format in Brasília timezone to get correct date
+  const year = date.toLocaleString("en-CA", { year: "numeric", timeZone: BRASILIA_TIMEZONE });
+  const month = date.toLocaleString("en-CA", { month: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  const day = date.toLocaleString("en-CA", { day: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  return `${year}-${month}-${day}`;
 };
 
 // Helper to create ISO datetime from date and time strings with Brasília timezone
 const createISODateTime = (dateStr: string, timeStr: string): string => {
   // Format: YYYY-MM-DDTHH:MM:SS-03:00 (Brasília timezone)
   return `${dateStr}T${timeStr}:00-03:00`;
+};
+
+// Helper to get current date string in Brasília timezone
+const getTodayInBrasilia = (): string => {
+  const now = new Date();
+  const year = now.toLocaleString("en-CA", { year: "numeric", timeZone: BRASILIA_TIMEZONE });
+  const month = now.toLocaleString("en-CA", { month: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  const day = now.toLocaleString("en-CA", { day: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  return `${year}-${month}-${day}`;
+};
+
+// Helper to format a local Date object to YYYY-MM-DD in Brasília timezone
+const formatDateToBrasilia = (date: Date): string => {
+  const year = date.toLocaleString("en-CA", { year: "numeric", timeZone: BRASILIA_TIMEZONE });
+  const month = date.toLocaleString("en-CA", { month: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  const day = date.toLocaleString("en-CA", { day: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  return `${year}-${month}-${day}`;
 };
 
 export default function Schedule() {
@@ -87,15 +114,18 @@ export default function Schedule() {
     time: "",
   });
 
-  // Get first and last day of month for fetching (ISO format with timezone)
+  // Get first and last day of month for fetching (ISO format with Brasília timezone)
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    // Format month with leading zero
+    const monthStr = String(month + 1).padStart(2, "0");
+    // Get last day of month
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    
     return {
-      start: firstDay.toISOString(),
-      end: lastDay.toISOString(),
+      start: `${year}-${monthStr}-01T00:00:00-03:00`,
+      end: `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}T23:59:59-03:00`,
     };
   };
 
@@ -309,7 +339,7 @@ export default function Schedule() {
   };
 
   const getAppointmentsForDay = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatDateToBrasilia(date);
     return appointments.filter((a) => getDateFromISO(a.start_time) === dateStr);
   };
 
@@ -318,7 +348,7 @@ export default function Schedule() {
     setSelectedDayAppointments(dayAppointments);
     setFormData((prev) => ({
       ...prev,
-      date: date.toISOString().split('T')[0],
+      date: formatDateToBrasilia(date),
     }));
     setIsDayDialogOpen(true);
   };

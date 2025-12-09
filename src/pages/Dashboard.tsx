@@ -19,10 +19,16 @@ interface OutletContextType {
   onMenuClick: () => void;
 }
 
-// Helper to format time from ISO string
+const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
+
+// Helper to format time from ISO string - always displays in Brasília timezone
 const formatTimeFromISO = (isoString: string): string => {
   const date = new Date(isoString);
-  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString("pt-BR", { 
+    hour: "2-digit", 
+    minute: "2-digit",
+    timeZone: BRASILIA_TIMEZONE 
+  });
 };
 
 export default function Dashboard() {
