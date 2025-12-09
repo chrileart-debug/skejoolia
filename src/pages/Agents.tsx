@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bot, Plus, Edit2, Trash2, Phone, Loader2 } from "lucide-react";
+import { Bot, Plus, Edit2, Trash2, Phone, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,6 +32,12 @@ import {
   DEFAULT_WORK_SCHEDULE,
   parseWorkSchedule,
 } from "@/components/agents/WorkScheduleEditor";
+import {
+  WhatsAppIntegrationManager,
+  Integration,
+  formatPhoneNumber,
+  getStatusForBadge,
+} from "@/components/integrations/WhatsAppIntegrationManager";
 
 interface Agent {
   id: string;
@@ -47,12 +53,6 @@ interface Agent {
   status: "online" | "offline";
 }
 
-interface WhatsAppNumber {
-  id: string;
-  nome: string;
-  numero: string;
-}
-
 interface OutletContextType {
   onMenuClick: () => void;
 }
@@ -61,7 +61,7 @@ export default function Agents() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [whatsappNumbers, setWhatsappNumbers] = useState<WhatsAppNumber[]>([]);
+  const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
@@ -82,9 +82,16 @@ export default function Agents() {
   useEffect(() => {
     if (user) {
       fetchAgents();
-      fetchWhatsAppNumbers();
+      fetchWhatsAppIntegrations();
     }
   }, [user]);
+
+  // Listen for whatsapp:updated events
+  useEffect(() => {
+    const handleUpdate = () => fetchWhatsAppIntegrations();
+    window.addEventListener("whatsapp:updated", handleUpdate);
+    return () => window.removeEventListener("whatsapp:updated", handleUpdate);
+  }, []);
 
   const fetchAgents = async () => {
     try {
@@ -118,17 +125,18 @@ export default function Agents() {
     }
   };
 
-  const fetchWhatsAppNumbers = async () => {
+  const fetchWhatsAppIntegrations = async () => {
     try {
       const { data, error } = await supabase
         .from("integracao_whatsapp")
-        .select("id, nome, numero");
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      setWhatsappNumbers(data || []);
+      setWhatsappIntegrations(data || []);
     } catch (error) {
-      console.error("Erro ao carregar números WhatsApp:", error);
+      console.error("Erro ao carregar integrações WhatsApp:", error);
     }
   };
 
@@ -207,6 +215,7 @@ export default function Agents() {
       if (error) throw error;
 
       setAgents(agents.filter((a) => a.id !== id));
+      window.dispatchEvent(new CustomEvent("whatsapp:updated"));
       toast.success("Agente removido com sucesso");
     } catch (error) {
       console.error("Erro ao remover agente:", error);
@@ -282,6 +291,7 @@ export default function Agents() {
               : a
           )
         );
+        window.dispatchEvent(new CustomEvent("whatsapp:updated"));
         toast.success("Agente atualizado com sucesso");
       } else {
         const { data, error } = await supabase
@@ -317,6 +327,7 @@ export default function Agents() {
           status: data.ativo ? "online" : "offline",
         };
         setAgents([newAgent, ...agents]);
+        window.dispatchEvent(new CustomEvent("whatsapp:updated"));
         toast.success("Agente criado com sucesso");
       }
 
@@ -330,15 +341,17 @@ export default function Agents() {
     }
   };
 
-  const handleSelectWhatsApp = (id: string) => {
-    setFormData({ ...formData, whatsappId: id });
-    setIsWhatsAppModalOpen(false);
+  const handleSelectWhatsApp = (integration: Integration | null) => {
+    if (integration) {
+      setFormData({ ...formData, whatsappId: integration.id });
+    } else {
+      setFormData({ ...formData, whatsappId: "" });
+    }
   };
 
-  const getWhatsAppNumber = (id: string | null) => {
+  const getWhatsAppIntegration = (id: string | null): Integration | null => {
     if (!id) return null;
-    const wp = whatsappNumbers.find((w) => w.id === id);
-    return wp?.numero || null;
+    return whatsappIntegrations.find((w) => w.id === id) || null;
   };
 
   if (isLoading) {
@@ -372,74 +385,79 @@ export default function Agents() {
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="bg-card rounded-2xl shadow-card p-5 hover:shadow-card-hover transition-all duration-300 animate-fade-in"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                      <Bot className="w-6 h-6 text-primary-foreground" />
+            {agents.map((agent) => {
+              const whatsappIntegration = getWhatsAppIntegration(agent.whatsappId);
+              
+              return (
+                <div
+                  key={agent.id}
+                  className="bg-card rounded-2xl shadow-card p-5 hover:shadow-card-hover transition-all duration-300 animate-fade-in"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
+                        <Bot className="w-6 h-6 text-primary-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          {agent.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {agent.role}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        {agent.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {agent.role}
-                      </p>
-                    </div>
+                    <StatusBadge status={agent.status} />
                   </div>
-                  <StatusBadge status={agent.status} />
-                </div>
 
-                <div className="space-y-2 mb-4">
-                  {agent.voiceTone && (
+                  <div className="space-y-2 mb-4">
+                    {agent.voiceTone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Tom de voz:</span>
+                        <span className="text-foreground">{agent.voiceTone}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">Tom de voz:</span>
-                      <span className="text-foreground">{agent.voiceTone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Dias ativos:</span>
-                    <span className="text-foreground">
-                      {Object.entries(agent.workSchedule)
-                        .filter(([, val]) => val.enabled)
-                        .length} dias
-                    </span>
-                  </div>
-                  {getWhatsAppNumber(agent.whatsappId) && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Dias ativos:</span>
                       <span className="text-foreground">
-                        {getWhatsAppNumber(agent.whatsappId)}
+                        {Object.entries(agent.workSchedule)
+                          .filter(([, val]) => val.enabled)
+                          .length} dias
                       </span>
                     </div>
-                  )}
-                </div>
+                    {whatsappIntegration && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <MessageSquare className={`w-4 h-4 ${whatsappIntegration.status === "conectado" ? "text-success" : "text-muted-foreground"}`} />
+                        <span className="text-foreground">
+                          {formatPhoneNumber(whatsappIntegration.numero)}
+                        </span>
+                        <StatusBadge status={getStatusForBadge(whatsappIntegration.status)} />
+                      </div>
+                    )}
+                  </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => handleEdit(agent)}
-                  >
-                    <Edit2 className="w-4 h-4 mr-1" />
-                    Editar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(agent.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleEdit(agent)}
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDelete(agent.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -570,14 +588,28 @@ export default function Agents() {
             />
 
             <div className="space-y-2">
-              <Label>Número do WhatsApp</Label>
+              <Label>Integração WhatsApp</Label>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Selecione um número"
-                  value={getWhatsAppNumber(formData.whatsappId) || ""}
-                  readOnly
-                  className="flex-1"
-                />
+                <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30">
+                  {formData.whatsappId ? (
+                    (() => {
+                      const integration = getWhatsAppIntegration(formData.whatsappId);
+                      if (!integration) return <span className="text-muted-foreground">Integração não encontrada</span>;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className={`w-4 h-4 ${integration.status === "conectado" ? "text-success" : "text-muted-foreground"}`} />
+                          <span className="font-medium">{integration.nome}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {formatPhoneNumber(integration.numero)}
+                          </span>
+                          <StatusBadge status={getStatusForBadge(integration.status)} />
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-muted-foreground">Nenhuma integração selecionada</span>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -611,50 +643,15 @@ export default function Agents() {
         </DialogContent>
       </Dialog>
 
-      {/* WhatsApp Selection Modal */}
-      <Dialog open={isWhatsAppModalOpen} onOpenChange={setIsWhatsAppModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Selecionar WhatsApp</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 pt-4">
-            {whatsappNumbers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Nenhum número WhatsApp cadastrado
-              </p>
-            ) : (
-              whatsappNumbers.map((wp) => (
-                <button
-                  key={wp.id}
-                  onClick={() => handleSelectWhatsApp(wp.id)}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-all text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-success" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">{wp.nome}</p>
-                    <p className="text-sm text-muted-foreground">{wp.numero}</p>
-                  </div>
-                </button>
-              ))
-            )}
-
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setIsWhatsAppModalOpen(false);
-                window.location.href = "/integrations";
-              }}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar novo número
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* WhatsApp Integration Manager */}
+      <WhatsAppIntegrationManager
+        open={isWhatsAppModalOpen}
+        onOpenChange={setIsWhatsAppModalOpen}
+        onSelectIntegration={handleSelectWhatsApp}
+        selectedIntegrationId={formData.whatsappId}
+        currentAgentId={editingAgent?.id}
+        mode="select"
+      />
     </div>
   );
 }
