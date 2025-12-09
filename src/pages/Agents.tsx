@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -52,7 +53,12 @@ interface WhatsAppNumber {
   numero: string;
 }
 
+interface OutletContextType {
+  onMenuClick: () => void;
+}
+
 export default function Agents() {
+  const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappNumbers, setWhatsappNumbers] = useState<WhatsAppNumber[]>([]);
@@ -338,7 +344,7 @@ export default function Agents() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Agentes" subtitle="Gerencie seus agentes de IA" />
+        <Header title="Agentes" subtitle="Gerencie seus agentes de IA" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -348,7 +354,7 @@ export default function Agents() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Agentes" subtitle="Gerencie seus agentes de IA" />
+      <Header title="Agentes" subtitle="Gerencie seus agentes de IA" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6">
         {agents.length === 0 ? (

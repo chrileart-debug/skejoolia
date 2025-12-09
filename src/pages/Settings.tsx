@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useOutletContext } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -25,7 +26,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
+interface OutletContextType {
+  onMenuClick: () => void;
+}
+
 export default function Settings() {
+  const { onMenuClick } = useOutletContext<OutletContextType>();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -118,7 +124,7 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Configurações" subtitle="Gerencie sua conta" />
+      <Header title="Configurações" subtitle="Gerencie sua conta" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
         {/* Profile Section */}

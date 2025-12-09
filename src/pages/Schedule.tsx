@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -47,7 +48,12 @@ interface Corte {
   nome_corte: string;
 }
 
+interface OutletContextType {
+  onMenuClick: () => void;
+}
+
 export default function Schedule() {
+  const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Corte[]>([]);
@@ -312,7 +318,7 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header title="Agenda" subtitle="Calendário de agendamentos" />
+      <Header title="Agenda" subtitle="Calendário de agendamentos" onMenuClick={onMenuClick} />
 
       <div className="flex-1 p-4 lg:p-6 flex flex-col">
         {/* Month Navigation */}
