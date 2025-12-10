@@ -2,6 +2,9 @@ import { Menu, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
   title: string;
@@ -9,13 +12,47 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
+function getInitials(name: string | null | undefined): string {
+  if (!name || name.trim() === "") return "?";
+  
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) {
+    return words[0].substring(0, 2).toUpperCase();
+  }
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
 export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
+  const [userName, setUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadUserName() {
+      if (!user) return;
+      
+      const { data } = await supabase
+        .from("user_settings")
+        .select("nome")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (data?.nome) {
+        setUserName(data.nome);
+      } else if (user.user_metadata?.nome) {
+        setUserName(user.user_metadata.nome);
+      }
+    }
+    
+    loadUserName();
+  }, [user]);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
+
+  const initials = getInitials(userName);
 
   return (
     <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border">
@@ -54,7 +91,7 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
             onClick={() => navigate("/settings")}
             className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity"
           >
-            JP
+            {initials}
           </button>
         </div>
       </div>
