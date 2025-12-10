@@ -231,10 +231,20 @@ export default function Register() {
       {/* Right side - Decorative */}
       <div className="hidden lg:flex flex-1 gradient-hero items-center justify-center p-12">
         <div className="text-center text-primary-foreground max-w-md animate-slide-up">
-          <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-8">
-            <Scissors className="w-12 h-12" />
+          <div className="flex items-center justify-center font-extrabold tracking-tighter select-none text-4xl mb-8">
+            <span>S</span>
+            <span>K</span>
+            <span>E</span>
+            <span>J</span>
+            <span className="text-white/80 inline-flex items-center justify-center mx-[2px] hover:rotate-180 transition-transform duration-700 ease-in-out">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6v6l4 2"></path>
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+            </span>
+            <span>O</span>
+            <span>L</span>
           </div>
-          <h2 className="text-3xl font-bold mb-4">BarberPro</h2>
           <p className="text-lg opacity-90">
             Automatize agendamentos, gerencie serviços e deixe a IA atender seus clientes pelo WhatsApp.
           </p>
