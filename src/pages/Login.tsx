@@ -144,9 +144,19 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right side - Decorative */}
-      <div className="hidden lg:flex flex-1 gradient-hero items-center justify-center p-12">
-        <div className="text-center text-primary-foreground max-w-md animate-slide-up">
+      {/* Right side - Decorative with barbershop image */}
+      <div className="hidden lg:flex flex-1 relative items-center justify-center p-12 overflow-hidden">
+        {/* Background image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-[2px] scale-105"
+          style={{ backgroundImage: "url('/images/barbershop-background.jpg')" }}
+        />
+        
+        {/* Blue overlay with gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#139ED0]/70 to-[#1BB0E9]/65" />
+        
+        {/* Content */}
+        <div className="relative z-10 text-center text-white max-w-md animate-slide-up">
           <div className="flex items-center justify-center font-extrabold tracking-tighter select-none text-4xl mb-8">
             <span>S</span>
             <span>K</span>
