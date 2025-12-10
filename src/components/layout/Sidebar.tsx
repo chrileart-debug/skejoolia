@@ -61,11 +61,28 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           "flex items-center h-16 px-4 border-b border-sidebar-border",
           collapsed ? "justify-center" : "gap-3"
         )}>
-          <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-md">
-            <Scissors className="w-5 h-5 text-primary-foreground" />
-          </div>
-          {!collapsed && (
-            <span className="font-bold text-lg text-sidebar-foreground">BarberPro</span>
+          {collapsed ? (
+            <span className="text-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6v6l4 2"></path>
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+            </span>
+          ) : (
+            <div className="flex items-center font-extrabold tracking-tighter text-sidebar-foreground select-none text-2xl">
+              <span>S</span>
+              <span>K</span>
+              <span>E</span>
+              <span>J</span>
+              <span className="text-primary inline-flex items-center justify-center mx-[2px] hover:rotate-180 transition-transform duration-700 ease-in-out">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 6v6l4 2"></path>
+                  <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+              </span>
+              <span>O</span>
+              <span>L</span>
+            </div>
           )}
         </div>
 
@@ -129,11 +146,19 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
       >
         {/* Mobile Header */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-md">
-              <Scissors className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg text-sidebar-foreground">BarberPro</span>
+          <div className="flex items-center font-extrabold tracking-tighter text-sidebar-foreground select-none text-2xl">
+            <span>S</span>
+            <span>K</span>
+            <span>E</span>
+            <span>J</span>
+            <span className="text-primary inline-flex items-center justify-center mx-[2px] hover:rotate-180 transition-transform duration-700 ease-in-out">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6v6l4 2"></path>
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+            </span>
+            <span>O</span>
+            <span>L</span>
           </div>
           <Button variant="ghost" size="icon" onClick={onMobileClose}>
             <X className="w-5 h-5" />
