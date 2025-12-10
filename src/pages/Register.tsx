@@ -99,19 +99,8 @@ export default function Register() {
         <div className="w-full max-w-md space-y-6 animate-fade-in py-8">
           {/* Logo */}
           <div className="text-center">
-            <div className="flex items-center justify-center font-extrabold tracking-tighter text-foreground select-none text-3xl mb-6">
-              <span>S</span>
-              <span>K</span>
-              <span>E</span>
-              <span>J</span>
-              <span className="text-primary inline-flex items-center justify-center mx-[2px] hover:rotate-180 transition-transform duration-700 ease-in-out">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 6v6l4 2"></path>
-                  <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-              </span>
-              <span>O</span>
-              <span>L</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
+              <Scissors className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
             <p className="text-muted-foreground mt-2">
