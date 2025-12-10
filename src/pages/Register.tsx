@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Scissors, Eye, EyeOff, Mail, Lock, User, Phone, Building2 } from "lucide-react";
+import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,7 +100,7 @@ export default function Register() {
           {/* Logo */}
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
-              <Scissors className="w-8 h-8 text-primary-foreground" />
+              <Clock className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
             <p className="text-muted-foreground mt-2">
