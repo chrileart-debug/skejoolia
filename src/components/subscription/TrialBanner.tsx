@@ -1,13 +1,53 @@
-import { Clock, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { Clock, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 export function TrialBanner() {
-  const { isTrialing, daysRemaining, plan } = useSubscription();
-  const navigate = useNavigate();
+  const { isTrialing, daysRemaining, plan, subscription } = useSubscription();
+  const { user } = useAuth();
+  const [subscribing, setSubscribing] = useState(false);
 
   if (!isTrialing || daysRemaining <= 0) return null;
+
+  const handleSubscribe = async () => {
+    if (!user || !subscription || !plan) {
+      toast.error("Dados de assinatura não encontrados");
+      return;
+    }
+
+    setSubscribing(true);
+    try {
+      const response = await fetch("https://webhook.lernow.com/webhook/asaas-checkout-skejool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "subscribe",
+          user_id: user.id,
+          plan_slug: subscription.plan_slug,
+          price: plan.price,
+          subscription_id: subscription.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.link) {
+        window.location.href = data.link;
+      } else if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        toast.error("Erro ao criar sessão de pagamento");
+      }
+    } catch (error) {
+      console.error("Subscribe error:", error);
+      toast.error("Erro ao processar assinatura");
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   return (
     <div className="w-full bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border-b border-primary/20">
@@ -27,11 +67,21 @@ export function TrialBanner() {
         </div>
         <Button
           size="sm"
-          onClick={() => navigate("/settings?tab=subscription")}
+          onClick={handleSubscribe}
+          disabled={subscribing}
           className="gap-1.5"
         >
-          Assinar agora
-          <ArrowRight className="w-3.5 h-3.5" />
+          {subscribing ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Processando...
+            </>
+          ) : (
+            <>
+              Assinar agora
+              <ArrowRight className="w-3.5 h-3.5" />
+            </>
+          )}
         </Button>
       </div>
     </div>
