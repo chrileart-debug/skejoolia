@@ -105,7 +105,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return data;
   };
 
-  const fetchSubscription = async (fetchedPlans?: Plan[]) => {
+  const fetchSubscription = async () => {
     if (!user) {
       setSubscription(null);
       setPlan(null);
@@ -126,7 +126,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         fallbackAttemptedRef.current = true;
         console.log("No subscription found, creating fallback...");
         
-        const plansToUse = fetchedPlans || plans;
+        // Fetch plans if not available
+        let plansToUse = plans;
+        if (plansToUse.length === 0) {
+          const { data: fetchedPlans } = await supabase
+            .from("plans")
+            .select("*")
+            .eq("is_active", true);
+          
+          if (fetchedPlans) {
+            plansToUse = fetchedPlans as Plan[];
+            setPlans(plansToUse);
+          }
+        }
+        
         const fallbackData = await createFallbackSubscription(user.id, plansToUse);
         
         if (fallbackData) {
@@ -173,22 +186,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const init = async () => {
-      const fetchedPlans = await fetchPlans();
-      await fetchSubscription(fetchedPlans);
-    };
-    init();
+    fetchPlans();
   }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchSubscription();
-    } else {
-      setSubscription(null);
-      setPlan(null);
-      setLoading(false);
-      fallbackAttemptedRef.current = false;
-    }
+    fetchSubscription();
   }, [user]);
 
   const isTrialing = subscription?.status === "trialing";
