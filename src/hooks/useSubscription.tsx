@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -55,6 +55,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const fallbackAttemptedRef = useRef(false);
 
   const fetchPlans = async () => {
     const { data, error } = await supabase
@@ -64,14 +65,52 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     if (!error && data) {
       setPlans(data as Plan[]);
+      return data as Plan[];
     }
+    return [];
   };
 
-  const fetchSubscription = async () => {
+  const createFallbackSubscription = async (userId: string, fetchedPlans: Plan[]) => {
+    // Get the basic plan (default)
+    const basicPlan = fetchedPlans.find(p => p.slug === "basico") || fetchedPlans[0];
+    
+    if (!basicPlan) {
+      console.error("No plans available for fallback subscription");
+      return null;
+    }
+
+    // Calculate trial expiration (7 days from now)
+    const trialExpiresAt = new Date();
+    trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
+
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .insert({
+        user_id: userId,
+        plan_slug: basicPlan.slug,
+        status: "trialing",
+        price_at_signup: basicPlan.price,
+        trial_started_at: new Date().toISOString(),
+        trial_expires_at: trialExpiresAt.toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating fallback subscription:", error);
+      return null;
+    }
+
+    console.log("Fallback subscription created successfully:", data);
+    return data;
+  };
+
+  const fetchSubscription = async (fetchedPlans?: Plan[]) => {
     if (!user) {
       setSubscription(null);
       setPlan(null);
       setLoading(false);
+      fallbackAttemptedRef.current = false;
       return;
     }
 
@@ -80,6 +119,34 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("user_id", user.id)
       .single();
+
+    if (error && error.code === "PGRST116") {
+      // No subscription found - create fallback if not already attempted
+      if (!fallbackAttemptedRef.current) {
+        fallbackAttemptedRef.current = true;
+        console.log("No subscription found, creating fallback...");
+        
+        const plansToUse = fetchedPlans || plans;
+        const fallbackData = await createFallbackSubscription(user.id, plansToUse);
+        
+        if (fallbackData) {
+          setSubscription(fallbackData as unknown as Subscription);
+          
+          // Fetch the plan details
+          const { data: planData } = await supabase
+            .from("plans")
+            .select("*")
+            .eq("slug", fallbackData.plan_slug)
+            .single();
+
+          if (planData) {
+            setPlan(planData as Plan);
+          }
+        }
+      }
+      setLoading(false);
+      return;
+    }
 
     if (!error && data) {
       setSubscription(data as unknown as Subscription);
@@ -101,15 +168,27 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const refreshSubscription = async () => {
     setLoading(true);
+    fallbackAttemptedRef.current = false;
     await fetchSubscription();
   };
 
   useEffect(() => {
-    fetchPlans();
+    const init = async () => {
+      const fetchedPlans = await fetchPlans();
+      await fetchSubscription(fetchedPlans);
+    };
+    init();
   }, []);
 
   useEffect(() => {
-    fetchSubscription();
+    if (user) {
+      fetchSubscription();
+    } else {
+      setSubscription(null);
+      setPlan(null);
+      setLoading(false);
+      fallbackAttemptedRef.current = false;
+    }
   }, [user]);
 
   const isTrialing = subscription?.status === "trialing";
@@ -128,6 +207,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       return { allowed: false, current: 0, limit: 0, reason: "not_authenticated" };
     }
 
+    // If no subscription exists yet, allow the action (fallback will create one)
+    if (!subscription && !loading) {
+      return { allowed: true, current: 0, limit: 1, reason: "no_subscription_yet" };
+    }
+
     const { data, error } = await supabase.rpc("check_user_limit", {
       p_user_id: user.id,
       p_resource: resource,
@@ -135,7 +219,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Error checking limit:", error);
-      return { allowed: false, current: 0, limit: 0, reason: "error" };
+      // On error, allow the action to prevent blocking users
+      return { allowed: true, current: 0, limit: 0, reason: "error" };
     }
 
     const result = data as unknown as LimitCheckResult;
