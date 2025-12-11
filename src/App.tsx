@@ -13,6 +13,7 @@ import Register from "./pages/Register";
 import Support from "./pages/Support";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Install from "./pages/Install";
 import Dashboard from "./pages/Dashboard";
 import Agents from "./pages/Agents";
 import Integrations from "./pages/Integrations";
@@ -42,6 +43,8 @@ const App = () => (
                 {/* Public pages */}
                 <Route path="/suporte" element={<Support />} />
                 <Route path="/privacidade" element={<Privacy />} />
+                <Route path="/termos" element={<Terms />} />
+                <Route path="/instalar" element={<Install />} />
                 <Route path="/termos" element={<Terms />} />
                 
                 {/* Protected App routes */}
