@@ -109,8 +109,8 @@ const Privacy = () => {
             <h2 className="text-xl font-semibold mb-4">8. Contato</h2>
             <p className="text-muted-foreground">
               Para questões sobre privacidade, entre em contato pelo email:{" "}
-              <a href="mailto:privacidade@skejool.com" className="text-primary hover:underline">
-                privacidade@skejool.com
+              <a href="mailto:suporte@app.skejool.com.br" className="text-primary hover:underline">
+                suporte@app.skejool.com.br
               </a>
             </p>
           </section>

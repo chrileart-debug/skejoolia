@@ -36,8 +36,8 @@ const Support = () => {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-2">Envie suas dúvidas por email:</p>
-              <a href="mailto:suporte@skejool.com" className="text-primary hover:underline font-medium">
-                suporte@skejool.com
+              <a href="mailto:suporte@app.skejool.com.br" className="text-primary hover:underline font-medium">
+                suporte@app.skejool.com.br
               </a>
             </CardContent>
           </Card>
@@ -51,8 +51,8 @@ const Support = () => {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-2">Atendimento via WhatsApp:</p>
-              <a href="https://wa.me/5511999999999" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                (11) 99999-9999
+              <a href="https://wa.me/169979982458" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                (16) 99799-82458
               </a>
             </CardContent>
           </Card>
