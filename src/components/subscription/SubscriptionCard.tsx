@@ -34,7 +34,9 @@ export function SubscriptionCard() {
 
       const data = await response.json();
       
-      if (data.checkout_url) {
+      if (data.link) {
+        window.location.href = data.link;
+      } else if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
         toast.error("Erro ao criar sessão de pagamento");
