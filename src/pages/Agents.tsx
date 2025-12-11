@@ -25,6 +25,8 @@ import { Bot, Plus, Edit2, Trash2, Phone, Loader2, MessageSquare } from "lucide-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
+import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { Json } from "@/integrations/supabase/types";
 import {
   WorkScheduleEditor,
@@ -60,6 +62,7 @@ interface OutletContextType {
 export default function Agents() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { checkLimit } = useSubscription();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +70,11 @@ export default function Agents() {
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
+    open: false,
+    current: 0,
+    limit: 0,
+  });
   const [formData, setFormData] = useState({
     name: "",
     role: "",
@@ -175,7 +183,18 @@ export default function Agents() {
     setEditingAgent(null);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    // Check limit before creating
+    const limitResult = await checkLimit("agents");
+    if (!limitResult.allowed) {
+      setLimitModal({
+        open: true,
+        current: limitResult.current,
+        limit: limitResult.limit,
+      });
+      return;
+    }
+    
     resetForm();
     setIsDialogOpen(true);
   };
@@ -651,6 +670,15 @@ export default function Agents() {
         selectedIntegrationId={formData.whatsappId}
         currentAgentId={editingAgent?.id}
         mode="select"
+      />
+
+      {/* Upgrade Limit Modal */}
+      <UpgradeLimitModal
+        open={limitModal.open}
+        onOpenChange={(open) => setLimitModal({ ...limitModal, open })}
+        resourceType="agents"
+        currentCount={limitModal.current}
+        limit={limitModal.limit}
       />
     </div>
   );

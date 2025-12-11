@@ -1,16 +1,33 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2 } from "lucide-react";
+import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { PlanSelector } from "@/components/subscription/PlanSelector";
+
+type RegistrationStep = "plan-selection" | "form";
+
+interface Plan {
+  slug: string;
+  name: string;
+  price: number;
+  max_agents: number;
+  max_whatsapp: number;
+  max_services: number | null;
+  max_appointments_month: number | null;
+}
 
 export default function Register() {
   const navigate = useNavigate();
   const { signUp, user, loading } = useAuth();
+  const [step, setStep] = useState<RegistrationStep>("plan-selection");
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -21,12 +38,38 @@ export default function Register() {
     password: "",
   });
 
+  // Fetch plans
+  useEffect(() => {
+    const fetchPlans = async () => {
+      const { data, error } = await supabase
+        .from("plans")
+        .select("*")
+        .eq("is_active", true);
+
+      if (!error && data) {
+        setPlans(data as Plan[]);
+      }
+      setLoadingPlans(false);
+    };
+
+    fetchPlans();
+  }, []);
+
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && user) {
       navigate("/dashboard");
     }
   }, [user, loading, navigate]);
+
+  const handleSelectPlan = (planSlug: string) => {
+    setSelectedPlan(planSlug);
+    setStep("form");
+  };
+
+  const handleBackToPlanSelection = () => {
+    setStep("plan-selection");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +81,11 @@ export default function Register() {
 
     if (formData.password.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    if (!selectedPlan) {
+      toast.error("Selecione um plano");
       return;
     }
 
@@ -60,10 +108,11 @@ export default function Register() {
       return;
     }
 
-    // Create user_settings record
+    // Create user_settings and subscription records
     const { data: { user: newUser } } = await supabase.auth.getUser();
     
     if (newUser) {
+      // Create user_settings
       const { error: settingsError } = await supabase
         .from("user_settings")
         .insert({
@@ -77,14 +126,39 @@ export default function Register() {
       if (settingsError) {
         console.error("Error creating user settings:", settingsError);
       }
+
+      // Get plan price
+      const selectedPlanData = plans.find(p => p.slug === selectedPlan);
+      
+      // Calculate trial expiration (7 days from now)
+      const trialExpiresAt = new Date();
+      trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
+
+      // Create subscription with trialing status
+      const { error: subscriptionError } = await supabase
+        .from("subscriptions")
+        .insert({
+          user_id: newUser.id,
+          plan_slug: selectedPlan,
+          status: "trialing",
+          price_at_signup: selectedPlanData?.price || 0,
+          trial_started_at: new Date().toISOString(),
+          trial_expires_at: trialExpiresAt.toISOString(),
+        });
+
+      if (subscriptionError) {
+        console.error("Error creating subscription:", subscriptionError);
+      }
     }
 
-    toast.success("Conta criada com sucesso! Verifique seu e-mail para confirmar.");
+    toast.success("Conta criada com sucesso! Seu teste grátis de 7 dias começou.");
     navigate("/dashboard");
     setIsLoading(false);
   };
 
-  if (loading) {
+  const selectedPlanData = plans.find(p => p.slug === selectedPlan);
+
+  if (loading || loadingPlans) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -96,136 +170,174 @@ export default function Register() {
     <div className="min-h-screen flex">
       {/* Left side - Form */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 overflow-y-auto">
-        <div className="w-full max-w-md space-y-6 animate-fade-in py-8">
-          {/* Logo */}
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
-              <Clock className="w-8 h-8 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
-            <p className="text-muted-foreground mt-2">
-              Comece a gerenciar sua barbearia agora
+        {step === "plan-selection" ? (
+          <div className="w-full py-8">
+            <PlanSelector 
+              plans={plans} 
+              onSelectPlan={handleSelectPlan} 
+              loading={isLoading}
+            />
+            {/* Login link */}
+            <p className="text-center text-sm text-muted-foreground mt-8">
+              Já tem uma conta?{" "}
+              <Link to="/" className="text-primary font-medium hover:underline">
+                Fazer login
+              </Link>
             </p>
           </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome completo</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="João Silva"
-                  className="pl-10 h-12"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Celular</Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="(11) 99999-9999"
-                  className="pl-10 h-12"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  className="pl-10 h-12"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="barbershopName">Nome da barbearia</Label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="barbershopName"
-                  type="text"
-                  placeholder="Barbearia do João"
-                  className="pl-10 h-12"
-                  value={formData.barbershopName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, barbershopName: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 6 caracteres"
-                  className="pl-10 pr-10 h-12"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <Button
-                type="submit"
-                size="xl"
-                className="w-full"
-                disabled={isLoading}
+        ) : (
+          <div className="w-full max-w-md space-y-6 animate-fade-in py-8">
+            {/* Back button and Plan info */}
+            <div className="space-y-4">
+              <button
+                onClick={handleBackToPlanSelection}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                {isLoading ? "Criando conta..." : "Criar conta"}
-              </Button>
-            </div>
-          </form>
+                <ArrowLeft className="w-4 h-4" />
+                Voltar para planos
+              </button>
 
-          {/* Login link */}
-          <p className="text-center text-sm text-muted-foreground">
-            Já tem uma conta?{" "}
-            <Link to="/" className="text-primary font-medium hover:underline">
-              Fazer login
-            </Link>
-          </p>
-        </div>
+              {/* Selected plan badge */}
+              {selectedPlanData && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                  <span>Plano {selectedPlanData.name}</span>
+                  <span className="text-xs opacity-75">
+                    R$ {selectedPlanData.price.toFixed(2).replace(".", ",")}/mês
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Logo */}
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
+                <Clock className="w-8 h-8 text-primary-foreground" />
+              </div>
+              <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
+              <p className="text-muted-foreground mt-2">
+                Comece seu teste grátis de 7 dias
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome completo</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="João Silva"
+                    className="pl-10 h-12"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Celular</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="(11) 99999-9999"
+                    className="pl-10 h-12"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">E-mail</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    className="pl-10 h-12"
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="barbershopName">Nome da barbearia</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="barbershopName"
+                    type="text"
+                    placeholder="Barbearia do João"
+                    className="pl-10 h-12"
+                    value={formData.barbershopName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, barbershopName: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Mínimo 6 caracteres"
+                    className="pl-10 pr-10 h-12"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  size="xl"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Criando conta..." : "Criar conta e começar teste grátis"}
+                </Button>
+              </div>
+            </form>
+
+            {/* Login link */}
+            <p className="text-center text-sm text-muted-foreground">
+              Já tem uma conta?{" "}
+              <Link to="/" className="text-primary font-medium hover:underline">
+                Fazer login
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Right side - Decorative with barbershop image */}

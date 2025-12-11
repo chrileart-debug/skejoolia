@@ -28,11 +28,12 @@ import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Bot
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
+import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { z } from "zod";
 
 const WEBHOOK_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp";
 const POLLING_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp_status";
-const MAX_INTEGRATIONS = 3;
 const QR_TIMEOUT_MS = 120000; // 2 minutes
 
 // Validation schema
@@ -179,6 +180,7 @@ interface OutletContextType {
 export default function Integrations() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { checkLimit } = useSubscription();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -193,6 +195,11 @@ export default function Integrations() {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [countdown, setCountdown] = useState(120);
   const [formErrors, setFormErrors] = useState<{ nome?: string; numero?: string }>({});
+  const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
+    open: false,
+    current: 0,
+    limit: 0,
+  });
   
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
@@ -262,10 +269,15 @@ export default function Integrations() {
     setFormErrors({});
   };
 
-  const handleCreate = () => {
-    // Check limit
-    if (integrations.length >= MAX_INTEGRATIONS) {
-      toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
+  const handleCreate = async () => {
+    // Check limit using subscription system
+    const limitResult = await checkLimit("whatsapp");
+    if (!limitResult.allowed && !limitResult.unlimited) {
+      setLimitModal({
+        open: true,
+        current: limitResult.current,
+        limit: limitResult.limit,
+      });
       return;
     }
     resetForm();
@@ -306,11 +318,7 @@ export default function Integrations() {
       return;
     }
 
-    // Check limit again
-    if (integrations.length >= MAX_INTEGRATIONS) {
-      toast.error(`Limite máximo de ${MAX_INTEGRATIONS} integrações atingido`);
-      return;
-    }
+    // Limit is already checked in handleCreate, but double-check here
 
     setIsCreating(true);
     const cleanNumero = sanitizePhoneNumber(formData.numero);
@@ -767,7 +775,7 @@ export default function Integrations() {
         )}
       </div>
 
-      {integrations.length > 0 && integrations.length < MAX_INTEGRATIONS && (
+      {integrations.length > 0 && (
         <FAB onClick={handleCreate} label="Nova Integração" />
       )}
 
@@ -923,6 +931,15 @@ export default function Integrations() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Upgrade Limit Modal */}
+      <UpgradeLimitModal
+        open={limitModal.open}
+        onOpenChange={(open) => setLimitModal({ ...limitModal, open })}
+        resourceType="whatsapp"
+        currentCount={limitModal.current}
+        limit={limitModal.limit}
+      />
     </div>
   );
 }

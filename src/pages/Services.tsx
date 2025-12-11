@@ -18,6 +18,8 @@ import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2, Upload, X } fro
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
+import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 
 interface Service {
   id: string;
@@ -38,6 +40,7 @@ interface OutletContextType {
 export default function Services() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { checkLimit } = useSubscription();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -46,6 +49,11 @@ export default function Services() {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
+    open: false,
+    current: 0,
+    limit: 0,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -99,7 +107,18 @@ export default function Services() {
     setPreviewUrl(null);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    // Check limit before creating
+    const limitResult = await checkLimit("services");
+    if (!limitResult.allowed && !limitResult.unlimited) {
+      setLimitModal({
+        open: true,
+        current: limitResult.current,
+        limit: limitResult.limit,
+      });
+      return;
+    }
+    
     resetForm();
     setIsDialogOpen(true);
   };
@@ -638,6 +657,15 @@ export default function Services() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Upgrade Limit Modal */}
+      <UpgradeLimitModal
+        open={limitModal.open}
+        onOpenChange={(open) => setLimitModal({ ...limitModal, open })}
+        resourceType="services"
+        currentCount={limitModal.current}
+        limit={limitModal.limit}
+      />
     </div>
   );
 }

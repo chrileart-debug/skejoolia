@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
+import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { cn } from "@/lib/utils";
 
 export function AppLayout() {
@@ -35,14 +36,15 @@ export function AppLayout() {
         />
       </div>
 
-      <main
-        className={cn(
-          "flex-1 min-h-screen pb-20 lg:pb-0 transition-all duration-300 overflow-y-auto",
-          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
-        )}
-      >
-        <Outlet context={{ onMenuClick: handleMobileMenuToggle }} />
-      </main>
+      <div className={cn(
+        "flex-1 flex flex-col min-h-screen transition-all duration-300",
+        sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
+      )}>
+        <TrialBanner />
+        <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto">
+          <Outlet context={{ onMenuClick: handleMobileMenuToggle }} />
+        </main>
+      </div>
 
       <BottomNav />
     </div>
