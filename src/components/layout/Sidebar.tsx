@@ -5,6 +5,7 @@ import {
   MessageSquare,
   Scissors,
   Calendar,
+  Users,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +22,7 @@ const navItems = [
   { title: "Integrações", icon: MessageSquare, href: "/integrations" },
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agenda", icon: Calendar, href: "/schedule" },
+  { title: "Clientes", icon: Users, href: "/clients" },
   { title: "Configurações", icon: Settings, href: "/settings" },
 ];
 

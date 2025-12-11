@@ -15,6 +15,7 @@ import Integrations from "./pages/Integrations";
 import Services from "./pages/Services";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
+import Clients from "./pages/Clients";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
                 <Route path="/integrations" element={<Integrations />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/schedule" element={<Schedule />} />
+                <Route path="/clients" element={<Clients />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
               
