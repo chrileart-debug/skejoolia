@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft } from "lucide-react";
+import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ export default function Register() {
     barbershopName: "",
     password: "",
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Fetch plans
   useEffect(() => {
@@ -76,6 +77,11 @@ export default function Register() {
 
     if (!formData.name || !formData.phone || !formData.email || !formData.barbershopName || !formData.password) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      toast.error("Você precisa aceitar os termos de uso para continuar");
       return;
     }
 
@@ -300,12 +306,37 @@ export default function Register() {
               </div>
             </div>
 
+            {/* Terms checkbox */}
+            <div className="flex items-start gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAcceptedTerms(!acceptedTerms)}
+                className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                  acceptedTerms 
+                    ? "bg-primary border-primary" 
+                    : "border-muted-foreground/50 hover:border-primary"
+                }`}
+              >
+                {acceptedTerms && <Check className="w-3 h-3 text-primary-foreground" />}
+              </button>
+              <label className="text-sm text-muted-foreground leading-tight">
+                Li e concordo com os{" "}
+                <Link to="/termos" target="_blank" className="text-primary hover:underline font-medium">
+                  Termos de Uso
+                </Link>
+                {" "}e a{" "}
+                <Link to="/privacidade" target="_blank" className="text-primary hover:underline font-medium">
+                  Política de Privacidade
+                </Link>
+              </label>
+            </div>
+
             <div className="pt-2">
               <Button
                 type="submit"
                 size="xl"
                 className="w-full"
-                disabled={isLoading}
+                disabled={isLoading || !acceptedTerms}
               >
                 {isLoading ? "Criando conta..." : "Criar conta e começar teste grátis"}
               </Button>
