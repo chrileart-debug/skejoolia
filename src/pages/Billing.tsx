@@ -244,54 +244,52 @@ export default function Billing() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="h-full flex flex-col overflow-hidden">
       <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
 
-      <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
+      <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-2xl mx-auto w-full flex flex-col gap-3 sm:gap-4 lg:gap-6 overflow-y-auto lg:overflow-visible">
         {/* Main Subscription Card - Banking App Style */}
-        <div className="bg-gradient-to-br from-card via-card to-muted/30 rounded-3xl shadow-card overflow-hidden animate-fade-in">
+        <div className="bg-gradient-to-br from-card via-card to-muted/30 rounded-2xl sm:rounded-3xl shadow-card overflow-hidden animate-fade-in flex-shrink-0">
           {/* Card Header with gradient accent */}
-          <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-6 py-5 border-b border-border/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-                  <CreditCard className="w-6 h-6 text-primary-foreground" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Método de pagamento</p>
-                  {cardInfo ? (
-                    <p className="text-lg font-semibold text-foreground">
-                      {cardInfo.brand} •••• {cardInfo.lastFour}
-                    </p>
-                  ) : (
-                    <p className="text-lg font-medium text-muted-foreground">Nenhum cartão vinculado</p>
-                  )}
-                </div>
+          <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-4 sm:px-6 py-3 sm:py-4 border-b border-border/50">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg flex-shrink-0">
+                <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Método de pagamento</p>
+                {cardInfo ? (
+                  <p className="text-base sm:text-lg font-semibold text-foreground truncate">
+                    {cardInfo.brand} •••• {cardInfo.lastFour}
+                  </p>
+                ) : (
+                  <p className="text-base sm:text-lg font-medium text-muted-foreground">Nenhum cartão</p>
+                )}
               </div>
             </div>
           </div>
 
           {/* Card Body */}
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
             {/* Status and Plan Value Row */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Status</p>
-                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${statusInfo.bgColor}`}>
-                  <StatusIcon className={`w-4 h-4 ${statusInfo.color}`} />
-                  <span className={`text-sm font-semibold ${statusInfo.color}`}>{statusInfo.label}</span>
+            <div className="grid grid-cols-2 gap-3 sm:gap-6">
+              <div className="space-y-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Status</p>
+                <div className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full ${statusInfo.bgColor}`}>
+                  <StatusIcon className={`w-3 h-3 sm:w-4 sm:h-4 ${statusInfo.color}`} />
+                  <span className={`text-xs sm:text-sm font-semibold ${statusInfo.color}`}>{statusInfo.label}</span>
                 </div>
                 {statusInfo.sublabel && (
-                  <p className="text-xs text-muted-foreground mt-1">{statusInfo.sublabel}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{statusInfo.sublabel}</p>
                 )}
               </div>
               
-              <div className="space-y-1.5 text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor do Plano</p>
-                <p className="text-2xl font-bold text-foreground">
+              <div className="space-y-1 text-right">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor do Plano</p>
+                <p className="text-xl sm:text-2xl font-bold text-foreground">
                   {plan ? formatCurrency(subscription?.price_at_signup || plan.price) : "-"}
                 </p>
-                <p className="text-xs text-muted-foreground">/mês</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">/mês</p>
               </div>
             </div>
 
@@ -299,39 +297,39 @@ export default function Billing() {
             <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
             {/* Dates Row */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Início do Contrato</p>
-                <p className="text-base font-semibold text-foreground">
+            <div className="grid grid-cols-2 gap-3 sm:gap-6">
+              <div className="space-y-0.5 sm:space-y-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Início</p>
+                <p className="text-sm sm:text-base font-semibold text-foreground">
                   {formatDate(subscription?.current_period_start || subscription?.trial_started_at || null)}
                 </p>
               </div>
               
-              <div className="space-y-1.5 text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Fim do Contrato</p>
-                <p className="text-base font-semibold text-foreground">
+              <div className="space-y-0.5 sm:space-y-1 text-right">
+                <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Fim</p>
+                <p className="text-sm sm:text-base font-semibold text-foreground">
                   {formatDate(subscription?.current_period_end || subscription?.trial_expires_at || null)}
                 </p>
               </div>
             </div>
 
             {/* Next Due Date - Highlighted */}
-            <div className="bg-muted/50 rounded-2xl p-4 text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Próximo Vencimento</p>
-              <p className="text-xl font-bold text-foreground">
+            <div className="bg-muted/50 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium mb-0.5">Próximo Vencimento</p>
+              <p className="text-lg sm:text-xl font-bold text-foreground">
                 {formatDate(subscription?.current_period_end || subscription?.trial_expires_at || null)}
               </p>
             </div>
 
             {/* Actions */}
-            <div className="pt-2 space-y-3">
+            <div className="pt-1 sm:pt-2 space-y-2">
               {(subscription?.status === "trialing" || subscription?.status === "expired" || !subscription) && (
                 <Button
-                  className="w-full h-12 text-base font-semibold rounded-xl"
+                  className="w-full h-10 sm:h-12 text-sm sm:text-base font-semibold rounded-xl"
                   onClick={handleSubscribe}
                   disabled={subscribing || !plan}
                 >
-                  <CreditCard className="w-5 h-5 mr-2" />
+                  <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   {subscribing ? "Processando..." : "Assinar agora"}
                 </Button>
               )}
@@ -340,7 +338,7 @@ export default function Billing() {
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button
-                      className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-3 border-t border-border/50"
+                      className="w-full text-center text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors py-2 sm:py-3 border-t border-border/50"
                       disabled={canceling}
                     >
                       {canceling ? "Cancelando..." : "Cancelar assinatura"}
@@ -369,29 +367,60 @@ export default function Billing() {
           </div>
         </div>
 
-        {/* Payment History */}
-        <div className="bg-card rounded-2xl shadow-card overflow-hidden animate-slide-up">
-          <div className="px-6 py-4 border-b border-border/50">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                <Receipt className="w-5 h-5 text-muted-foreground" />
+        {/* Payment History - Compact for mobile */}
+        <div className="bg-card rounded-xl sm:rounded-2xl shadow-card overflow-hidden animate-slide-up flex-shrink-0">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border/50">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground">Histórico de Pagamentos</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-foreground">Histórico</h2>
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {loadingPayments ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center h-20 sm:h-32">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : payments.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>Nenhum pagamento registrado</p>
+              <div className="text-center py-4 sm:py-8 text-muted-foreground">
+                <Calendar className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 opacity-50" />
+                <p className="text-xs sm:text-base">Nenhum pagamento registrado</p>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-6">
+              <div className="space-y-2 sm:hidden">
+                {/* Mobile: Card layout for payments */}
+                {payments.slice(0, 3).map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="text-left min-w-0">
+                        <p className="text-xs font-medium text-foreground">{formatDate(payment.due_date)}</p>
+                        <p className="text-[10px] text-muted-foreground capitalize">{payment.method || "Cartão"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {getPaymentStatusBadge(payment.status)}
+                      <span className="text-xs font-semibold text-foreground">{formatCurrency(payment.amount)}</span>
+                      {payment.invoice_url && (
+                        <a
+                          href={payment.invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Desktop/Tablet: Table layout */}
+            {payments.length > 0 && (
+              <div className="hidden sm:block overflow-x-auto -mx-6">
                 <Table>
                   <TableHeader>
                     <TableRow>
