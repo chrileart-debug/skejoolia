@@ -13,7 +13,6 @@ import {
   Clock,
   ExternalLink,
   XCircle,
-  Crown,
   Calendar,
   Receipt,
 } from "lucide-react";
@@ -25,6 +24,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -38,6 +48,12 @@ interface Payment {
   paid_at: string | null;
   method: string | null;
   invoice_url: string | null;
+  raw: {
+    creditCard?: {
+      creditCardNumber?: string;
+      creditCardBrand?: string;
+    };
+  } | null;
 }
 
 export default function Billing() {
@@ -122,7 +138,6 @@ export default function Billing() {
 
       if (response.ok) {
         toast.success("Assinatura cancelada com sucesso");
-        // Update local state
         await supabase
           .from("subscriptions")
           .update({ status: "canceled" })
@@ -139,52 +154,22 @@ export default function Billing() {
     }
   };
 
-  const getStatusBadge = () => {
+  const getStatusInfo = () => {
     if (!subscription) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-muted text-muted-foreground">
-          <AlertCircle className="w-4 h-4" />
-          Sem assinatura
-        </span>
-      );
+      return { label: "Sem assinatura", color: "text-muted-foreground", bgColor: "bg-muted", icon: AlertCircle };
     }
 
     switch (subscription.status) {
       case "trialing":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary">
-            <Clock className="w-4 h-4" />
-            Teste grátis ({daysRemaining} dias restantes)
-          </span>
-        );
+        return { label: `Teste grátis`, sublabel: `${daysRemaining} dias restantes`, color: "text-primary", bgColor: "bg-primary/10", icon: Clock };
       case "active":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-success/10 text-success">
-            <CheckCircle className="w-4 h-4" />
-            Ativo
-          </span>
-        );
+        return { label: "Ativo", color: "text-success", bgColor: "bg-success/10", icon: CheckCircle };
       case "canceled":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-muted text-muted-foreground">
-            <XCircle className="w-4 h-4" />
-            Cancelado
-          </span>
-        );
+        return { label: "Cancelado", color: "text-muted-foreground", bgColor: "bg-muted", icon: XCircle };
       case "expired":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-destructive/10 text-destructive">
-            <AlertCircle className="w-4 h-4" />
-            Expirado
-          </span>
-        );
+        return { label: "Expirado", color: "text-destructive", bgColor: "bg-destructive/10", icon: AlertCircle };
       default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-warning/10 text-warning">
-            <AlertCircle className="w-4 h-4" />
-            {subscription.status}
-          </span>
-        );
+        return { label: subscription.status, color: "text-warning", bgColor: "bg-warning/10", icon: AlertCircle };
     }
   };
 
@@ -233,6 +218,20 @@ export default function Billing() {
     }).format(value);
   };
 
+  // Extract card info from most recent payment
+  const getCardInfo = () => {
+    const paymentWithCard = payments.find(p => p.raw?.creditCard?.creditCardNumber);
+    if (!paymentWithCard?.raw?.creditCard) return null;
+    
+    const { creditCardNumber, creditCardBrand } = paymentWithCard.raw.creditCard;
+    const lastFour = creditCardNumber?.slice(-4) || "****";
+    return { lastFour, brand: creditCardBrand || "Cartão" };
+  };
+
+  const cardInfo = getCardInfo();
+  const statusInfo = getStatusInfo();
+  const StatusIcon = statusInfo.icon;
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -248,149 +247,189 @@ export default function Billing() {
     <div className="min-h-screen">
       <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
 
-      <div className="p-4 lg:p-6 max-w-4xl mx-auto space-y-6">
-        {/* Current Plan Card */}
-        <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-              <Crown className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Plano Atual</h2>
-              <p className="text-sm text-muted-foreground">
-                {plan?.name || "Nenhum plano selecionado"}
-              </p>
+      <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
+        {/* Main Subscription Card - Banking App Style */}
+        <div className="bg-gradient-to-br from-card via-card to-muted/30 rounded-3xl shadow-card overflow-hidden animate-fade-in">
+          {/* Card Header with gradient accent */}
+          <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 px-6 py-5 border-b border-border/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
+                  <CreditCard className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Método de pagamento</p>
+                  {cardInfo ? (
+                    <p className="text-lg font-semibold text-foreground">
+                      {cardInfo.brand} •••• {cardInfo.lastFour}
+                    </p>
+                  ) : (
+                    <p className="text-lg font-medium text-muted-foreground">Nenhum cartão vinculado</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            {/* Status */}
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <span className="text-muted-foreground">Status</span>
-              {getStatusBadge()}
+          {/* Card Body */}
+          <div className="p-6 space-y-6">
+            {/* Status and Plan Value Row */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Status</p>
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${statusInfo.bgColor}`}>
+                  <StatusIcon className={`w-4 h-4 ${statusInfo.color}`} />
+                  <span className={`text-sm font-semibold ${statusInfo.color}`}>{statusInfo.label}</span>
+                </div>
+                {statusInfo.sublabel && (
+                  <p className="text-xs text-muted-foreground mt-1">{statusInfo.sublabel}</p>
+                )}
+              </div>
+              
+              <div className="space-y-1.5 text-right">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor do Plano</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {plan ? formatCurrency(subscription?.price_at_signup || plan.price) : "-"}
+                </p>
+                <p className="text-xs text-muted-foreground">/mês</p>
+              </div>
             </div>
 
-            {/* Price */}
-            {plan && (
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <span className="text-muted-foreground">Valor</span>
-                <span className="font-semibold text-foreground">
-                  {formatCurrency(plan.price)}/mês
-                </span>
-              </div>
-            )}
+            {/* Divider */}
+            <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
-            {/* Limits */}
-            {plan && (
-              <div className="grid grid-cols-2 gap-4 py-3">
-                <div className="text-center p-3 rounded-xl bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{plan.max_agents}</p>
-                  <p className="text-xs text-muted-foreground">Agentes</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{plan.max_whatsapp}</p>
-                  <p className="text-xs text-muted-foreground">WhatsApp</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">
-                    {plan.max_services ?? "∞"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Serviços</p>
-                </div>
-                <div className="text-center p-3 rounded-xl bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">
-                    {plan.max_appointments_month ?? "∞"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Agendamentos/mês</p>
-                </div>
+            {/* Dates Row */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Início do Contrato</p>
+                <p className="text-base font-semibold text-foreground">
+                  {formatDate(subscription?.current_period_start || subscription?.trial_started_at || null)}
+                </p>
               </div>
-            )}
+              
+              <div className="space-y-1.5 text-right">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Fim do Contrato</p>
+                <p className="text-base font-semibold text-foreground">
+                  {formatDate(subscription?.current_period_end || subscription?.trial_expires_at || null)}
+                </p>
+              </div>
+            </div>
+
+            {/* Next Due Date - Highlighted */}
+            <div className="bg-muted/50 rounded-2xl p-4 text-center">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Próximo Vencimento</p>
+              <p className="text-xl font-bold text-foreground">
+                {formatDate(subscription?.current_period_end || subscription?.trial_expires_at || null)}
+              </p>
+            </div>
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <div className="pt-2 space-y-3">
               {(subscription?.status === "trialing" || subscription?.status === "expired" || !subscription) && (
                 <Button
-                  className="flex-1"
+                  className="w-full h-12 text-base font-semibold rounded-xl"
                   onClick={handleSubscribe}
                   disabled={subscribing || !plan}
                 >
-                  <CreditCard className="w-4 h-4 mr-2" />
+                  <CreditCard className="w-5 h-5 mr-2" />
                   {subscribing ? "Processando..." : "Assinar agora"}
                 </Button>
               )}
               
               {subscription?.status === "active" && (
-                <Button
-                  variant="outline"
-                  className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={handleCancel}
-                  disabled={canceling}
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  {canceling ? "Cancelando..." : "Cancelar assinatura"}
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-3 border-t border-border/50"
+                      disabled={canceling}
+                    >
+                      {canceling ? "Cancelando..." : "Cancelar assinatura"}
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar assinatura</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja cancelar sua assinatura? Você perderá acesso aos recursos premium ao final do período atual.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Voltar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleCancel}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Confirmar cancelamento
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
             </div>
           </div>
         </div>
 
         {/* Payment History */}
-        <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-              <Receipt className="w-5 h-5 text-muted-foreground" />
+        <div className="bg-card rounded-2xl shadow-card overflow-hidden animate-slide-up">
+          <div className="px-6 py-4 border-b border-border/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-semibold text-foreground">Histórico de Pagamentos</h2>
             </div>
-            <h2 className="text-lg font-semibold text-foreground">Histórico de Pagamentos</h2>
           </div>
 
-          {loadingPayments ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : payments.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhum pagamento registrado</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Método</TableHead>
-                    <TableHead className="text-right">Fatura</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell>{formatDate(payment.due_date)}</TableCell>
-                      <TableCell>{formatCurrency(payment.amount)}</TableCell>
-                      <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
-                      <TableCell className="capitalize">{payment.method || "-"}</TableCell>
-                      <TableCell className="text-right">
-                        {payment.invoice_url ? (
-                          <a
-                            href={payment.invoice_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary hover:underline text-sm"
-                          >
-                            Ver <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
+          <div className="p-6">
+            {loadingPayments ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Nenhum pagamento registrado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-6">Data</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Método</TableHead>
+                      <TableHead className="text-right pr-6">Fatura</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((payment) => (
+                      <TableRow key={payment.id} className="hover:bg-muted/50">
+                        <TableCell className="pl-6 font-medium">{formatDate(payment.due_date)}</TableCell>
+                        <TableCell>{formatCurrency(payment.amount)}</TableCell>
+                        <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
+                        <TableCell className="capitalize text-muted-foreground">{payment.method || "-"}</TableCell>
+                        <TableCell className="text-right pr-6">
+                          {payment.invoice_url ? (
+                            <a
+                              href={payment.invoice_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline text-sm font-medium"
+                            >
+                              Ver <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
