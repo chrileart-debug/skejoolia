@@ -130,8 +130,8 @@ const Terms = () => {
             <h2 className="text-xl font-semibold mb-4">10. Contato</h2>
             <p className="text-muted-foreground">
               Para dúvidas sobre estes termos, entre em contato:{" "}
-              <a href="mailto:contato@skejool.com" className="text-primary hover:underline">
-                contato@skejool.com
+              <a href="mailto:suporte@app.skejool.com.br" className="text-primary hover:underline">
+                suporte@app.skejool.com.br
               </a>
             </p>
           </section>
