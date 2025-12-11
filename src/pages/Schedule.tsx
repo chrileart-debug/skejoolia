@@ -29,7 +29,19 @@ import {
   Search,
   ArrowLeft,
   Phone,
+  Pencil,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -120,12 +132,21 @@ export default function Schedule() {
   const [modalStep, setModalStep] = useState<ModalStep>("selection");
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     client: "",
     phone: "",
     service: "",
     date: "",
     time: "",
+  });
+  const [editFormData, setEditFormData] = useState({
+    service: "",
+    date: "",
+    time: "",
+    status: "",
   });
 
   // Get first and last day of month for fetching (ISO format with Brasília timezone)
@@ -339,6 +360,85 @@ export default function Schedule() {
         selectedDayAppointments.map((a) => (a.id_agendamento === id ? { ...a, status } : a))
       );
       toast.success("Status atualizado");
+    }
+  };
+
+  const handleEditAppointment = (appointment: Appointment) => {
+    setEditingAppointment(appointment);
+    const dateStr = getDateFromISO(appointment.start_time);
+    const timeStr = formatTimeFromISO(appointment.start_time);
+    setEditFormData({
+      service: appointment.id_corte || "",
+      date: dateStr,
+      time: timeStr,
+      status: appointment.status || "pending",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateAppointment = async () => {
+    if (!editingAppointment || !editFormData.date || !editFormData.time) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    const startTime = createISODateTime(editFormData.date, editFormData.time);
+    const [hours, minutes] = editFormData.time.split(":").map(Number);
+    const endHours = String((hours + 1) % 24).padStart(2, "0");
+    const endTime = `${editFormData.date}T${endHours}:${String(minutes).padStart(2, "0")}:00-03:00`;
+
+    const { error } = await supabase
+      .from("agendamentos")
+      .update({
+        id_corte: editFormData.service || null,
+        start_time: startTime,
+        end_time: endTime,
+        status: editFormData.status,
+      })
+      .eq("id_agendamento", editingAppointment.id_agendamento);
+
+    if (error) {
+      console.error("Error updating appointment:", error);
+      toast.error("Erro ao atualizar agendamento");
+    } else {
+      toast.success("Agendamento atualizado");
+      setIsEditDialogOpen(false);
+      setEditingAppointment(null);
+      fetchAppointments();
+      // Update day dialog if open
+      if (isDayDialogOpen) {
+        const updatedAppt = {
+          ...editingAppointment,
+          id_corte: editFormData.service || null,
+          start_time: startTime,
+          end_time: endTime,
+          status: editFormData.status,
+        };
+        setSelectedDayAppointments((prev) =>
+          prev.map((a) => (a.id_agendamento === editingAppointment.id_agendamento ? updatedAppt : a))
+        );
+      }
+    }
+  };
+
+  const handleDeleteAppointment = async () => {
+    if (!deleteAppointmentId) return;
+
+    const { error } = await supabase
+      .from("agendamentos")
+      .delete()
+      .eq("id_agendamento", deleteAppointmentId);
+
+    if (error) {
+      console.error("Error deleting appointment:", error);
+      toast.error("Erro ao excluir agendamento");
+    } else {
+      toast.success("Agendamento excluído");
+      setDeleteAppointmentId(null);
+      fetchAppointments();
+      setSelectedDayAppointments((prev) =>
+        prev.filter((a) => a.id_agendamento !== deleteAppointmentId)
+      );
     }
   };
 
@@ -614,21 +714,39 @@ export default function Schedule() {
                           </div>
                         </div>
                       </div>
-                      <Select
-                        value={appointment.status || "pending"}
-                        onValueChange={(value) =>
-                          handleStatusChange(appointment.id_agendamento, value)
-                        }
-                      >
-                        <SelectTrigger className="w-auto border-0 bg-transparent p-0 h-auto">
-                          <StatusBadge status={appointment.status as "pending" | "confirmed" | "completed" || "pending"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pendente</SelectItem>
-                          <SelectItem value="confirmed">Confirmado</SelectItem>
-                          <SelectItem value="completed">Concluído</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={appointment.status || "pending"}
+                          onValueChange={(value) =>
+                            handleStatusChange(appointment.id_agendamento, value)
+                          }
+                        >
+                          <SelectTrigger className="w-auto border-0 bg-transparent p-0 h-auto">
+                            <StatusBadge status={appointment.status as "pending" | "confirmed" | "completed" || "pending"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="confirmed">Confirmado</SelectItem>
+                            <SelectItem value="completed">Concluído</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleEditAppointment(appointment)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteAppointmentId(appointment.id_agendamento)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -854,6 +972,130 @@ export default function Schedule() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Appointment Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5" />
+              Editar Agendamento
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-4">
+            {editingAppointment && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">
+                    {editingAppointment.nome_cliente || "Cliente não informado"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {editingAppointment.telefone_cliente ? formatPhone(editingAppointment.telefone_cliente) : "Sem telefone"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Serviço</Label>
+              <Select
+                value={editFormData.service}
+                onValueChange={(value) =>
+                  setEditFormData({ ...editFormData, service: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o serviço" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((service) => (
+                    <SelectItem key={service.id_corte} value={service.id_corte}>
+                      {service.nome_corte}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Data *</Label>
+                <Input
+                  type="date"
+                  value={editFormData.date}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Horário *</Label>
+                <Input
+                  type="time"
+                  value={editFormData.time}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, time: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editFormData.status}
+                onValueChange={(value) =>
+                  setEditFormData({ ...editFormData, status: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
+                  <SelectItem value="completed">Concluído</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button className="flex-1" onClick={handleUpdateAppointment}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteAppointmentId} onOpenChange={(open) => !open && setDeleteAppointmentId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agendamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O agendamento será permanentemente removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAppointment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
