@@ -10,6 +10,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "next-themes";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Support from "./pages/Support";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import Dashboard from "./pages/Dashboard";
 import Agents from "./pages/Agents";
 import Integrations from "./pages/Integrations";
@@ -32,9 +35,14 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                {/* Auth routes */}
+              {/* Auth routes */}
                 <Route path="/" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                
+                {/* Public pages */}
+                <Route path="/suporte" element={<Support />} />
+                <Route path="/privacidade" element={<Privacy />} />
+                <Route path="/termos" element={<Terms />} />
                 
                 {/* Protected App routes */}
                 <Route element={
