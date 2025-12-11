@@ -126,178 +126,184 @@ export default function Register() {
     );
   }
 
+  // Plan selection step - full screen centered layout
+  if (step === "plan-selection") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+        <div className="w-full max-w-4xl">
+          <PlanSelector 
+            plans={plans} 
+            onSelectPlan={handleSelectPlan} 
+            loading={isLoading}
+          />
+          {/* Login link */}
+          <p className="text-center text-sm text-muted-foreground mt-8">
+            Já tem uma conta?{" "}
+            <Link to="/" className="text-primary font-medium hover:underline">
+              Fazer login
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Form step - split layout with image
   return (
     <div className="min-h-screen flex">
       {/* Left side - Form */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 overflow-y-auto">
-        {step === "plan-selection" ? (
-          <div className="w-full py-8">
-            <PlanSelector 
-              plans={plans} 
-              onSelectPlan={handleSelectPlan} 
-              loading={isLoading}
-            />
-            {/* Login link */}
-            <p className="text-center text-sm text-muted-foreground mt-8">
-              Já tem uma conta?{" "}
-              <Link to="/" className="text-primary font-medium hover:underline">
-                Fazer login
-              </Link>
+        <div className="w-full max-w-md space-y-6 animate-fade-in py-8">
+          {/* Back button and Plan info */}
+          <div className="space-y-4">
+            <button
+              onClick={handleBackToPlanSelection}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar para planos
+            </button>
+
+            {/* Selected plan badge */}
+            {selectedPlanData && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                <span>Plano {selectedPlanData.name}</span>
+                <span className="text-xs opacity-75">
+                  R$ {selectedPlanData.price.toFixed(2).replace(".", ",")}/mês
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Logo */}
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
+              <Clock className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
+            <p className="text-muted-foreground mt-2">
+              Comece seu teste grátis de 7 dias
             </p>
           </div>
-        ) : (
-          <div className="w-full max-w-md space-y-6 animate-fade-in py-8">
-            {/* Back button and Plan info */}
-            <div className="space-y-4">
-              <button
-                onClick={handleBackToPlanSelection}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar para planos
-              </button>
 
-              {/* Selected plan badge */}
-              {selectedPlanData && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                  <span>Plano {selectedPlanData.name}</span>
-                  <span className="text-xs opacity-75">
-                    R$ {selectedPlanData.price.toFixed(2).replace(".", ",")}/mês
-                  </span>
-                </div>
-              )}
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome completo</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="João Silva"
+                  className="pl-10 h-12"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                />
+              </div>
             </div>
 
-            {/* Logo */}
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary shadow-glow mb-6">
-                <Clock className="w-8 h-8 text-primary-foreground" />
+            <div className="space-y-2">
+              <Label htmlFor="phone">Celular</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="(11) 99999-9999"
+                  className="pl-10 h-12"
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
+                />
               </div>
-              <h1 className="text-2xl font-bold text-foreground">Crie sua conta</h1>
-              <p className="text-muted-foreground mt-2">
-                Comece seu teste grátis de 7 dias
-              </p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome completo</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="João Silva"
-                    className="pl-10 h-12"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  className="pl-10 h-12"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Celular</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="(11) 99999-9999"
-                    className="pl-10 h-12"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="barbershopName">Nome da barbearia</Label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="barbershopName"
+                  type="text"
+                  placeholder="Barbearia do João"
+                  className="pl-10 h-12"
+                  value={formData.barbershopName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, barbershopName: e.target.value })
+                  }
+                />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    className="pl-10 h-12"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="barbershopName">Nome da barbearia</Label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="barbershopName"
-                    type="text"
-                    placeholder="Barbearia do João"
-                    className="pl-10 h-12"
-                    value={formData.barbershopName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, barbershopName: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Mínimo 6 caracteres"
-                    className="pl-10 pr-10 h-12"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  size="xl"
-                  className="w-full"
-                  disabled={isLoading}
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Mínimo 6 caracteres"
+                  className="pl-10 pr-10 h-12"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {isLoading ? "Criando conta..." : "Criar conta e começar teste grátis"}
-                </Button>
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
               </div>
-            </form>
+            </div>
 
-            {/* Login link */}
-            <p className="text-center text-sm text-muted-foreground">
-              Já tem uma conta?{" "}
-              <Link to="/" className="text-primary font-medium hover:underline">
-                Fazer login
-              </Link>
-            </p>
-          </div>
-        )}
+            <div className="pt-2">
+              <Button
+                type="submit"
+                size="xl"
+                className="w-full"
+                disabled={isLoading}
+              >
+                {isLoading ? "Criando conta..." : "Criar conta e começar teste grátis"}
+              </Button>
+            </div>
+          </form>
+
+          {/* Login link */}
+          <p className="text-center text-sm text-muted-foreground">
+            Já tem uma conta?{" "}
+            <Link to="/" className="text-primary font-medium hover:underline">
+              Fazer login
+            </Link>
+          </p>
+        </div>
       </div>
 
       {/* Right side - Decorative with barbershop image */}
