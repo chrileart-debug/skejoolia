@@ -141,6 +141,21 @@ export default function Login() {
               Criar conta
             </Link>
           </p>
+
+          {/* Footer links */}
+          <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground pt-4 border-t border-border">
+            <Link to="/suporte" className="hover:text-primary transition-colors">
+              Suporte
+            </Link>
+            <span>•</span>
+            <Link to="/privacidade" className="hover:text-primary transition-colors">
+              Privacidade
+            </Link>
+            <span>•</span>
+            <Link to="/termos" className="hover:text-primary transition-colors">
+              Termos
+            </Link>
+          </div>
         </div>
       </div>
 
