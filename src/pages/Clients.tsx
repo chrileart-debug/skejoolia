@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, UserPlus } from "lucide-react";
+import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
@@ -24,6 +24,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
 import { toast } from "sonner";
@@ -63,6 +73,8 @@ export default function Clients() {
     id_agente: "",
   });
   const [saving, setSaving] = useState(false);
+  const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+  const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -169,7 +181,18 @@ export default function Clients() {
   }
 
   const handleCreate = () => {
+    setEditingClient(null);
     setFormData({ nome: "", telefone: "", id_agente: "" });
+    setIsDialogOpen(true);
+  };
+
+  const handleEdit = (client: Cliente) => {
+    setEditingClient(client);
+    setFormData({
+      nome: client.nome || "",
+      telefone: client.telefone || "",
+      id_agente: client.id_agente || "",
+    });
     setIsDialogOpen(true);
   };
 
@@ -186,23 +209,66 @@ export default function Clients() {
 
     setSaving(true);
 
+    if (editingClient) {
+      // Update existing client
+      const { error } = await supabase
+        .from("clientes")
+        .update({
+          nome: formData.nome.trim(),
+          telefone: formData.telefone.trim() || null,
+          id_agente: formData.id_agente || null,
+        })
+        .eq("client_id", editingClient.client_id);
+
+      setSaving(false);
+
+      if (error) {
+        console.error("Error updating client:", error);
+        toast.error("Erro ao atualizar cliente");
+      } else {
+        toast.success("Cliente atualizado com sucesso");
+        setIsDialogOpen(false);
+        setEditingClient(null);
+        loadClients();
+      }
+    } else {
+      // Create new client
+      const { error } = await supabase
+        .from("clientes")
+        .insert({
+          user_id: user.id,
+          nome: formData.nome.trim(),
+          telefone: formData.telefone.trim() || null,
+          id_agente: formData.id_agente || null,
+        });
+
+      setSaving(false);
+
+      if (error) {
+        console.error("Error creating client:", error);
+        toast.error("Erro ao criar cliente");
+      } else {
+        toast.success("Cliente cadastrado com sucesso");
+        setIsDialogOpen(false);
+        loadClients();
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteClientId) return;
+
     const { error } = await supabase
       .from("clientes")
-      .insert({
-        user_id: user.id,
-        nome: formData.nome.trim(),
-        telefone: formData.telefone.trim() || null,
-        id_agente: formData.id_agente || null,
-      });
-
-    setSaving(false);
+      .delete()
+      .eq("client_id", deleteClientId);
 
     if (error) {
-      console.error("Error creating client:", error);
-      toast.error("Erro ao criar cliente");
+      console.error("Error deleting client:", error);
+      toast.error("Erro ao excluir cliente");
     } else {
-      toast.success("Cliente cadastrado com sucesso");
-      setIsDialogOpen(false);
+      toast.success("Cliente excluído");
+      setDeleteClientId(null);
       loadClients();
     }
   };
@@ -408,15 +474,35 @@ export default function Clients() {
                       </div>
                     </div>
 
-                    {/* Agent Toggle */}
-                    <div className="flex flex-col items-center gap-1 shrink-0">
-                      <Switch
-                        checked={client.agente_ativo}
-                        onCheckedChange={() => toggleAgenteAtivo(client.client_id, client.agente_ativo)}
-                      />
-                      <span className="text-[10px] text-muted-foreground">
-                        {client.agente_ativo ? "Agente ON" : "Agente OFF"}
-                      </span>
+                    {/* Actions */}
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleEdit(client)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteClientId(client.client_id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <Switch
+                          checked={client.agente_ativo}
+                          onCheckedChange={() => toggleAgenteAtivo(client.client_id, client.agente_ativo)}
+                        />
+                        <span className="text-[10px] text-muted-foreground">
+                          {client.agente_ativo ? "Agente ON" : "Agente OFF"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -428,13 +514,16 @@ export default function Clients() {
 
       <FAB onClick={handleCreate} />
 
-      {/* New Client Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Client Dialog (Create/Edit) */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) setEditingClient(null);
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5" />
-              Novo Cliente
+              {editingClient ? <Pencil className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+              {editingClient ? "Editar Cliente" : "Novo Cliente"}
             </DialogTitle>
           </DialogHeader>
 
@@ -492,12 +581,30 @@ export default function Clients() {
                 Cancelar
               </Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={saving}>
-                {saving ? "Salvando..." : "Cadastrar"}
+                {saving ? "Salvando..." : editingClient ? "Salvar" : "Cadastrar"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteClientId} onOpenChange={(open) => !open && setDeleteClientId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O cliente será permanentemente removido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
