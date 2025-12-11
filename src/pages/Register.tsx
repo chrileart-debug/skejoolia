@@ -91,11 +91,12 @@ export default function Register() {
 
     setIsLoading(true);
 
-    // Sign up with metadata
+    // Sign up with metadata including plan_slug for the database trigger
     const { error } = await signUp(formData.email, formData.password, {
       nome: formData.name,
       numero: formData.phone,
       nome_empresa: formData.barbershopName,
+      plan_slug: selectedPlan,
     });
 
     if (error) {
@@ -108,91 +109,11 @@ export default function Register() {
       return;
     }
 
-    // Wait for auth state to propagate
-    setTimeout(async () => {
-      try {
-        const { data: { user: newUser } } = await supabase.auth.getUser();
-        
-        if (!newUser) {
-          console.error("No user found after signup");
-          toast.success("Conta criada! Faça login para continuar.");
-          navigate("/");
-          setIsLoading(false);
-          return;
-        }
-
-        console.log("Creating user_settings for user:", newUser.id, {
-          nome: formData.name,
-          numero: formData.phone,
-          email: formData.email,
-          nome_empresa: formData.barbershopName,
-        });
-
-        // Delete any existing user_settings first (in case it was auto-created empty)
-        await supabase
-          .from("user_settings")
-          .delete()
-          .eq("user_id", newUser.id);
-
-        // Create user_settings with all data
-        const { error: settingsError } = await supabase
-          .from("user_settings")
-          .insert({
-            user_id: newUser.id,
-            nome: formData.name,
-            numero: formData.phone,
-            email: formData.email,
-            nome_empresa: formData.barbershopName,
-          });
-
-        if (settingsError) {
-          console.error("Error creating user settings:", settingsError);
-        } else {
-          console.log("User settings created successfully");
-        }
-
-        // Get plan data
-        const selectedPlanData = plans.find(p => p.slug === selectedPlan);
-        console.log("Selected plan:", selectedPlan, selectedPlanData);
-        
-        // Calculate trial expiration (7 days from now)
-        const trialExpiresAt = new Date();
-        trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
-
-        // Delete any existing subscription first (in case it was auto-created)
-        await supabase
-          .from("subscriptions")
-          .delete()
-          .eq("user_id", newUser.id);
-
-        // Create subscription with correct plan
-        const { error: subscriptionError } = await supabase
-          .from("subscriptions")
-          .insert({
-            user_id: newUser.id,
-            plan_slug: selectedPlan,
-            status: "trialing",
-            price_at_signup: selectedPlanData?.price || 0,
-            trial_started_at: new Date().toISOString(),
-            trial_expires_at: trialExpiresAt.toISOString(),
-          });
-
-        if (subscriptionError) {
-          console.error("Error creating subscription:", subscriptionError);
-        } else {
-          console.log("Subscription created with plan:", selectedPlan);
-        }
-
-        toast.success("Conta criada com sucesso! Seu teste grátis de 7 dias começou.");
-        navigate("/dashboard");
-      } catch (err) {
-        console.error("Error during registration:", err);
-        toast.error("Erro ao finalizar cadastro. Tente fazer login.");
-        navigate("/");
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500);
+    // The database trigger handles creating user_settings and subscription
+    // Just show success message and redirect
+    toast.success("Conta criada com sucesso! Verifique seu e-mail para confirmar ou faça login.");
+    setIsLoading(false);
+    navigate("/");
   };
 
   const selectedPlanData = plans.find(p => p.slug === selectedPlan);
