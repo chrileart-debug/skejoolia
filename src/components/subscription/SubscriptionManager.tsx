@@ -105,21 +105,21 @@ export function SubscriptionManager() {
       }
 
       const data = await response.json();
+      const checkoutUrl = data.link || data.checkout_url;
 
-      if (data.checkout_url) {
+      if (checkoutUrl) {
         // Save checkout session
         await supabase.from("session_checkout").upsert({
           user_id: user.id,
           asaas_checkout_id: data.checkout_id || null,
-          asaas_checkout_link: data.checkout_url,
+          asaas_checkout_link: checkoutUrl,
           status: "pending",
         });
 
         // Redirect to Asaas checkout
-        window.open(data.checkout_url, "_blank");
-        toast.success("Redirecionando para o checkout...");
+        window.location.href = checkoutUrl;
       } else {
-        toast.success("Solicitação de assinatura enviada!");
+        toast.error("Erro ao criar sessão de pagamento");
       }
 
       await refreshSubscription();
