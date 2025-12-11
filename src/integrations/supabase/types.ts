@@ -467,6 +467,7 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          asaas_customer_id: string | null
           cep: string | null
           cidade: string | null
           cnpj: string | null
@@ -483,6 +484,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          asaas_customer_id?: string | null
           cep?: string | null
           cidade?: string | null
           cnpj?: string | null
@@ -499,6 +501,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          asaas_customer_id?: string | null
           cep?: string | null
           cidade?: string | null
           cnpj?: string | null
