@@ -2,19 +2,18 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Bot,
-  MessageSquare,
   Scissors,
   Calendar,
-  Users,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Home", icon: LayoutDashboard, href: "/dashboard" },
   { title: "Agenda", icon: Calendar, href: "/schedule" },
-  { title: "Clientes", icon: Users, href: "/clients" },
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agentes", icon: Bot, href: "/agents" },
+  { title: "Faturas", icon: Receipt, href: "/billing" },
 ];
 
 export function BottomNav() {

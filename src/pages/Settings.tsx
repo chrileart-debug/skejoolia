@@ -25,7 +25,6 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { SubscriptionManager } from "@/components/subscription/SubscriptionManager";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -319,9 +318,6 @@ export default function Settings() {
             Sair da conta
           </Button>
         </div>
-
-        {/* Subscription Management */}
-        <SubscriptionManager />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -211,6 +212,8 @@ export default function Dashboard() {
 
           {/* Right Column */}
           <div className="space-y-4">
+            {/* Subscription Card */}
+            <SubscriptionCard />
             {/* Next Appointment */}
             <div className="bg-card rounded-2xl shadow-card p-5 animate-slide-up">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">

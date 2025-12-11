@@ -108,52 +108,69 @@ export default function Register() {
       return;
     }
 
-    // Create user_settings and subscription records
-    const { data: { user: newUser } } = await supabase.auth.getUser();
-    
-    if (newUser) {
-      // Create user_settings
-      const { error: settingsError } = await supabase
-        .from("user_settings")
-        .insert({
-          user_id: newUser.id,
-          nome: formData.name,
-          numero: formData.phone,
-          email: formData.email,
-          nome_empresa: formData.barbershopName,
-        });
+    // Use setTimeout to ensure auth state is propagated
+    setTimeout(async () => {
+      try {
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        
+        if (!newUser) {
+          console.error("No user found after signup");
+          toast.success("Conta criada! Faça login para continuar.");
+          navigate("/");
+          setIsLoading(false);
+          return;
+        }
 
-      if (settingsError) {
-        console.error("Error creating user settings:", settingsError);
+        // Create user_settings
+        const { error: settingsError } = await supabase
+          .from("user_settings")
+          .insert({
+            user_id: newUser.id,
+            nome: formData.name,
+            numero: formData.phone,
+            email: formData.email,
+            nome_empresa: formData.barbershopName,
+          });
+
+        if (settingsError) {
+          console.error("Error creating user settings:", settingsError);
+          toast.error("Erro ao salvar configurações. Tente novamente no login.");
+        }
+
+        // Get plan price
+        const selectedPlanData = plans.find(p => p.slug === selectedPlan);
+        
+        // Calculate trial expiration (7 days from now)
+        const trialExpiresAt = new Date();
+        trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
+
+        // Create subscription with trialing status
+        const { error: subscriptionError } = await supabase
+          .from("subscriptions")
+          .insert({
+            user_id: newUser.id,
+            plan_slug: selectedPlan,
+            status: "trialing",
+            price_at_signup: selectedPlanData?.price || 0,
+            trial_started_at: new Date().toISOString(),
+            trial_expires_at: trialExpiresAt.toISOString(),
+          });
+
+        if (subscriptionError) {
+          console.error("Error creating subscription:", subscriptionError);
+          // Don't show error to user - fallback will handle it
+        }
+
+        toast.success("Conta criada com sucesso! Seu teste grátis de 7 dias começou.");
+        navigate("/dashboard");
+      } catch (err) {
+        console.error("Error during registration:", err);
+        toast.error("Erro ao finalizar cadastro. Tente fazer login.");
+        navigate("/");
+      } finally {
+        setIsLoading(false);
       }
-
-      // Get plan price
-      const selectedPlanData = plans.find(p => p.slug === selectedPlan);
-      
-      // Calculate trial expiration (7 days from now)
-      const trialExpiresAt = new Date();
-      trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
-
-      // Create subscription with trialing status
-      const { error: subscriptionError } = await supabase
-        .from("subscriptions")
-        .insert({
-          user_id: newUser.id,
-          plan_slug: selectedPlan,
-          status: "trialing",
-          price_at_signup: selectedPlanData?.price || 0,
-          trial_started_at: new Date().toISOString(),
-          trial_expires_at: trialExpiresAt.toISOString(),
-        });
-
-      if (subscriptionError) {
-        console.error("Error creating subscription:", subscriptionError);
-      }
-    }
-
-    toast.success("Conta criada com sucesso! Seu teste grátis de 7 dias começou.");
-    navigate("/dashboard");
-    setIsLoading(false);
+    }, 100);
   };
 
   const selectedPlanData = plans.find(p => p.slug === selectedPlan);

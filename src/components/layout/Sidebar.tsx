@@ -11,6 +11,7 @@ import {
   ChevronRight,
   LogOut,
   X,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ const navItems = [
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agenda", icon: Calendar, href: "/schedule" },
   { title: "Clientes", icon: Users, href: "/clients" },
+  { title: "Faturas", icon: Receipt, href: "/billing" },
   { title: "Configurações", icon: Settings, href: "/settings" },
 ];
 
