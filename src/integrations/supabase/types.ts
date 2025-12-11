@@ -139,6 +139,7 @@ export type Database = {
       }
       clientes: {
         Row: {
+          agente_ativo: boolean
           client_id: string
           created_at: string
           faturamento_total: number | null
@@ -150,6 +151,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agente_ativo?: boolean
           client_id?: string
           created_at?: string
           faturamento_total?: number | null
@@ -161,6 +163,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agente_ativo?: boolean
           client_id?: string
           created_at?: string
           faturamento_total?: number | null
