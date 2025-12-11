@@ -5,16 +5,16 @@ import {
   MessageSquare,
   Scissors,
   Calendar,
-  Settings,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Home", icon: LayoutDashboard, href: "/dashboard" },
-  { title: "Agentes", icon: Bot, href: "/agents" },
-  { title: "WhatsApp", icon: MessageSquare, href: "/integrations" },
-  { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agenda", icon: Calendar, href: "/schedule" },
+  { title: "Clientes", icon: Users, href: "/clients" },
+  { title: "Serviços", icon: Scissors, href: "/services" },
+  { title: "Agentes", icon: Bot, href: "/agents" },
 ];
 
 export function BottomNav() {
