@@ -8,7 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { toast } from "sonner";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -21,6 +23,7 @@ interface Cliente {
   id_agente: string | null;
   total_cortes: number;
   faturamento_total: number;
+  agente_ativo: boolean;
   agente_nome?: string | null;
   has_active_appointment?: boolean;
 }
@@ -87,6 +90,35 @@ export default function Clients() {
       console.error("Error loading clients:", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleAgenteAtivo(clientId: string, currentValue: boolean) {
+    const newValue = !currentValue;
+    
+    // Optimistic update
+    setClients((prev) =>
+      prev.map((c) =>
+        c.client_id === clientId ? { ...c, agente_ativo: newValue } : c
+      )
+    );
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ agente_ativo: newValue })
+      .eq("client_id", clientId);
+
+    if (error) {
+      // Revert on error
+      setClients((prev) =>
+        prev.map((c) =>
+          c.client_id === clientId ? { ...c, agente_ativo: currentValue } : c
+        )
+      );
+      toast.error("Erro ao atualizar status do agente");
+      console.error("Error toggling agente_ativo:", error);
+    } else {
+      toast.success(newValue ? "Agente ativado" : "Agente desativado");
     }
   }
 
@@ -289,6 +321,17 @@ export default function Clients() {
                           </span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Agent Toggle */}
+                    <div className="flex flex-col items-center gap-1 shrink-0">
+                      <Switch
+                        checked={client.agente_ativo}
+                        onCheckedChange={() => toggleAgenteAtivo(client.client_id, client.agente_ativo)}
+                      />
+                      <span className="text-[10px] text-muted-foreground">
+                        {client.agente_ativo ? "Agente ON" : "Agente OFF"}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
