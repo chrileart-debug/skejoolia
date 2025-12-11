@@ -1,15 +1,31 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search } from "lucide-react";
+import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { FAB } from "@/components/shared/FAB";
 import { toast } from "sonner";
 
 interface OutletContextType {
@@ -28,16 +44,30 @@ interface Cliente {
   has_active_appointment?: boolean;
 }
 
+interface Agente {
+  id_agente: string;
+  nome: string;
+}
+
 export default function Clients() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const [clients, setClients] = useState<Cliente[]>([]);
+  const [agents, setAgents] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    nome: "",
+    telefone: "",
+    id_agente: "",
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadClients();
+      loadAgents();
     }
   }, [user]);
 
@@ -93,6 +123,22 @@ export default function Clients() {
     }
   }
 
+  async function loadAgents() {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("agentes")
+      .select("id_agente, nome")
+      .eq("user_id", user.id)
+      .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Error loading agents:", error);
+    } else {
+      setAgents(data || []);
+    }
+  }
+
   async function toggleAgenteAtivo(clientId: string, currentValue: boolean) {
     const newValue = !currentValue;
     
@@ -121,6 +167,45 @@ export default function Clients() {
       toast.success(newValue ? "Agente ativado" : "Agente desativado");
     }
   }
+
+  const handleCreate = () => {
+    setFormData({ nome: "", telefone: "", id_agente: "" });
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.nome.trim()) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
+
+    if (!user) {
+      toast.error("Você precisa estar logado");
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase
+      .from("clientes")
+      .insert({
+        user_id: user.id,
+        nome: formData.nome.trim(),
+        telefone: formData.telefone.trim() || null,
+        id_agente: formData.id_agente || null,
+      });
+
+    setSaving(false);
+
+    if (error) {
+      console.error("Error creating client:", error);
+      toast.error("Erro ao criar cliente");
+    } else {
+      toast.success("Cliente cadastrado com sucesso");
+      setIsDialogOpen(false);
+      loadClients();
+    }
+  };
 
   const filteredClients = clients.filter((client) => {
     const searchLower = searchTerm.toLowerCase();
@@ -259,7 +344,7 @@ export default function Clients() {
             description={
               searchTerm
                 ? "Tente buscar com outros termos"
-                : "Seus clientes aparecerão aqui quando fizerem agendamentos"
+                : "Clique no botão + para cadastrar seu primeiro cliente"
             }
           />
         ) : (
@@ -340,6 +425,79 @@ export default function Clients() {
           </div>
         )}
       </main>
+
+      <FAB onClick={handleCreate} />
+
+      {/* New Client Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5" />
+              Novo Cliente
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input
+                placeholder="Nome do cliente"
+                value={formData.nome}
+                onChange={(e) =>
+                  setFormData({ ...formData, nome: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="Telefone do cliente"
+                value={formData.telefone}
+                onChange={(e) =>
+                  setFormData({ ...formData, telefone: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Agente Responsável</Label>
+              <Select
+                value={formData.id_agente}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, id_agente: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o agente (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id_agente} value={agent.id_agente}>
+                      {agent.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsDialogOpen(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button className="flex-1" onClick={handleSubmit} disabled={saving}>
+                {saving ? "Salvando..." : "Cadastrar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
