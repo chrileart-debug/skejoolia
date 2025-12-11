@@ -108,7 +108,7 @@ export default function Register() {
       return;
     }
 
-    // Use setTimeout to ensure auth state is propagated
+    // Wait for auth state to propagate
     setTimeout(async () => {
       try {
         const { data: { user: newUser } } = await supabase.auth.getUser();
@@ -121,48 +121,66 @@ export default function Register() {
           return;
         }
 
-        // Create/update user_settings using upsert
+        console.log("Creating user_settings for user:", newUser.id, {
+          nome: formData.name,
+          numero: formData.phone,
+          email: formData.email,
+          nome_empresa: formData.barbershopName,
+        });
+
+        // Delete any existing user_settings first (in case it was auto-created empty)
+        await supabase
+          .from("user_settings")
+          .delete()
+          .eq("user_id", newUser.id);
+
+        // Create user_settings with all data
         const { error: settingsError } = await supabase
           .from("user_settings")
-          .upsert({
+          .insert({
             user_id: newUser.id,
             nome: formData.name,
             numero: formData.phone,
             email: formData.email,
             nome_empresa: formData.barbershopName,
-          }, {
-            onConflict: 'user_id'
           });
 
         if (settingsError) {
           console.error("Error creating user settings:", settingsError);
-          // Don't block registration, settings can be updated later
+        } else {
+          console.log("User settings created successfully");
         }
 
-        // Get plan price
+        // Get plan data
         const selectedPlanData = plans.find(p => p.slug === selectedPlan);
+        console.log("Selected plan:", selectedPlan, selectedPlanData);
         
         // Calculate trial expiration (7 days from now)
         const trialExpiresAt = new Date();
         trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
 
-        // Create subscription with trialing status using upsert
+        // Delete any existing subscription first (in case it was auto-created)
+        await supabase
+          .from("subscriptions")
+          .delete()
+          .eq("user_id", newUser.id);
+
+        // Create subscription with correct plan
         const { error: subscriptionError } = await supabase
           .from("subscriptions")
-          .upsert({
+          .insert({
             user_id: newUser.id,
             plan_slug: selectedPlan,
             status: "trialing",
             price_at_signup: selectedPlanData?.price || 0,
             trial_started_at: new Date().toISOString(),
             trial_expires_at: trialExpiresAt.toISOString(),
-          }, {
-            onConflict: 'user_id'
           });
 
         if (subscriptionError) {
           console.error("Error creating subscription:", subscriptionError);
-          // Don't show error to user - fallback will handle it
+        } else {
+          console.log("Subscription created with plan:", selectedPlan);
         }
 
         toast.success("Conta criada com sucesso! Seu teste grátis de 7 dias começou.");
@@ -174,7 +192,7 @@ export default function Register() {
       } finally {
         setIsLoading(false);
       }
-    }, 100);
+    }, 500);
   };
 
   const selectedPlanData = plans.find(p => p.slug === selectedPlan);
