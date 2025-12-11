@@ -287,6 +287,184 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          asaas_payment_id: string | null
+          created_at: string | null
+          due_date: string | null
+          id: string
+          invoice_url: string | null
+          method: string | null
+          paid_at: string | null
+          raw: Json | null
+          status: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          asaas_payment_id?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_url?: string | null
+          method?: string | null
+          paid_at?: string | null
+          raw?: Json | null
+          status: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          asaas_payment_id?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_url?: string | null
+          method?: string | null
+          paid_at?: string | null
+          raw?: Json | null
+          status?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          max_agents: number
+          max_appointments_month: number | null
+          max_services: number | null
+          max_whatsapp: number
+          name: string
+          price: number
+          slug: string
+          trial_days: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_agents: number
+          max_appointments_month?: number | null
+          max_services?: number | null
+          max_whatsapp: number
+          name: string
+          price: number
+          slug: string
+          trial_days?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_agents?: number
+          max_appointments_month?: number | null
+          max_services?: number | null
+          max_whatsapp?: number
+          name?: string
+          price?: number
+          slug?: string
+          trial_days?: number | null
+        }
+        Relationships: []
+      }
+      session_checkout: {
+        Row: {
+          asaas_checkout_id: string | null
+          asaas_checkout_link: string | null
+          created_at: string | null
+          id: string
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          asaas_checkout_id?: string | null
+          asaas_checkout_link?: string | null
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          asaas_checkout_id?: string | null
+          asaas_checkout_link?: string | null
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          asaas_subscription_id: string | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_slug: string
+          price_at_signup: number | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          trial_expires_at: string | null
+          trial_started_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          asaas_subscription_id?: string | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_slug: string
+          price_at_signup?: number | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_expires_at?: string | null
+          trial_started_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          asaas_subscription_id?: string | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_slug?: string
+          price_at_signup?: number | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          trial_expires_at?: string | null
+          trial_started_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_slug_fkey"
+            columns: ["plan_slug"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           cep: string | null
@@ -386,6 +564,10 @@ export type Database = {
       }
     }
     Functions: {
+      check_user_limit: {
+        Args: { p_resource: string; p_user_id: string }
+        Returns: Json
+      }
       get_available_integracoes_whatsapp: {
         Args: { p_current_agent_id?: string; p_user_id: string }
         Returns: {
@@ -404,7 +586,12 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      subscription_status:
+        | "trialing"
+        | "active"
+        | "canceled"
+        | "expired"
+        | "past_due"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -531,6 +718,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      subscription_status: [
+        "trialing",
+        "active",
+        "canceled",
+        "expired",
+        "past_due",
+      ],
+    },
   },
 } as const
