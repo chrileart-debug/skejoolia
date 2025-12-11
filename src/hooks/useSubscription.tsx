@@ -70,6 +70,25 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return [];
   };
 
+  const ensureUserSettings = async (userId: string, userEmail: string | undefined) => {
+    // Check if user_settings exists
+    const { data: existingSettings } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!existingSettings) {
+      // Create user_settings if it doesn't exist
+      await supabase
+        .from("user_settings")
+        .insert({
+          user_id: userId,
+          email: userEmail,
+        });
+    }
+  };
+
   const createFallbackSubscription = async (userId: string, fetchedPlans: Plan[]) => {
     // Get the basic plan (default)
     const basicPlan = fetchedPlans.find(p => p.slug === "basico") || fetchedPlans[0];
@@ -113,6 +132,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       fallbackAttemptedRef.current = false;
       return;
     }
+
+    // Ensure user_settings exists
+    await ensureUserSettings(user.id, user.email);
 
     const { data, error } = await supabase
       .from("subscriptions")

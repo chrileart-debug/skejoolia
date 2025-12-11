@@ -121,20 +121,22 @@ export default function Register() {
           return;
         }
 
-        // Create user_settings
+        // Create/update user_settings using upsert
         const { error: settingsError } = await supabase
           .from("user_settings")
-          .insert({
+          .upsert({
             user_id: newUser.id,
             nome: formData.name,
             numero: formData.phone,
             email: formData.email,
             nome_empresa: formData.barbershopName,
+          }, {
+            onConflict: 'user_id'
           });
 
         if (settingsError) {
           console.error("Error creating user settings:", settingsError);
-          toast.error("Erro ao salvar configurações. Tente novamente no login.");
+          // Don't block registration, settings can be updated later
         }
 
         // Get plan price
@@ -144,16 +146,18 @@ export default function Register() {
         const trialExpiresAt = new Date();
         trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
 
-        // Create subscription with trialing status
+        // Create subscription with trialing status using upsert
         const { error: subscriptionError } = await supabase
           .from("subscriptions")
-          .insert({
+          .upsert({
             user_id: newUser.id,
             plan_slug: selectedPlan,
             status: "trialing",
             price_at_signup: selectedPlanData?.price || 0,
             trial_started_at: new Date().toISOString(),
             trial_expires_at: trialExpiresAt.toISOString(),
+          }, {
+            onConflict: 'user_id'
           });
 
         if (subscriptionError) {
