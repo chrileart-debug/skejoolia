@@ -4,7 +4,6 @@ import {
   Bot,
   Scissors,
   Calendar,
-  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +12,6 @@ const navItems = [
   { title: "Agenda", icon: Calendar, href: "/schedule" },
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agentes", icon: Bot, href: "/agents" },
-  { title: "Faturas", icon: Receipt, href: "/billing" },
 ];
 
 export function BottomNav() {
