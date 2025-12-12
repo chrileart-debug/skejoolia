@@ -15,6 +15,7 @@ import {
   XCircle,
   Calendar,
   Receipt,
+  MessageSquare,
 } from "lucide-react";
 import {
   Table,
@@ -35,6 +36,23 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -64,6 +82,13 @@ export default function Billing() {
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [subscribing, setSubscribing] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [showChurnSurvey, setShowChurnSurvey] = useState(false);
+  const [churnSurvey, setChurnSurvey] = useState({
+    mainReason: "",
+    mostUsedFeature: "",
+    wouldReturn: "",
+    additionalComment: "",
+  });
 
   useEffect(() => {
     if (user) {
@@ -120,7 +145,11 @@ export default function Billing() {
     }
   };
 
-  const handleCancel = async () => {
+  const handleOpenChurnSurvey = () => {
+    setShowChurnSurvey(true);
+  };
+
+  const handleCancelWithSurvey = async () => {
     if (!user || !subscription) return;
     
     setCanceling(true);
@@ -133,6 +162,12 @@ export default function Billing() {
           user_id: user.id,
           subscription_id: subscription.id,
           asaas_subscription_id: subscription.asaas_subscription_id,
+          churn_survey: {
+            main_reason: churnSurvey.mainReason,
+            most_used_feature: churnSurvey.mostUsedFeature,
+            would_return: churnSurvey.wouldReturn,
+            additional_comment: churnSurvey.additionalComment,
+          },
         }),
       });
 
@@ -142,6 +177,7 @@ export default function Billing() {
           .from("subscriptions")
           .update({ status: "canceled" })
           .eq("id", subscription.id);
+        setShowChurnSurvey(false);
         window.location.reload();
       } else {
         toast.error("Erro ao cancelar assinatura");
@@ -454,16 +490,121 @@ export default function Billing() {
                 <AlertDialogFooter>
                   <AlertDialogCancel>Voltar</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={handleCancel}
+                    onClick={handleOpenChurnSurvey}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    Confirmar cancelamento
+                    Continuar
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           </div>
         )}
+
+        {/* Churn Survey Modal */}
+        <Dialog open={showChurnSurvey} onOpenChange={setShowChurnSurvey}>
+          <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle>Antes de ir...</DialogTitle>
+                  <DialogDescription>Nos ajude a melhorar</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="mainReason">Motivo principal do cancelamento</Label>
+                <Select
+                  value={churnSurvey.mainReason}
+                  onValueChange={(value) => setChurnSurvey({ ...churnSurvey, mainReason: value })}
+                >
+                  <SelectTrigger id="mainReason" className="bg-background">
+                    <SelectValue placeholder="Selecione um motivo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="preco_alto">Preço muito alto</SelectItem>
+                    <SelectItem value="nao_uso">Não uso mais o serviço</SelectItem>
+                    <SelectItem value="dificil_usar">Achei difícil de usar</SelectItem>
+                    <SelectItem value="expectativas">Não atendeu minhas expectativas</SelectItem>
+                    <SelectItem value="alternativa">Encontrei uma alternativa melhor</SelectItem>
+                    <SelectItem value="problemas_tecnicos">Problemas técnicos</SelectItem>
+                    <SelectItem value="outro">Outro motivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="mostUsedFeature">Qual recurso você mais utilizou?</Label>
+                <Select
+                  value={churnSurvey.mostUsedFeature}
+                  onValueChange={(value) => setChurnSurvey({ ...churnSurvey, mostUsedFeature: value })}
+                >
+                  <SelectTrigger id="mostUsedFeature" className="bg-background">
+                    <SelectValue placeholder="Selecione um recurso" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="agendamentos">Agendamentos</SelectItem>
+                    <SelectItem value="agentes_ia">Agentes IA</SelectItem>
+                    <SelectItem value="whatsapp">Integração WhatsApp</SelectItem>
+                    <SelectItem value="clientes">Gestão de clientes</SelectItem>
+                    <SelectItem value="nenhum">Nenhum em particular</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="wouldReturn">Você voltaria a usar o Skejool no futuro?</Label>
+                <Select
+                  value={churnSurvey.wouldReturn}
+                  onValueChange={(value) => setChurnSurvey({ ...churnSurvey, wouldReturn: value })}
+                >
+                  <SelectTrigger id="wouldReturn" className="bg-background">
+                    <SelectValue placeholder="Selecione uma opção" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="sim_certeza">Sim, com certeza</SelectItem>
+                    <SelectItem value="talvez">Talvez</SelectItem>
+                    <SelectItem value="provavelmente_nao">Provavelmente não</SelectItem>
+                    <SelectItem value="nao">Não</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="additionalComment">Comentário adicional (opcional)</Label>
+                <Textarea
+                  id="additionalComment"
+                  placeholder="Conte-nos mais sobre sua experiência..."
+                  value={churnSurvey.additionalComment}
+                  onChange={(e) => setChurnSurvey({ ...churnSurvey, additionalComment: e.target.value })}
+                  className="resize-none bg-background"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setShowChurnSurvey(false)}
+              >
+                Voltar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancelWithSurvey}
+                disabled={canceling || !churnSurvey.mainReason}
+              >
+                {canceling ? "Cancelando..." : "Confirmar cancelamento"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
