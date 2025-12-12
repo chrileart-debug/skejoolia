@@ -83,7 +83,7 @@ const Plans = () => {
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="p-4 md:p-6 space-y-6 pb-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Planos</h1>
@@ -106,7 +106,7 @@ const Plans = () => {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid gap-6 md:grid-cols-2 max-w-4xl">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
         {/* Plano Básico */}
         <Card className={`relative overflow-hidden transition-all ${currentPlanSlug === "basico" ? "ring-2 ring-primary" : ""}`}>
           {currentPlanSlug === "basico" && (
