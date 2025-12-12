@@ -12,6 +12,7 @@ import {
   LogOut,
   X,
   Receipt,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const navItems = [
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agenda", icon: Calendar, href: "/schedule" },
   { title: "Clientes", icon: Users, href: "/clients" },
+  { title: "Planos", icon: Crown, href: "/plans" },
   { title: "Faturas", icon: Receipt, href: "/billing" },
   { title: "Configurações", icon: Settings, href: "/settings" },
 ];
