@@ -12,6 +12,8 @@ import { ThemeProvider } from "next-themes";
 import { SplashScreen } from "@/components/pwa/SplashScreen";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Support from "./pages/Support";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -57,7 +59,10 @@ const App = () => {
                 <Routes>
                 {/* Auth routes */}
                   <Route path="/" element={<Login />} />
+                  <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   
                   {/* Public pages */}
                   <Route path="/suporte" element={<Support />} />
