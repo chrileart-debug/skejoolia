@@ -31,9 +31,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { z } from "zod";
+import {
+  WEBHOOK_ENDPOINTS,
+  createWhatsAppInstance,
+  connectWhatsAppInstance,
+  checkWhatsAppStatus,
+  disconnectWhatsAppInstance,
+  deleteWhatsAppInstance,
+} from "@/lib/webhook";
 
-const WEBHOOK_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp";
-const POLLING_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp_status";
+const WEBHOOK_URL = WEBHOOK_ENDPOINTS.WHATSAPP_INTEGRATION;
+const POLLING_URL = WEBHOOK_ENDPOINTS.WHATSAPP_STATUS;
 const QR_TIMEOUT_MS = 120000; // 2 minutes
 
 // Validation schema
