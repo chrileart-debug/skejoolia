@@ -1,6 +1,6 @@
 import { usePWA } from "@/hooks/usePWA";
 import { Button } from "@/components/ui/button";
-import { Download, X, Smartphone } from "lucide-react";
+import { Download, Smartphone } from "lucide-react";
 
 export function InstallBanner() {
   const { 
@@ -25,16 +25,7 @@ export function InstallBanner() {
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 p-4 sm:p-5 animate-slide-up">
-      {/* Dismiss button */}
-      <button
-        onClick={dismissBanner}
-        className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
-        aria-label="Fechar"
-      >
-        <X className="w-4 h-4" />
-      </button>
-
+    <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 p-4 sm:p-5 animate-slide-up">
       <div className="flex items-center gap-4">
         {/* Icon */}
         <div className="shrink-0 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -42,7 +33,7 @@ export function InstallBanner() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 pr-6">
+        <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground text-sm sm:text-base">
             Instale o Skejool
           </h3>
@@ -64,6 +55,14 @@ export function InstallBanner() {
           <span className="hidden sm:inline">Instalar</span>
         </Button>
       </div>
+
+      {/* Discrete dismiss link */}
+      <button
+        onClick={dismissBanner}
+        className="w-full mt-3 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+      >
+        Agora não
+      </button>
     </div>
   );
 }
