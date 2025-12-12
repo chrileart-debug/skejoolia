@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -5,7 +6,7 @@ import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
 import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOutletContext } from "react-router-dom";
 import {
   Scissors,
@@ -36,11 +37,42 @@ const formatTimeFromISO = (isoString: string): string => {
 export default function Dashboard() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const today = new Date();
   const todayStart = startOfDay(today).toISOString();
   const todayEnd = endOfDay(today).toISOString();
   const monthStart = startOfMonth(today).toISOString();
   const monthEnd = endOfMonth(today).toISOString();
+
+  // Check for pending plan from Google OAuth registration
+  useEffect(() => {
+    const updatePendingPlan = async () => {
+      if (!user?.id) return;
+      
+      const pendingPlan = localStorage.getItem("pending_plan_slug");
+      if (!pendingPlan) return;
+      
+      console.log("Atualizando plano pendente do OAuth:", pendingPlan);
+      
+      // Update the user's subscription with the selected plan
+      const { error } = await supabase
+        .from("subscriptions")
+        .update({ plan_slug: pendingPlan })
+        .eq("user_id", user.id);
+      
+      if (error) {
+        console.error("Erro ao atualizar plano:", error);
+      } else {
+        console.log("Plano atualizado com sucesso:", pendingPlan);
+        // Clear the pending plan
+        localStorage.removeItem("pending_plan_slug");
+        // Refresh subscription data
+        queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      }
+    };
+    
+    updatePendingPlan();
+  }, [user?.id, queryClient]);
 
   // Fetch today's appointments
   const { data: todayAppointments = [] } = useQuery({
