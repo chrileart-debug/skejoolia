@@ -321,9 +321,9 @@ export default function Billing() {
               </p>
             </div>
 
-            {/* Actions */}
-            <div className="pt-1 sm:pt-2 space-y-2">
-              {(subscription?.status === "trialing" || subscription?.status === "expired" || !subscription) && (
+            {/* Subscribe Action */}
+            {(subscription?.status === "trialing" || subscription?.status === "expired" || !subscription) && (
+              <div className="pt-1 sm:pt-2">
                 <Button
                   className="w-full h-10 sm:h-12 text-sm sm:text-base font-semibold rounded-xl"
                   onClick={handleSubscribe}
@@ -332,38 +332,8 @@ export default function Billing() {
                   <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   {subscribing ? "Processando..." : "Assinar agora"}
                 </Button>
-              )}
-              
-              {subscription?.status === "active" && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button
-                      className="w-full text-center text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors py-2 sm:py-3 border-t border-border/50"
-                      disabled={canceling}
-                    >
-                      {canceling ? "Cancelando..." : "Cancelar assinatura"}
-                    </button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Cancelar assinatura</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Tem certeza que deseja cancelar sua assinatura? Você perderá acesso aos recursos premium ao final do período atual.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Voltar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleCancel}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Confirmar cancelamento
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -460,6 +430,40 @@ export default function Billing() {
             )}
           </div>
         </div>
+
+        {/* Cancel Subscription - Separate section at bottom */}
+        {subscription?.status === "active" && (
+          <div className="flex-shrink-0 pt-4 pb-8">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="flex items-center justify-center gap-2 w-full text-xs text-destructive/70 hover:text-destructive transition-colors py-3"
+                  disabled={canceling}
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  {canceling ? "Cancelando..." : "Cancelar assinatura"}
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-destructive">Cancelar assinatura</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja cancelar sua assinatura? Você perderá acesso aos recursos premium ao final do período atual.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleCancel}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Confirmar cancelamento
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </div>
     </div>
   );
