@@ -485,16 +485,16 @@ export default function Agents() {
 
       {/* Agent Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto mx-auto">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto mx-auto animate-scale-in">
+          <DialogHeader className="animate-fade-in">
             <DialogTitle>
               {editingAgent ? "Editar Agente" : "Criar Agente"}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in" style={{ animationDelay: '50ms' }}>
+              <div className="space-y-2 transition-all duration-200">
                 <Label>Nome *</Label>
                 <Input
                   placeholder="Nome do agente"
@@ -502,9 +502,10 @@ export default function Agents() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
+                  className="transition-all duration-200 focus:scale-[1.01]"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 transition-all duration-200">
                 <Label>Função *</Label>
                 <Input
                   placeholder="Ex: Atendimento"
@@ -512,12 +513,13 @@ export default function Agents() {
                   onChange={(e) =>
                     setFormData({ ...formData, role: e.target.value })
                   }
+                  className="transition-all duration-200 focus:scale-[1.01]"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in" style={{ animationDelay: '100ms' }}>
+              <div className="space-y-2 transition-all duration-200">
                 <Label>Sexo</Label>
                 <Select
                   value={formData.gender}
@@ -525,7 +527,7 @@ export default function Agents() {
                     setFormData({ ...formData, gender: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -535,7 +537,7 @@ export default function Agents() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 transition-all duration-200">
                 <Label>Tom de voz</Label>
                 <Select
                   value={formData.voiceTone}
@@ -543,7 +545,7 @@ export default function Agents() {
                     setFormData({ ...formData, voiceTone: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -556,7 +558,7 @@ export default function Agents() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '150ms' }}>
               <Label>Objetivo</Label>
               <Input
                 placeholder="Ex: Agendar cortes e tirar dúvidas"
@@ -564,10 +566,11 @@ export default function Agents() {
                 onChange={(e) =>
                   setFormData({ ...formData, objective: e.target.value })
                 }
+                className="transition-all duration-200 focus:scale-[1.01]"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '200ms' }}>
               <Label>Limite de caracteres da resposta</Label>
               <Select
                 value={formData.charLimit}
@@ -575,7 +578,7 @@ export default function Agents() {
                   setFormData({ ...formData, charLimit: value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,7 +590,7 @@ export default function Agents() {
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '250ms' }}>
               <Label>Restrições (até 180 palavras)</Label>
               <Textarea
                 placeholder="Ex: Não oferecer descontos acima de 10%"
@@ -596,20 +599,23 @@ export default function Agents() {
                   setFormData({ ...formData, restrictions: e.target.value })
                 }
                 rows={3}
+                className="transition-all duration-200 focus:scale-[1.005]"
               />
             </div>
 
-            <WorkScheduleEditor
-              value={formData.workSchedule}
-              onChange={(schedule) =>
-                setFormData({ ...formData, workSchedule: schedule })
-              }
-            />
+            <div className="animate-fade-in" style={{ animationDelay: '300ms' }}>
+              <WorkScheduleEditor
+                value={formData.workSchedule}
+                onChange={(schedule) =>
+                  setFormData({ ...formData, workSchedule: schedule })
+                }
+              />
+            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '350ms' }}>
               <Label>Integração WhatsApp</Label>
               <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30 min-w-0">
+                <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30 min-w-0 transition-all duration-200 hover:border-primary/30">
                   {formData.whatsappId ? (
                     (() => {
                       const integration = getWhatsAppIntegration(formData.whatsappId);
@@ -632,7 +638,7 @@ export default function Agents() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full sm:w-auto shrink-0"
+                  className="w-full sm:w-auto shrink-0 transition-all duration-200 hover:scale-[1.02]"
                   onClick={() => setIsWhatsAppModalOpen(true)}
                 >
                   <Phone className="w-4 h-4 mr-2 sm:mr-0" />
@@ -641,16 +647,16 @@ export default function Agents() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 animate-fade-in" style={{ animationDelay: '400ms' }}>
               <Button
                 variant="outline"
-                className="flex-1"
+                className="flex-1 transition-all duration-200 hover:scale-[1.02]"
                 onClick={() => setIsDialogOpen(false)}
                 disabled={isSaving}
               >
                 Cancelar
               </Button>
-              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>
+              <Button className="flex-1 transition-all duration-200 hover:scale-[1.02]" onClick={handleSubmit} disabled={isSaving}>
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : editingAgent ? (
