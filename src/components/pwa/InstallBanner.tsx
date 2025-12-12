@@ -1,30 +1,34 @@
 import { usePWA } from "@/hooks/usePWA";
 import { Button } from "@/components/ui/button";
 import { Download, X, Smartphone } from "lucide-react";
-import { useState } from "react";
 
 export function InstallBanner() {
-  const { isInstallable, isInstalled, isIOS, promptInstall } = usePWA();
-  const [dismissed, setDismissed] = useState(false);
+  const { 
+    isInstallable, 
+    isIOS, 
+    shouldShowBanner, 
+    promptInstall, 
+    dismissBanner 
+  } = usePWA();
 
-  // Don't show if already installed, dismissed, or can't install (except iOS)
-  if (isInstalled || dismissed) return null;
-  if (!isInstallable && !isIOS) return null;
+  // Don't show if conditions not met
+  if (!shouldShowBanner) return null;
 
   const handleInstall = async () => {
-    if (isIOS) {
-      // Navigate to install page for iOS instructions
-      window.location.href = "/instalar";
-    } else {
+    if (isInstallable) {
+      // Android with native prompt available
       await promptInstall();
+    } else {
+      // iOS or Android without prompt - go to install page
+      window.location.href = "/instalar";
     }
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 p-4 sm:p-5">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 p-4 sm:p-5 animate-slide-up">
       {/* Dismiss button */}
       <button
-        onClick={() => setDismissed(true)}
+        onClick={dismissBanner}
         className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
         aria-label="Fechar"
       >
@@ -43,7 +47,10 @@ export function InstallBanner() {
             Instale o Skejool
           </h3>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2">
-            Acesso rápido direto da sua tela inicial
+            {isIOS 
+              ? "Toque em Compartilhar e depois 'Adicionar à Tela Inicial'"
+              : "Acesso rápido direto da sua tela inicial"
+            }
           </p>
         </div>
 

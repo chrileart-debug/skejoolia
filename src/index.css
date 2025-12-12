@@ -176,6 +176,29 @@
     animation: scaleIn 0.2s ease-out;
   }
 
+  /* Splash screen animations */
+  .animate-splash-icon {
+    animation: splashIcon 1.8s ease-out forwards;
+  }
+
+  .animate-splash-spin {
+    animation: splashSpin 1.5s ease-in-out;
+  }
+
+  .animate-splash-pulse {
+    animation: splashPulse 1.5s ease-out;
+  }
+
+  .animate-splash-text {
+    opacity: 0;
+    animation: splashText 0.6s ease-out 0.3s forwards;
+  }
+
+  .animate-splash-text-delayed {
+    opacity: 0;
+    animation: splashText 0.6s ease-out 0.5s forwards;
+  }
+
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -200,6 +223,59 @@
     to { 
       opacity: 1; 
       transform: scale(1); 
+    }
+  }
+
+  @keyframes splashIcon {
+    0% {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    30% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+    50% {
+      transform: scale(1);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes splashSpin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes splashPulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.4;
+    }
+    50% {
+      transform: scale(1.5);
+      opacity: 0.2;
+    }
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+  @keyframes splashText {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 
