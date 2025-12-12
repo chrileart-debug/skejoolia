@@ -1,14 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+const DISMISSED_KEY = "pwa-banner-dismissed";
+
 export function usePWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() => {
+    return localStorage.getItem(DISMISSED_KEY) === "true";
+  });
+
+  // Detect mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/i.test(navigator.userAgent);
 
   useEffect(() => {
     // Check if already installed
@@ -63,12 +76,23 @@ export function usePWA() {
     }
   };
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const dismissBanner = useCallback(() => {
+    setIsDismissed(true);
+    localStorage.setItem(DISMISSED_KEY, "true");
+  }, []);
+
+  // Show banner on mobile if not installed and not dismissed
+  const shouldShowBanner = isMobile && !isInstalled && !isDismissed;
 
   return {
     isInstallable,
     isInstalled,
     isIOS,
+    isAndroid,
+    isMobile,
+    isDismissed,
+    shouldShowBanner,
     promptInstall,
+    dismissBanner,
   };
 }
