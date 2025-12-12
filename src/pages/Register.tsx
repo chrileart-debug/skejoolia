@@ -226,6 +226,10 @@ export default function Register() {
                 toast.error("Selecione um plano primeiro");
                 return;
               }
+              
+              // Store selected plan in localStorage before OAuth redirect
+              localStorage.setItem("pending_plan_slug", selectedPlan);
+              
               setIsGoogleLoading(true);
               const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
