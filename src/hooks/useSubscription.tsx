@@ -162,13 +162,36 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
 
     if (!error && data) {
-      setSubscription(data as unknown as Subscription);
+      let subscriptionData = data as unknown as Subscription;
+      
+      // Check if trial has expired and update status if needed
+      if (subscriptionData.status === "trialing" && subscriptionData.trial_expires_at) {
+        const trialExpires = new Date(subscriptionData.trial_expires_at);
+        const now = new Date();
+        
+        if (trialExpires < now) {
+          // Trial expired - update status to 'expired'
+          console.log("Trial expired, updating status to expired...");
+          const { data: updatedData, error: updateError } = await supabase
+            .from("subscriptions")
+            .update({ status: "expired", updated_at: new Date().toISOString() })
+            .eq("id", subscriptionData.id)
+            .select()
+            .single();
+          
+          if (!updateError && updatedData) {
+            subscriptionData = updatedData as unknown as Subscription;
+          }
+        }
+      }
+      
+      setSubscription(subscriptionData);
       
       // Fetch the plan details
       const { data: planData } = await supabase
         .from("plans")
         .select("*")
-        .eq("slug", data.plan_slug)
+        .eq("slug", subscriptionData.plan_slug)
         .single();
 
       if (planData) {
