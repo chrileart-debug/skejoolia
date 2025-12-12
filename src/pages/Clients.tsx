@@ -421,25 +421,25 @@ export default function Clients() {
                 className="hover:bg-accent/50 transition-colors"
               >
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-3">
                     {/* Avatar */}
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-primary font-semibold text-lg">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-primary font-semibold">
                         {client.nome
                           ? client.nome.charAt(0).toUpperCase()
-                          : "?"}
+                          : "C"}
                       </span>
                     </div>
 
                     {/* Info */}
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground truncate max-w-[150px] sm:max-w-none">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground truncate">
                           {client.nome || "Cliente sem nome"}
                         </h3>
                         {client.has_active_appointment && (
                           <Badge variant="default" className="text-xs bg-green-500/20 text-green-600 hover:bg-green-500/30 shrink-0">
-                            Agenda ativa
+                            Ativo
                           </Badge>
                         )}
                       </div>
@@ -454,55 +454,37 @@ export default function Clients() {
                       {client.agente_nome && (
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
                           <Bot className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">Atendido por {client.agente_nome}</span>
+                          <span className="truncate">{client.agente_nome}</span>
                         </div>
                       )}
 
                       {/* Stats */}
-                      <div className="flex items-center gap-3 sm:gap-4 mt-3 flex-wrap">
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Scissors className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="font-medium">{client.total_cortes || 0}</span>
-                          <span className="text-muted-foreground">cortes</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <DollarSign className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="font-medium text-emerald-600 truncate">
-                            {formatCurrency(client.faturamento_total)}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <span>{client.total_cortes || 0} cortes</span>
+                        <span className="text-emerald-600 font-medium">
+                          {formatCurrency(client.faturamento_total)}
+                        </span>
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => handleEdit(client)}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteClientId(client.client_id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div className="flex flex-col items-center gap-1">
-                        <Switch
-                          checked={client.agente_ativo}
-                          onCheckedChange={() => toggleAgenteAtivo(client.client_id, client.agente_ativo)}
-                        />
-                        <span className="text-[10px] text-muted-foreground">
-                          {client.agente_ativo ? "Agente ON" : "Agente OFF"}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => handleEdit(client)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteClientId(client.client_id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
