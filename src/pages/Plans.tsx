@@ -38,23 +38,43 @@ const Plans = () => {
   };
 
   const handleUpgrade = async () => {
-    if (!user || !subscription) return;
+    console.log("=== handleUpgrade iniciado ===");
+    console.log("User:", user);
+    console.log("Subscription:", subscription);
+
+    if (!user || !subscription) {
+      console.log("Abortando: user ou subscription nulo");
+      toast({
+        title: "Erro",
+        description: "Dados de assinatura não disponíveis. Tente recarregar a página.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const payload = {
+      action: "upgrade",
+      user_id: user.id,
+      plan_slug: "corporativo",
+      price: 49.9,
+      subscription_id: subscription.id,
+    };
+
+    console.log("Payload para webhook:", payload);
 
     setUpgradeLoading(true);
     try {
-      const { data, error } = await createCheckoutSession({
-        action: "upgrade",
-        user_id: user.id,
-        plan_slug: "corporativo",
-        price: 49.9,
-        subscription_id: subscription.id,
-      });
+      const { data, error } = await createCheckoutSession(payload);
+      
+      console.log("Resposta webhook - data:", data);
+      console.log("Resposta webhook - error:", error);
 
       if (error) {
         throw new Error(error);
       }
 
       const checkoutUrl = data?.link || data?.checkout_url;
+      console.log("Checkout URL:", checkoutUrl);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
@@ -62,6 +82,7 @@ const Plans = () => {
         throw new Error("Link de checkout não encontrado");
       }
     } catch (error) {
+      console.error("Erro no upgrade:", error);
       toast({
         title: "Erro",
         description: "Não foi possível iniciar o upgrade. Tente novamente.",
