@@ -580,6 +580,7 @@ export type Database = {
         Args: { p_resource: string; p_user_id: string }
         Returns: Json
       }
+      expire_trials: { Args: never; Returns: number }
       get_available_integracoes_whatsapp: {
         Args: { p_current_agent_id?: string; p_user_id: string }
         Returns: {
