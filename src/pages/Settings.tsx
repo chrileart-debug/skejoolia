@@ -38,7 +38,7 @@ export default function Settings() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { isInstalled, isInstallable, promptInstall } = usePWA();
+  const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -302,44 +302,46 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* PWA Download Section */}
-        <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Smartphone className="w-5 h-5 text-primary" />
-            Aplicativo
-          </h3>
+        {/* PWA Download Section - Only on mobile/tablet */}
+        {isMobile && (
+          <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-primary" />
+              Aplicativo
+            </h3>
 
-          {isInstalled ? (
-            <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
-              <CheckCircle className="w-5 h-5 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">Aplicativo instalado</p>
-                <p className="text-sm text-muted-foreground">
-                  Você já tem o Skejool instalado no seu dispositivo
-                </p>
+            {isInstalled ? (
+              <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
+                <CheckCircle className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-medium text-foreground">Aplicativo instalado</p>
+                  <p className="text-sm text-muted-foreground">
+                    Você já tem o Skejool instalado no seu dispositivo
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
-              </p>
-              <Button
-                onClick={() => {
-                  if (isInstallable) {
-                    promptInstall();
-                  } else {
-                    navigate("/instalar");
-                  }
-                }}
-                className="w-full sm:w-auto"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Baixar Aplicativo
-              </Button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
+                </p>
+                <Button
+                  onClick={() => {
+                    if (isInstallable) {
+                      promptInstall();
+                    } else {
+                      navigate("/instalar");
+                    }
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Baixar Aplicativo
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
