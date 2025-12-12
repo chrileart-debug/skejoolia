@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { webhookRequest, WEBHOOK_ENDPOINTS, CheckoutResponse } from "@/lib/webhook";
+import { createCheckoutSession } from "@/lib/webhook";
 
 const Plans = () => {
   const { user } = useAuth();
@@ -38,21 +38,17 @@ const Plans = () => {
   };
 
   const handleUpgrade = async () => {
-    if (!user) return;
+    if (!user || !subscription) return;
 
     setUpgradeLoading(true);
     try {
-      const { data, error } = await webhookRequest<CheckoutResponse>(
-        WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT,
-        {
-          body: {
-            user_id: user.id,
-            plan_name: "Corporativo",
-            plan_price: 49.9,
-            email: user.email,
-          },
-        }
-      );
+      const { data, error } = await createCheckoutSession({
+        action: "upgrade",
+        user_id: user.id,
+        plan_slug: "corporativo",
+        price: 49.9,
+        subscription_id: subscription.id,
+      });
 
       if (error) {
         throw new Error(error);
