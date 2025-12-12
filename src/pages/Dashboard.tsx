@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
+import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
@@ -131,6 +132,9 @@ export default function Dashboard() {
       />
 
       <div className="p-4 lg:p-6 space-y-6">
+        {/* PWA Install Banner */}
+        <InstallBanner />
+
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
