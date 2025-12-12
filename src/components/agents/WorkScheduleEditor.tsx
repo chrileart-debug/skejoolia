@@ -103,34 +103,36 @@ export function WorkScheduleEditor({ value, onChange }: WorkScheduleEditorProps)
         {DAY_ORDER.map((day) => (
           <div
             key={day}
-            className="flex items-center gap-3 py-2 border-b border-border last:border-b-0"
+            className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 py-2 border-b border-border last:border-b-0"
           >
-            <div className="w-20 flex items-center gap-2">
+            {/* Mobile: Switch + Day name in same row */}
+            <div className="flex items-center gap-3">
               <Switch
                 checked={value[day].enabled}
                 onCheckedChange={(checked) =>
                   handleDayChange(day, "enabled", checked)
                 }
               />
+              <span className="text-sm font-medium text-foreground min-w-[60px]">
+                {DAY_LABELS[day]}
+              </span>
             </div>
-            <span className="w-20 text-sm font-medium text-foreground">
-              {DAY_LABELS[day]}
-            </span>
-            <div className="flex items-center gap-2 flex-1">
+            {/* Time inputs */}
+            <div className="flex items-center gap-2 pl-10 sm:pl-0">
               <Input
                 type="time"
                 value={value[day].start}
                 onChange={(e) => handleDayChange(day, "start", e.target.value)}
                 disabled={!value[day].enabled}
-                className="w-24 text-sm"
+                className="w-[100px] sm:w-24 text-sm"
               />
-              <span className="text-muted-foreground text-sm">até</span>
+              <span className="text-muted-foreground text-sm">—</span>
               <Input
                 type="time"
                 value={value[day].end}
                 onChange={(e) => handleDayChange(day, "end", e.target.value)}
                 disabled={!value[day].enabled}
-                className="w-24 text-sm"
+                className="w-[100px] sm:w-24 text-sm"
               />
             </div>
           </div>
