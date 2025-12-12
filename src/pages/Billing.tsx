@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createCheckoutSession, webhookRequest, WEBHOOK_ENDPOINTS } from "@/lib/webhook";
 import {
   CreditCard,
   CheckCircle,
@@ -116,23 +117,22 @@ export default function Billing() {
     
     setSubscribing(true);
     try {
-      const response = await fetch("https://webhook.lernow.com/webhook/asaas-checkout-skejool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "subscribe",
-          user_id: user.id,
-          plan_slug: subscription.plan_slug,
-          price: plan.price,
-          subscription_id: subscription.id,
-        }),
+      const { data, error } = await createCheckoutSession({
+        action: "subscribe",
+        user_id: user.id,
+        plan_slug: subscription.plan_slug,
+        price: plan.price,
+        subscription_id: subscription.id,
       });
 
-      const data = await response.json();
+      if (error) {
+        toast.error(error);
+        return;
+      }
       
-      if (data.link) {
+      if (data?.link) {
         window.location.href = data.link;
-      } else if (data.checkout_url) {
+      } else if (data?.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
         toast.error("Erro ao criar sessão de pagamento");
@@ -154,10 +154,8 @@ export default function Billing() {
     
     setCanceling(true);
     try {
-      const response = await fetch("https://webhook.lernow.com/webhook/asaas-checkout-skejool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { error } = await webhookRequest(WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT, {
+        body: {
           action: "cancel",
           user_id: user.id,
           subscription_id: subscription.id,
@@ -168,20 +166,21 @@ export default function Billing() {
             would_return: churnSurvey.wouldReturn,
             additional_comment: churnSurvey.additionalComment,
           },
-        }),
+        },
       });
 
-      if (response.ok) {
-        toast.success("Assinatura cancelada com sucesso");
-        await supabase
-          .from("subscriptions")
-          .update({ status: "canceled" })
-          .eq("id", subscription.id);
-        setShowChurnSurvey(false);
-        window.location.reload();
-      } else {
+      if (error) {
         toast.error("Erro ao cancelar assinatura");
+        return;
       }
+
+      toast.success("Assinatura cancelada com sucesso");
+      await supabase
+        .from("subscriptions")
+        .update({ status: "canceled" })
+        .eq("id", subscription.id);
+      setShowChurnSurvey(false);
+      window.location.reload();
     } catch (error) {
       console.error("Cancel error:", error);
       toast.error("Erro ao cancelar assinatura");

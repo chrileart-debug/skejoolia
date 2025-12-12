@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { createCheckoutSession } from "@/lib/webhook";
 
 export function TrialBanner() {
   const { isTrialing, daysRemaining, plan, subscription } = useSubscription();
@@ -20,23 +21,22 @@ export function TrialBanner() {
 
     setSubscribing(true);
     try {
-      const response = await fetch("https://webhook.lernow.com/webhook/asaas-checkout-skejool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "subscribe",
-          user_id: user.id,
-          plan_slug: subscription.plan_slug,
-          price: plan.price,
-          subscription_id: subscription.id,
-        }),
+      const { data, error } = await createCheckoutSession({
+        action: "subscribe",
+        user_id: user.id,
+        plan_slug: subscription.plan_slug,
+        price: plan.price,
+        subscription_id: subscription.id,
       });
 
-      const data = await response.json();
+      if (error) {
+        toast.error(error);
+        return;
+      }
 
-      if (data.link) {
+      if (data?.link) {
         window.location.href = data.link;
-      } else if (data.checkout_url) {
+      } else if (data?.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
         toast.error("Erro ao criar sessão de pagamento");

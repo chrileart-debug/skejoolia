@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { webhookRequest, WEBHOOK_ENDPOINTS, CheckoutResponse } from "@/lib/webhook";
 
 const Plans = () => {
   const { user } = useAuth();
@@ -41,22 +42,23 @@ const Plans = () => {
 
     setUpgradeLoading(true);
     try {
-      const response = await fetch(
-        "https://webhook.lernow.com/webhook/asaas-checkout-skejool",
+      const { data, error } = await webhookRequest<CheckoutResponse>(
+        WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             user_id: user.id,
             plan_name: "Corporativo",
             plan_price: 49.9,
             email: user.email,
-          }),
+          },
         }
       );
 
-      const data = await response.json();
-      const checkoutUrl = data.link || data.checkout_url;
+      if (error) {
+        throw new Error(error);
+      }
+
+      const checkoutUrl = data?.link || data?.checkout_url;
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;

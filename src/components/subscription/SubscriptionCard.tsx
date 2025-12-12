@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Crown, Clock, CreditCard, AlertCircle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { createCheckoutSession } from "@/lib/webhook";
 
 export function SubscriptionCard() {
   const navigate = useNavigate();
@@ -20,23 +21,22 @@ export function SubscriptionCard() {
     
     setSubscribing(true);
     try {
-      const response = await fetch("https://webhook.lernow.com/webhook/asaas-checkout-skejool", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "subscribe",
-          user_id: user.id,
-          plan_slug: subscription.plan_slug,
-          price: plan.price,
-          subscription_id: subscription.id,
-        }),
+      const { data, error } = await createCheckoutSession({
+        action: "subscribe",
+        user_id: user.id,
+        plan_slug: subscription.plan_slug,
+        price: plan.price,
+        subscription_id: subscription.id,
       });
 
-      const data = await response.json();
+      if (error) {
+        toast.error(error);
+        return;
+      }
       
-      if (data.link) {
+      if (data?.link) {
         window.location.href = data.link;
-      } else if (data.checkout_url) {
+      } else if (data?.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
         toast.error("Erro ao criar sessão de pagamento");

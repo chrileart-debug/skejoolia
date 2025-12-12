@@ -25,9 +25,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { z } from "zod";
+import {
+  createWhatsAppInstance,
+  connectWhatsAppInstance,
+  checkWhatsAppStatus,
+  disconnectWhatsAppInstance,
+  deleteWhatsAppInstance,
+} from "@/lib/webhook";
 
-const WEBHOOK_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp";
-const POLLING_URL = "https://webhook.lernow.com/webhook/integracao_whatsapp_status";
 const MAX_INTEGRATIONS = 3;
 const QR_TIMEOUT_MS = 120000; // 2 minutes
 
@@ -336,16 +341,15 @@ export function WhatsAppIntegrationManager({
 
     try {
       // Call n8n webhook first to create instance
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "whatsapp.integration.create",
-          instancia: instancia,
-        }),
+      const { data: webhookData, error: webhookError } = await createWhatsAppInstance({
+        event: "whatsapp.integration.create",
+        instancia: instancia,
       });
 
-      const webhookData = await response.json();
+      if (webhookError) {
+        throw new Error(webhookError);
+      }
+
       console.log("Webhook create response:", webhookData);
       
       const { instanceId, instanceName } = extractInstanceData(webhookData);
@@ -397,16 +401,15 @@ export function WhatsAppIntegrationManager({
         .update({ status: "conectando" })
         .eq("id", integration.id);
 
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "whatsapp.integration.connect",
-          instancia: integration.instancia,
-        }),
+      const { data, error: webhookError } = await connectWhatsAppInstance({
+        event: "whatsapp.integration.connect",
+        instancia: integration.instancia || "",
       });
 
-      const data = await response.json();
+      if (webhookError) {
+        throw new Error(webhookError);
+      }
+
       console.log("Webhook connect response:", data);
 
       const qrCode = extractQRCode(data);
@@ -465,18 +468,14 @@ export function WhatsAppIntegrationManager({
       }
 
       try {
-        const response = await fetch(POLLING_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            instancia: integration.instancia,
-          }),
+        const { data, error: pollError } = await checkWhatsAppStatus({
+          event: "whatsapp.integration.status",
+          instancia: integration.instancia || "",
         });
 
-        const data = await response.json();
         console.log("Polling response:", data);
 
-        if (isConnected(data)) {
+        if (!pollError && isConnected(data)) {
           clearTimeout(pollingRef.current!);
           pollingRef.current = null;
           if (countdownRef.current) clearInterval(countdownRef.current);
@@ -516,13 +515,9 @@ export function WhatsAppIntegrationManager({
     setIsDisconnecting(true);
 
     try {
-      await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "whatsapp.integration.disconnect",
-          instancia: integration.instancia,
-        }),
+      await disconnectWhatsAppInstance({
+        event: "whatsapp.integration.disconnect",
+        instancia: integration.instancia || "",
       });
 
       await supabase
@@ -564,13 +559,9 @@ export function WhatsAppIntegrationManager({
     setIsDeleting(true);
 
     try {
-      await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "whatsapp.integration.delete",
-          instancia: selectedIntegration.instancia,
-        }),
+      await deleteWhatsAppInstance({
+        event: "whatsapp.integration.delete",
+        instancia: selectedIntegration.instancia || "",
       });
 
       const { error } = await supabase

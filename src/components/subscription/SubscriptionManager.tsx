@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { createCheckoutSession, webhookRequest, WEBHOOK_ENDPOINTS } from "@/lib/webhook";
 
 interface Payment {
   id: string;
@@ -46,8 +47,6 @@ interface Payment {
   invoice_url: string | null;
   created_at: string | null;
 }
-
-const WEBHOOK_URL = "https://webhook.lernow.com/webhook/asaas-checkout-skejool";
 
 export function SubscriptionManager() {
   const { user } = useAuth();
@@ -88,30 +87,25 @@ export function SubscriptionManager() {
     setIsSubscribing(true);
 
     try {
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "subscribe",
-          user_id: user.id,
-          plan_slug: subscription.plan_slug,
-          price: plan.price,
-          subscription_id: subscription.id,
-        }),
+      const { data, error } = await createCheckoutSession({
+        action: "subscribe",
+        user_id: user.id,
+        plan_slug: subscription.plan_slug,
+        price: plan.price,
+        subscription_id: subscription.id,
       });
 
-      if (!response.ok) {
-        throw new Error("Erro ao processar assinatura");
+      if (error) {
+        throw new Error(error);
       }
 
-      const data = await response.json();
-      const checkoutUrl = data.link || data.checkout_url;
+      const checkoutUrl = data?.link || data?.checkout_url;
 
       if (checkoutUrl) {
         // Save checkout session
         await supabase.from("session_checkout").upsert({
           user_id: user.id,
-          asaas_checkout_id: data.checkout_id || null,
+          asaas_checkout_id: null,
           asaas_checkout_link: checkoutUrl,
           status: "pending",
         });
@@ -140,19 +134,17 @@ export function SubscriptionManager() {
     setIsCanceling(true);
 
     try {
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { error } = await webhookRequest(WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT, {
+        body: {
           action: "cancel",
           user_id: user.id,
           subscription_id: subscription.id,
           asaas_subscription_id: subscription.asaas_subscription_id,
-        }),
+        },
       });
 
-      if (!response.ok) {
-        throw new Error("Erro ao cancelar assinatura");
+      if (error) {
+        throw new Error(error);
       }
 
       // Update local subscription status
