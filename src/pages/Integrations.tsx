@@ -649,7 +649,7 @@ export default function Integrations() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Integrações" subtitle="Gerencie suas conexões com WhatsApp" onMenuClick={onMenuClick} />
+        <Header title="Integrações" subtitle="Gerencie suas conexões" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -661,7 +661,7 @@ export default function Integrations() {
     <div className="min-h-screen">
       <Header
         title="Integrações"
-        subtitle="Gerencie suas conexões com WhatsApp"
+        subtitle="Gerencie suas conexões"
         onMenuClick={onMenuClick}
       />
 
