@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft, Check } from "lucide-react";
+import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +40,7 @@ export default function Register() {
     barbershopName: "",
     password: "",
   });
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  
 
   // Show message if redirected from login with unregistered Google account
   useEffect(() => {
@@ -90,10 +90,6 @@ export default function Register() {
       return;
     }
 
-    if (!acceptedTerms) {
-      toast.error("Você precisa aceitar os termos de uso para continuar");
-      return;
-    }
 
     if (formData.password.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
@@ -224,12 +220,8 @@ export default function Register() {
             variant="outline"
             size="xl"
             className="w-full"
-            disabled={isGoogleLoading || !acceptedTerms}
+            disabled={isGoogleLoading}
             onClick={async () => {
-              if (!acceptedTerms) {
-                toast.error("Você precisa aceitar os termos de uso para continuar");
-                return;
-              }
               if (!selectedPlan) {
                 toast.error("Selecione um plano primeiro");
                 return;
@@ -271,11 +263,16 @@ export default function Register() {
             </svg>
             {isGoogleLoading ? "Conectando..." : "Cadastrar com Google"}
           </Button>
-          {!acceptedTerms && (
-            <p className="text-xs text-muted-foreground text-center">
-              Aceite os termos abaixo para cadastrar com Google
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground text-center">
+            Ao criar conta, você concorda com os{" "}
+            <Link to="/termos" target="_blank" className="text-primary hover:underline">
+              Termos de Uso
+            </Link>
+            {" "}e{" "}
+            <Link to="/privacidade" target="_blank" className="text-primary hover:underline">
+              Política de Privacidade
+            </Link>
+          </p>
 
           {/* Divider */}
           <div className="relative">
@@ -385,40 +382,25 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Terms checkbox */}
-            <div className="flex items-start gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setAcceptedTerms(!acceptedTerms)}
-                className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                  acceptedTerms 
-                    ? "bg-primary border-primary" 
-                    : "border-muted-foreground/50 hover:border-primary"
-                }`}
-              >
-                {acceptedTerms && <Check className="w-3 h-3 text-primary-foreground" />}
-              </button>
-              <label className="text-sm text-muted-foreground leading-tight">
-                Li e concordo com os{" "}
-                <Link to="/termos" target="_blank" className="text-primary hover:underline font-medium">
-                  Termos de Uso
-                </Link>
-                {" "}e a{" "}
-                <Link to="/privacidade" target="_blank" className="text-primary hover:underline font-medium">
-                  Política de Privacidade
-                </Link>
-              </label>
-            </div>
-
             <div className="pt-2">
               <Button
                 type="submit"
                 size="xl"
                 className="w-full"
-                disabled={isLoading || !acceptedTerms}
+                disabled={isLoading}
               >
                 {isLoading ? "Criando conta..." : "Criar conta e começar teste grátis"}
               </Button>
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Ao criar conta, você concorda com os{" "}
+                <Link to="/termos" target="_blank" className="text-primary hover:underline">
+                  Termos de Uso
+                </Link>
+                {" "}e{" "}
+                <Link to="/privacidade" target="_blank" className="text-primary hover:underline">
+                  Política de Privacidade
+                </Link>
+              </p>
             </div>
           </form>
 
