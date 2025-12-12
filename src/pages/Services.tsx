@@ -391,7 +391,7 @@ export default function Services() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Serviços" subtitle="Gerencie os cortes e serviços" onMenuClick={onMenuClick} />
+        <Header title="Serviços" subtitle="Gerencie seus serviços" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -401,7 +401,7 @@ export default function Services() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Serviços" subtitle="Gerencie os cortes e serviços" onMenuClick={onMenuClick} />
+      <Header title="Serviços" subtitle="Gerencie seus serviços" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6">
         {services.length === 0 ? (
