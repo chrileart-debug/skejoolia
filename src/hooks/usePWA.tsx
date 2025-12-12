@@ -5,14 +5,15 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISSED_KEY = "pwa-banner-dismissed";
+const SESSION_DISMISSED_KEY = "pwa-banner-dismissed-session";
 
 export function usePWA() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => {
-    return localStorage.getItem(DISMISSED_KEY) === "true";
+    // Use sessionStorage so banner reappears on each new session
+    return sessionStorage.getItem(SESSION_DISMISSED_KEY) === "true";
   });
 
   // Detect mobile device
@@ -78,7 +79,7 @@ export function usePWA() {
 
   const dismissBanner = useCallback(() => {
     setIsDismissed(true);
-    localStorage.setItem(DISMISSED_KEY, "true");
+    sessionStorage.setItem(SESSION_DISMISSED_KEY, "true");
   }, []);
 
   // Show banner on mobile if not installed and not dismissed
