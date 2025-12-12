@@ -485,7 +485,7 @@ export default function Agents() {
 
       {/* Agent Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto mx-auto">
           <DialogHeader>
             <DialogTitle>
               {editingAgent ? "Editar Agente" : "Criar Agente"}
@@ -493,7 +493,7 @@ export default function Agents() {
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label>Nome *</Label>
                 <Input
@@ -516,7 +516,7 @@ export default function Agents() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label>Sexo</Label>
                 <Select
@@ -608,17 +608,17 @@ export default function Agents() {
 
             <div className="space-y-2">
               <Label>Integração WhatsApp</Label>
-              <div className="flex gap-2">
-                <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30 min-w-0">
                   {formData.whatsappId ? (
                     (() => {
                       const integration = getWhatsAppIntegration(formData.whatsappId);
-                      if (!integration) return <span className="text-muted-foreground">Integração não encontrada</span>;
+                      if (!integration) return <span className="text-muted-foreground text-sm">Integração não encontrada</span>;
                       return (
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className={`w-4 h-4 ${integration.status === "conectado" ? "text-success" : "text-muted-foreground"}`} />
-                          <span className="font-medium">{integration.nome}</span>
-                          <span className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <MessageSquare className={`w-4 h-4 shrink-0 ${integration.status === "conectado" ? "text-success" : "text-muted-foreground"}`} />
+                          <span className="font-medium text-sm truncate">{integration.nome}</span>
+                          <span className="text-xs text-muted-foreground">
                             {formatPhoneNumber(integration.numero)}
                           </span>
                           <StatusBadge status={getStatusForBadge(integration.status)} />
@@ -626,15 +626,17 @@ export default function Agents() {
                       );
                     })()
                   ) : (
-                    <span className="text-muted-foreground">Nenhuma integração selecionada</span>
+                    <span className="text-muted-foreground text-sm">Nenhuma integração selecionada</span>
                   )}
                 </div>
                 <Button
                   type="button"
                   variant="outline"
+                  className="w-full sm:w-auto shrink-0"
                   onClick={() => setIsWhatsAppModalOpen(true)}
                 >
-                  <Phone className="w-4 h-4" />
+                  <Phone className="w-4 h-4 mr-2 sm:mr-0" />
+                  <span className="sm:hidden">Selecionar WhatsApp</span>
                 </Button>
               </div>
             </div>
