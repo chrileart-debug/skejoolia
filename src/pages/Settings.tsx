@@ -347,7 +347,7 @@ export default function Settings() {
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <Button
             size="lg"
-            className="flex-1"
+            className="w-full sm:flex-1"
             onClick={handleSave}
             disabled={isLoading}
           >
@@ -357,7 +357,7 @@ export default function Settings() {
           <Button
             variant="outline"
             size="lg"
-            className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="w-full sm:flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={handleLogout}
           >
             <LogOut className="w-4 h-4 mr-2" />
