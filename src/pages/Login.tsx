@@ -13,17 +13,49 @@ export default function Login() {
   const { signIn, user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
-  // Redirect if already logged in
+  // Check if user logged in via Google is new (created in last 30 seconds)
   useEffect(() => {
     if (!loading && user) {
-      navigate("/dashboard");
+      const createdAt = new Date(user.created_at).getTime();
+      const now = Date.now();
+      const isNewUser = now - createdAt < 30000; // 30 seconds threshold
+      
+      // Check if this is a Google OAuth user
+      const isGoogleUser = user.app_metadata?.provider === "google" || 
+                          user.identities?.some(i => i.provider === "google");
+      
+      if (isNewUser && isGoogleUser) {
+        // New Google user trying to login - sign them out and redirect to register
+        supabase.auth.signOut().then(() => {
+          toast.error("Conta não encontrada. Complete seu cadastro primeiro.");
+          navigate("/register?from=google");
+        });
+      } else {
+        // Existing user - proceed to dashboard
+        navigate("/dashboard");
+      }
     }
   }, [user, loading, navigate]);
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+    if (error) {
+      toast.error("Erro ao conectar com Google");
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,17 +116,8 @@ export default function Login() {
             variant="outline"
             size="xl"
             className="w-full"
-            onClick={async () => {
-              const { error } = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                  redirectTo: `${window.location.origin}/dashboard`,
-                },
-              });
-              if (error) {
-                toast.error("Erro ao conectar com Google");
-              }
-            }}
+            disabled={isGoogleLoading}
+            onClick={handleGoogleLogin}
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
               <path
@@ -114,7 +137,7 @@ export default function Login() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continuar com Google
+            {isGoogleLoading ? "Conectando..." : "Entrar com Google"}
           </Button>
 
           {/* Divider */}

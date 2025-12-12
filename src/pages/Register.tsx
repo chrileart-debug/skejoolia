@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,8 @@ interface Plan {
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromGoogle = searchParams.get("from") === "google";
   const { signUp, user, loading } = useAuth();
   const [step, setStep] = useState<RegistrationStep>("plan-selection");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -30,6 +32,7 @@ export default function Register() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -38,6 +41,13 @@ export default function Register() {
     password: "",
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  // Show message if redirected from login with unregistered Google account
+  useEffect(() => {
+    if (fromGoogle) {
+      toast.info("Use o botão 'Cadastrar com Google' para criar sua conta.");
+    }
+  }, [fromGoogle]);
 
   // Fetch plans
   useEffect(() => {
@@ -214,15 +224,30 @@ export default function Register() {
             variant="outline"
             size="xl"
             className="w-full"
+            disabled={isGoogleLoading || !acceptedTerms}
             onClick={async () => {
+              if (!acceptedTerms) {
+                toast.error("Você precisa aceitar os termos de uso para continuar");
+                return;
+              }
+              if (!selectedPlan) {
+                toast.error("Selecione um plano primeiro");
+                return;
+              }
+              setIsGoogleLoading(true);
               const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
                   redirectTo: `${window.location.origin}/dashboard`,
+                  queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent',
+                  },
                 },
               });
               if (error) {
                 toast.error("Erro ao conectar com Google");
+                setIsGoogleLoading(false);
               }
             }}
           >
@@ -244,8 +269,13 @@ export default function Register() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Cadastrar com Google
+            {isGoogleLoading ? "Conectando..." : "Cadastrar com Google"}
           </Button>
+          {!acceptedTerms && (
+            <p className="text-xs text-muted-foreground text-center">
+              Aceite os termos abaixo para cadastrar com Google
+            </p>
+          )}
 
           {/* Divider */}
           <div className="relative">
