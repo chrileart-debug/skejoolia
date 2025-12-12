@@ -19,27 +19,44 @@ export default function Login() {
     password: "",
   });
 
-  // Check if user logged in via Google is new (created in last 30 seconds)
+  // Check if user logged in via Google is new (account just created)
   useEffect(() => {
     if (!loading && user) {
-      const createdAt = new Date(user.created_at).getTime();
-      const now = Date.now();
-      const isNewUser = now - createdAt < 30000; // 30 seconds threshold
-      
-      // Check if this is a Google OAuth user
-      const isGoogleUser = user.app_metadata?.provider === "google" || 
-                          user.identities?.some(i => i.provider === "google");
-      
-      if (isNewUser && isGoogleUser) {
-        // New Google user trying to login - sign them out and redirect to register
-        supabase.auth.signOut().then(() => {
-          toast.error("Conta não encontrada. Complete seu cadastro primeiro.");
-          navigate("/register?from=google");
-        });
-      } else {
-        // Existing user - proceed to dashboard
+      const checkNewGoogleUser = async () => {
+        // Check if this is a Google OAuth user
+        const isGoogleUser = user.app_metadata?.provider === "google" || 
+                            user.identities?.some(i => i.provider === "google");
+        
+        if (isGoogleUser) {
+          // Check if user has user_settings record (indicates proper registration)
+          const { data: userSettings } = await supabase
+            .from("user_settings")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          
+          // Check if user has subscription (indicates proper registration)
+          const { data: subscription } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          
+          // If no user_settings or subscription, this is a new unregistered Google user
+          if (!userSettings && !subscription) {
+            // Sign them out and redirect to register
+            await supabase.auth.signOut();
+            toast.error("Conta não encontrada. Complete seu cadastro primeiro.");
+            navigate("/register?from=google");
+            return;
+          }
+        }
+        
+        // Existing registered user - proceed to dashboard
         navigate("/dashboard");
-      }
+      };
+      
+      checkNewGoogleUser();
     }
   }, [user, loading, navigate]);
 
@@ -48,7 +65,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/login`,
       },
     });
     if (error) {
