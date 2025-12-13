@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { formatPhoneMask } from "@/lib/phoneMask";
 
 interface Appointment {
   id_agendamento: string;
@@ -902,18 +903,19 @@ export default function Schedule() {
                   <div className="space-y-2">
                     <Label>Telefone</Label>
                     <Input
-                      placeholder="Telefone do cliente"
+                      placeholder="(11) 99999-9999"
                       value={formData.phone}
                       onChange={(e) =>
-                        setFormData({ ...formData, phone: e.target.value })
+                        setFormData({ ...formData, phone: formatPhoneMask(e.target.value) })
                       }
+                      maxLength={16}
                     />
                   </div>
                 </>
               )}
 
               <div className="space-y-2">
-                <Label>Serviço *</Label>
+                <Label>Serviço</Label>
                 <Select
                   value={formData.service}
                   onValueChange={(value) =>
