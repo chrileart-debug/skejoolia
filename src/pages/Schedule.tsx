@@ -264,7 +264,7 @@ export default function Schedule() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.service || !formData.date || !formData.time) {
+    if (!formData.client.trim() || !formData.date || !formData.time) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
@@ -325,7 +325,7 @@ export default function Schedule() {
         user_id: user.id,
         nome_cliente: formData.client || null,
         telefone_cliente: formData.phone || null,
-        id_corte: formData.service,
+        id_corte: formData.service || null,
         start_time: startTime,
         end_time: endTime,
         status: "pending",
