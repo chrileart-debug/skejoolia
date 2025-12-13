@@ -21,7 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bot, Plus, Edit2, Trash2, Phone, Loader2, MessageSquare } from "lucide-react";
+import { Bot, Plus, Edit2, Trash2, Phone, Loader2, MessageSquare, Sparkles } from "lucide-react";
+import { criarAgenteAutomatico } from "@/lib/webhook";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -75,6 +76,9 @@ export default function Agents() {
     current: 0,
     limit: 0,
   });
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isCreatingWithAI, setIsCreatingWithAI] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     role: "",
@@ -373,6 +377,58 @@ export default function Agents() {
     return whatsappIntegrations.find((w) => w.id === id) || null;
   };
 
+  const handleCreateWithAI = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error("Digite um prompt para criar o agente");
+      return;
+    }
+
+    if (!user) {
+      toast.error("Usuário não autenticado");
+      return;
+    }
+
+    // Verificar limite antes de criar
+    const limitResult = await checkLimit("agents");
+    if (!limitResult.allowed) {
+      setLimitModal({
+        open: true,
+        current: limitResult.current,
+        limit: limitResult.limit,
+      });
+      return;
+    }
+
+    setIsCreatingWithAI(true);
+
+    try {
+      const { data, error } = await criarAgenteAutomatico({
+        user_id: user.id,
+        prompt: aiPrompt,
+      });
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success("Agente criado com sucesso!");
+      setIsAIModalOpen(false);
+      setAiPrompt("");
+      await fetchAgents();
+    } catch (err) {
+      console.error("Erro ao criar agente com IA:", err);
+      toast.error("Erro ao criar agente. Tente novamente.");
+    } finally {
+      setIsCreatingWithAI(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen">
@@ -481,6 +537,16 @@ export default function Agents() {
         )}
       </div>
 
+      {/* FAB de criação com IA - posicionado acima do FAB padrão */}
+      {agents.length > 0 && (
+        <FAB 
+          onClick={() => setIsAIModalOpen(true)} 
+          icon={<Sparkles className="w-6 h-6" />}
+          className="bottom-36 lg:bottom-28"
+        />
+      )}
+
+      {/* FAB padrão */}
       {agents.length > 0 && <FAB onClick={handleCreate} />}
 
       {/* Agent Form Dialog */}
@@ -688,6 +754,65 @@ export default function Agents() {
         currentCount={limitModal.current}
         limit={limitModal.limit}
       />
+
+      {/* AI Agent Creation Modal */}
+      <Dialog open={isAIModalOpen} onOpenChange={(open) => {
+        if (!isCreatingWithAI) {
+          setIsAIModalOpen(open);
+          if (!open) setAiPrompt("");
+        }
+      }}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Criar Agente com IA
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Descreva o agente que você deseja criar</Label>
+              <Textarea
+                placeholder="Ex: Crie um agente masculino, amigável, para atendimento de barbearia, que agenda cortes e tira dúvidas sobre preços..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={5}
+                disabled={isCreatingWithAI}
+                className="resize-none"
+              />
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsAIModalOpen(false)}
+                disabled={isCreatingWithAI}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1" 
+                onClick={handleCreateWithAI}
+                disabled={isCreatingWithAI || !aiPrompt.trim()}
+              >
+                {isCreatingWithAI ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Enviar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

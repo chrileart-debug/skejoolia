@@ -10,6 +10,7 @@ export const WEBHOOK_ENDPOINTS = {
   WHATSAPP_INTEGRATION: "https://webhook.lernow.com/webhook/integracao_whatsapp",
   WHATSAPP_STATUS: "https://webhook.lernow.com/webhook/integracao_whatsapp_status",
   ASAAS_CHECKOUT: "https://webhook.lernow.com/webhook/asaas-checkout-skejool",
+  CRIAR_AGENTE_IA: "https://webhook.lernow.com/webhook/criar-agente-skejool",
 } as const;
 
 interface WebhookOptions {
@@ -167,6 +168,20 @@ export async function deleteWhatsAppInstance(payload: {
   instancia: string;
 }): Promise<WebhookResponse<unknown>> {
   return webhookRequest(WEBHOOK_ENDPOINTS.WHATSAPP_INTEGRATION, {
+    body: payload,
+  });
+}
+
+export interface CriarAgenteIAResponse {
+  success?: boolean;
+  error?: string;
+}
+
+export async function criarAgenteAutomatico(payload: {
+  user_id: string;
+  prompt: string;
+}): Promise<WebhookResponse<CriarAgenteIAResponse>> {
+  return webhookRequest<CriarAgenteIAResponse>(WEBHOOK_ENDPOINTS.CRIAR_AGENTE_IA, {
     body: payload,
   });
 }
