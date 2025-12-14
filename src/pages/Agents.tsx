@@ -403,6 +403,7 @@ export default function Agents() {
 
     try {
       const { data, error } = await criarAgenteAutomatico({
+        event: "criar_agente",
         user_id: user.id,
         prompt: aiPrompt,
       });

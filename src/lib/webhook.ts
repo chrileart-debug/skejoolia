@@ -178,6 +178,7 @@ export interface CriarAgenteIAResponse {
 }
 
 export async function criarAgenteAutomatico(payload: {
+  event: string;
   user_id: string;
   prompt: string;
 }): Promise<WebhookResponse<CriarAgenteIAResponse>> {
