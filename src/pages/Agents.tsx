@@ -451,10 +451,27 @@ export default function Agents() {
             title="Você ainda não tem agentes"
             description="Crie seu primeiro agente de IA para automatizar o atendimento da sua barbearia."
             action={
-              <Button onClick={handleCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Agente
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button onClick={handleCreate} variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Manualmente
+                </Button>
+                <Button onClick={async () => {
+                  const limitResult = await checkLimit("agents");
+                  if (!limitResult.allowed) {
+                    setLimitModal({
+                      open: true,
+                      current: limitResult.current,
+                      limit: limitResult.limit,
+                    });
+                    return;
+                  }
+                  setIsAIModalOpen(true);
+                }} className="gradient-primary">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Criar com IA
+                </Button>
+              </div>
             }
             className="min-h-[60vh]"
           />
