@@ -223,8 +223,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!subscription?.trial_expires_at) return 0;
     const now = new Date();
     const expires = new Date(subscription.trial_expires_at);
-    const diff = expires.getTime() - now.getTime();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    const diffMs = expires.getTime() - now.getTime();
+    // Use floor to get complete days remaining (7 days + 23h = 7, not 8)
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return Math.max(0, days);
   })();
 
   const checkLimit = async (resource: "agents" | "whatsapp" | "services" | "appointments"): Promise<LimitCheckResult> => {
