@@ -25,6 +25,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fromGoogle = searchParams.get("from") === "google";
+  const planFromUrl = searchParams.get("plan"); // Get plan from URL query param
   const { signUp, user, loading } = useAuth();
   const [step, setStep] = useState<RegistrationStep>("plan-selection");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function Register() {
     }
   }, [fromGoogle]);
 
-  // Fetch plans
+  // Fetch plans and handle URL plan parameter
   useEffect(() => {
     const fetchPlans = async () => {
       const { data, error } = await supabase
@@ -59,12 +60,21 @@ export default function Register() {
 
       if (!error && data) {
         setPlans(data as Plan[]);
+        
+        // If plan is provided in URL, validate and pre-select it
+        if (planFromUrl) {
+          const validPlan = data.find((p: Plan) => p.slug === planFromUrl);
+          if (validPlan) {
+            setSelectedPlan(planFromUrl);
+            setStep("form"); // Skip plan selection step
+          }
+        }
       }
       setLoadingPlans(false);
     };
 
     fetchPlans();
-  }, []);
+  }, [planFromUrl]);
 
   // Redirect if already logged in
   useEffect(() => {
