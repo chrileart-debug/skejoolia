@@ -322,7 +322,7 @@ export default function Billing() {
               <div className="space-y-1 text-right">
                 <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider font-medium">Valor do Plano</p>
                 <p className="text-xl sm:text-2xl font-bold text-foreground">
-                  {plan ? formatCurrency(subscription?.price_at_signup || plan.price) : "-"}
+                  {plan ? formatCurrency(plan.price) : "-"}
                 </p>
                 <p className="text-[10px] sm:text-xs text-muted-foreground">/mês</p>
               </div>
