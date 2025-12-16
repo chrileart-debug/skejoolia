@@ -191,6 +191,36 @@ export type Database = {
           },
         ]
       }
+      complementos: {
+        Row: {
+          ativo: boolean | null
+          created_at: string
+          id_complemento: string
+          nome: string
+          preco: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string
+          id_complemento?: string
+          nome: string
+          preco?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string
+          id_complemento?: string
+          nome?: string
+          preco?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cortes: {
         Row: {
           agente_pode_usar: boolean | null
@@ -226,6 +256,42 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      cortes_complementos: {
+        Row: {
+          created_at: string
+          id: string
+          id_complemento: string
+          id_corte: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          id_complemento: string
+          id_corte: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          id_complemento?: string
+          id_corte?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cortes_complementos_id_complemento_fkey"
+            columns: ["id_complemento"]
+            isOneToOne: false
+            referencedRelation: "complementos"
+            referencedColumns: ["id_complemento"]
+          },
+          {
+            foreignKeyName: "cortes_complementos_id_corte_fkey"
+            columns: ["id_corte"]
+            isOneToOne: false
+            referencedRelation: "cortes"
+            referencedColumns: ["id_corte"]
+          },
+        ]
       }
       integracao_whatsapp: {
         Row: {
