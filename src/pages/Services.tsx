@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
+import { ComplementosSelector, Complemento } from "@/components/services/ComplementosSelector";
 
 interface Service {
   id: string;
@@ -28,6 +30,7 @@ interface Service {
   price: number;
   image: string | null;
   agentEnabled: boolean;
+  complementos: Complemento[];
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -49,6 +52,7 @@ export default function Services() {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedComplementos, setSelectedComplementos] = useState<string[]>([]);
   const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
     open: false,
     current: 0,
@@ -70,20 +74,54 @@ export default function Services() {
 
   const fetchServices = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch services
+      const { data: cortesData, error: cortesError } = await supabase
         .from("cortes")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (cortesError) throw cortesError;
 
-      const mappedServices: Service[] = (data || []).map((item) => ({
+      // Fetch all cortes_complementos relationships
+      const corteIds = (cortesData || []).map(c => c.id_corte);
+      
+      let complementosMap: Record<string, Complemento[]> = {};
+      
+      if (corteIds.length > 0) {
+        const { data: relData } = await supabase
+          .from("cortes_complementos")
+          .select("id_corte, id_complemento")
+          .in("id_corte", corteIds);
+
+        if (relData && relData.length > 0) {
+          const complementoIds = [...new Set(relData.map(r => r.id_complemento))];
+          
+          const { data: compData } = await supabase
+            .from("complementos")
+            .select("*")
+            .in("id_complemento", complementoIds);
+
+          // Build map of corte -> complementos
+          relData.forEach(rel => {
+            if (!complementosMap[rel.id_corte]) {
+              complementosMap[rel.id_corte] = [];
+            }
+            const comp = compData?.find(c => c.id_complemento === rel.id_complemento);
+            if (comp) {
+              complementosMap[rel.id_corte].push(comp);
+            }
+          });
+        }
+      }
+
+      const mappedServices: Service[] = (cortesData || []).map((item) => ({
         id: item.id_corte,
         name: item.nome_corte,
         description: item.descricao || "",
         price: Number(item.preco_corte),
         image: item.image_corte,
         agentEnabled: item.agente_pode_usar ?? true,
+        complementos: complementosMap[item.id_corte] || [],
       }));
 
       setServices(mappedServices);
@@ -105,6 +143,7 @@ export default function Services() {
     setEditingService(null);
     setPendingFile(null);
     setPreviewUrl(null);
+    setSelectedComplementos([]);
   };
 
   const handleCreate = async () => {
@@ -133,6 +172,7 @@ export default function Services() {
     });
     setPreviewUrl(service.image);
     setPendingFile(null);
+    setSelectedComplementos(service.complementos.map(c => c.id_complemento));
     setIsDialogOpen(true);
   };
 
@@ -296,6 +336,34 @@ export default function Services() {
     }
   };
 
+  const saveComplementos = async (corteId: string) => {
+    // Delete existing relationships
+    await supabase
+      .from("cortes_complementos")
+      .delete()
+      .eq("id_corte", corteId);
+
+    // Insert new relationships
+    if (selectedComplementos.length > 0) {
+      const inserts = selectedComplementos.map(id_complemento => ({
+        id_corte: corteId,
+        id_complemento,
+      }));
+      
+      await supabase.from("cortes_complementos").insert(inserts);
+    }
+
+    // Fetch updated complementos for this service
+    if (selectedComplementos.length > 0) {
+      const { data } = await supabase
+        .from("complementos")
+        .select("*")
+        .in("id_complemento", selectedComplementos);
+      return data || [];
+    }
+    return [];
+  };
+
   const handleSubmit = async () => {
     if (!formData.name || !formData.price) {
       toast.error("Preencha os campos obrigatórios");
@@ -323,6 +391,9 @@ export default function Services() {
 
         if (error) throw error;
 
+        // Save complementos relationships
+        const updatedComplementos = await saveComplementos(editingService.id);
+
         setServices(
           services.map((s) =>
             s.id === editingService.id
@@ -332,6 +403,7 @@ export default function Services() {
                   description: formData.description,
                   price: parseFloat(formData.price),
                   agentEnabled: formData.agentEnabled,
+                  complementos: updatedComplementos,
                 }
               : s
           )
@@ -360,6 +432,9 @@ export default function Services() {
           imageUrl = await uploadImage(pendingFile, data.id_corte);
         }
 
+        // Save complementos relationships
+        const savedComplementos = await saveComplementos(data.id_corte);
+
         const newService: Service = {
           id: data.id_corte,
           name: data.nome_corte,
@@ -367,6 +442,7 @@ export default function Services() {
           price: Number(data.preco_corte),
           image: imageUrl || data.image_corte,
           agentEnabled: data.agente_pode_usar ?? true,
+          complementos: savedComplementos,
         };
         setServices([newService, ...services]);
         toast.success("Serviço criado com sucesso");
@@ -439,7 +515,7 @@ export default function Services() {
 
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-2">
-                    <div>
+                    <div className="flex-1 min-w-0 mr-3">
                       <h3 className="font-semibold text-foreground">
                         {service.name}
                       </h3>
@@ -447,10 +523,25 @@ export default function Services() {
                         {service.description}
                       </p>
                     </div>
-                    <span className="text-lg font-bold text-primary">
+                    <span className="text-lg font-bold text-primary shrink-0">
                       R$ {service.price.toFixed(2)}
                     </span>
                   </div>
+
+                  {/* Complementos badges */}
+                  {service.complementos.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {service.complementos.map((comp) => (
+                        <Badge 
+                          key={comp.id_complemento} 
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {comp.nome} +R${comp.preco.toFixed(2)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Agent Toggle */}
                   <div className="flex items-center justify-between py-3 border-t border-b border-border my-3">
@@ -614,6 +705,12 @@ export default function Services() {
                 }}
               />
             </div>
+
+            {/* Complementos selector */}
+            <ComplementosSelector
+              selectedIds={selectedComplementos}
+              onSelectionChange={setSelectedComplementos}
+            />
 
             <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
               <div className="flex items-center gap-3">
