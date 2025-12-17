@@ -13,21 +13,25 @@ import {
   X,
   Receipt,
   Crown,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 
-const navItems = [
-  { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { title: "Agentes", icon: Bot, href: "/agents" },
-  { title: "Integrações", icon: MessageSquare, href: "/integrations" },
-  { title: "Serviços", icon: Scissors, href: "/services" },
-  { title: "Agenda", icon: Calendar, href: "/schedule" },
-  { title: "Clientes", icon: Users, href: "/clients" },
-  { title: "Planos", icon: Crown, href: "/plans" },
-  { title: "Faturas", icon: Receipt, href: "/billing" },
-  { title: "Configurações", icon: Settings, href: "/settings" },
+// Navigation items with role restrictions
+const allNavItems = [
+  { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard", ownerOnly: false },
+  { title: "Agentes", icon: Bot, href: "/agents", ownerOnly: false },
+  { title: "Integrações", icon: MessageSquare, href: "/integrations", ownerOnly: false },
+  { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false },
+  { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false },
+  { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false },
+  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
+  { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
+  { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
+  { title: "Configurações", icon: Settings, href: "/settings", ownerOnly: true },
 ];
 
 interface SidebarProps {
@@ -41,6 +45,10 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { isOwner } = useBarbershop();
+
+  // Filter nav items based on role
+  const navItems = allNavItems.filter(item => !item.ownerOnly || isOwner);
 
   const handleLogout = async () => {
     await signOut();
