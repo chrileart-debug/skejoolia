@@ -22,6 +22,7 @@ export type Database = {
           end_time: string | null
           id_agendamento: string
           nome_cliente: string | null
+          reminder_sent: boolean | null
           service_id: string | null
           start_time: string
           status: string | null
@@ -36,6 +37,7 @@ export type Database = {
           end_time?: string | null
           id_agendamento?: string
           nome_cliente?: string | null
+          reminder_sent?: boolean | null
           service_id?: string | null
           start_time: string
           status?: string | null
@@ -50,6 +52,7 @@ export type Database = {
           end_time?: string | null
           id_agendamento?: string
           nome_cliente?: string | null
+          reminder_sent?: boolean | null
           service_id?: string | null
           start_time?: string
           status?: string | null
@@ -165,10 +168,13 @@ export type Database = {
           nicho: string | null
           owner_id: string
           phone: string | null
+          reminder_message_template: string | null
+          reminder_minutes: number | null
           slug: string | null
           state: string | null
           subnicho: string | null
           updated_at: string
+          webhook_reminders_enabled: boolean | null
         }
         Insert: {
           address?: string | null
@@ -184,10 +190,13 @@ export type Database = {
           nicho?: string | null
           owner_id: string
           phone?: string | null
+          reminder_message_template?: string | null
+          reminder_minutes?: number | null
           slug?: string | null
           state?: string | null
           subnicho?: string | null
           updated_at?: string
+          webhook_reminders_enabled?: boolean | null
         }
         Update: {
           address?: string | null
@@ -203,10 +212,13 @@ export type Database = {
           nicho?: string | null
           owner_id?: string
           phone?: string | null
+          reminder_message_template?: string | null
+          reminder_minutes?: number | null
           slug?: string | null
           state?: string | null
           subnicho?: string | null
           updated_at?: string
+          webhook_reminders_enabled?: boolean | null
         }
         Relationships: []
       }
