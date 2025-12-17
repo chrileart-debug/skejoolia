@@ -6,6 +6,7 @@ import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
 import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOutletContext } from "react-router-dom";
 import {
@@ -24,7 +25,6 @@ interface OutletContextType {
 
 const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
 
-// Helper to format time from ISO string - always displays in Brasília timezone
 const formatTimeFromISO = (isoString: string): string => {
   const date = new Date(isoString);
   return date.toLocaleTimeString("pt-BR", { 
@@ -37,6 +37,7 @@ const formatTimeFromISO = (isoString: string): string => {
 export default function Dashboard() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const queryClient = useQueryClient();
   const today = new Date();
   const todayStart = startOfDay(today).toISOString();
@@ -44,7 +45,6 @@ export default function Dashboard() {
   const monthStart = startOfMonth(today).toISOString();
   const monthEnd = endOfMonth(today).toISOString();
 
-  // Check for pending plan from Google OAuth registration
   useEffect(() => {
     const updatePendingPlan = async () => {
       if (!user?.id) return;
@@ -54,7 +54,6 @@ export default function Dashboard() {
       
       console.log("Atualizando plano pendente do OAuth:", pendingPlan);
       
-      // Update the user's subscription with the selected plan
       const { error } = await supabase
         .from("subscriptions")
         .update({ plan_slug: pendingPlan })
@@ -64,15 +63,31 @@ export default function Dashboard() {
         console.error("Erro ao atualizar plano:", error);
       } else {
         console.log("Plano atualizado com sucesso:", pendingPlan);
-        // Clear the pending plan
         localStorage.removeItem("pending_plan_slug");
-        // Refresh subscription data
         queryClient.invalidateQueries({ queryKey: ["subscription"] });
       }
     };
     
     updatePendingPlan();
   }, [user?.id, queryClient]);
+
+  // Fetch services for price lookup
+  const { data: servicesMap = {} } = useQuery({
+    queryKey: ["services-map", barbershop?.id],
+    queryFn: async () => {
+      if (!barbershop?.id) return {};
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, name, price")
+        .eq("barbershop_id", barbershop.id);
+      if (error) throw error;
+      return (data || []).reduce((acc, s) => {
+        acc[s.id] = s;
+        return acc;
+      }, {} as Record<string, { id: string; name: string; price: number }>);
+    },
+    enabled: !!barbershop?.id,
+  });
 
   // Fetch today's appointments
   const { data: todayAppointments = [] } = useQuery({
@@ -81,7 +96,7 @@ export default function Dashboard() {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("agendamentos")
-        .select("*, cortes(nome_corte, preco_corte)")
+        .select("*")
         .eq("user_id", user.id)
         .gte("start_time", todayStart)
         .lte("start_time", todayEnd)
@@ -99,7 +114,7 @@ export default function Dashboard() {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from("agendamentos")
-        .select("*, cortes(nome_corte, preco_corte)")
+        .select("*")
         .eq("user_id", user.id)
         .gte("start_time", monthStart)
         .lte("start_time", monthEnd);
@@ -127,22 +142,23 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Calculate stats
+  // Calculate stats using the services map
   const todayCuts = todayAppointments.length;
   const todayRevenue = todayAppointments.reduce((sum, apt) => {
-    return sum + (apt.cortes?.preco_corte || 0);
+    const service = apt.service_id ? servicesMap[apt.service_id] : null;
+    return sum + (service?.price || 0);
   }, 0);
 
   const monthCuts = monthAppointments.length;
   const monthRevenue = monthAppointments.reduce((sum, apt) => {
-    return sum + (apt.cortes?.preco_corte || 0);
+    const service = apt.service_id ? servicesMap[apt.service_id] : null;
+    return sum + (service?.price || 0);
   }, 0);
 
   const pendingAppointments = todayAppointments.filter(
     (apt) => apt.status === "pending" || apt.status === "confirmed"
   );
 
-  // Get next appointment (upcoming from now)
   const now = new Date().toISOString();
   const nextAppointment = todayAppointments.find(
     (apt) => apt.start_time >= now && (apt.status === "pending" || apt.status === "confirmed")
@@ -155,6 +171,11 @@ export default function Dashboard() {
     return "pending";
   };
 
+  const getServiceName = (serviceId: string | null) => {
+    if (!serviceId) return "Serviço";
+    return servicesMap[serviceId]?.name || "Serviço";
+  };
+
   return (
     <div className="min-h-screen">
       <Header
@@ -164,10 +185,8 @@ export default function Dashboard() {
       />
 
       <div className="p-4 lg:p-6 space-y-6">
-        {/* PWA Install Banner */}
         <InstallBanner />
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Cortes hoje"
@@ -191,9 +210,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main Content Grid */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Upcoming Appointments */}
           <div className="lg:col-span-2 bg-card rounded-2xl shadow-card p-5 animate-slide-up">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-foreground">
@@ -227,7 +244,7 @@ export default function Dashboard() {
                           {appointment.nome_cliente || "Cliente"}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {appointment.cortes?.nome_corte || "Serviço"}
+                          {getServiceName(appointment.service_id)}
                         </p>
                       </div>
                     </div>
@@ -246,11 +263,8 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Right Column */}
           <div className="space-y-4">
-            {/* Subscription Card */}
             <SubscriptionCard />
-            {/* Next Appointment */}
             <div className="bg-card rounded-2xl shadow-card p-5 animate-slide-up">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
                 Próximo cliente
@@ -263,7 +277,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-semibold">{nextAppointment.nome_cliente || "Cliente"}</p>
-                      <p className="text-sm opacity-90">{nextAppointment.cortes?.nome_corte || "Serviço"}</p>
+                      <p className="text-sm opacity-90">{getServiceName(nextAppointment.service_id)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -278,7 +292,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Agent Status */}
             <div className="bg-card rounded-2xl shadow-card p-5 animate-slide-up">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
                 Status do Agente IA
@@ -299,7 +312,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Monthly Summary */}
             <div className="bg-card rounded-2xl shadow-card p-5 animate-slide-up">
               <h3 className="text-sm font-medium text-muted-foreground mb-4">
                 Resumo do mês

@@ -20,8 +20,8 @@ export type Database = {
           created_at: string
           end_time: string | null
           id_agendamento: string
-          id_corte: string | null
           nome_cliente: string | null
+          service_id: string | null
           start_time: string
           status: string | null
           telefone_cliente: string | null
@@ -33,8 +33,8 @@ export type Database = {
           created_at?: string
           end_time?: string | null
           id_agendamento?: string
-          id_corte?: string | null
           nome_cliente?: string | null
+          service_id?: string | null
           start_time: string
           status?: string | null
           telefone_cliente?: string | null
@@ -46,8 +46,8 @@ export type Database = {
           created_at?: string
           end_time?: string | null
           id_agendamento?: string
-          id_corte?: string | null
           nome_cliente?: string | null
+          service_id?: string | null
           start_time?: string
           status?: string | null
           telefone_cliente?: string | null
@@ -61,13 +61,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clientes"
             referencedColumns: ["client_id"]
-          },
-          {
-            foreignKeyName: "agendamentos_id_corte_fkey"
-            columns: ["id_corte"]
-            isOneToOne: false
-            referencedRelation: "cortes"
-            referencedColumns: ["id_corte"]
           },
         ]
       }
@@ -137,6 +130,92 @@ export type Database = {
           },
         ]
       }
+      barbershops: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          logo_url: string | null
+          name: string
+          owner_id: string
+          phone: string | null
+          slug: string | null
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name: string
+          owner_id: string
+          phone?: string | null
+          slug?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string
+          owner_id?: string
+          phone?: string | null
+          slug?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          barbershop_id: string
+          created_at: string
+          display_order: number | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          barbershop_id: string
+          created_at?: string
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          barbershop_id?: string
+          created_at?: string
+          display_order?: number | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           agente_ativo: boolean
@@ -188,108 +267,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "agentes_integracoes_view"
             referencedColumns: ["id_agente"]
-          },
-        ]
-      }
-      complementos: {
-        Row: {
-          ativo: boolean | null
-          created_at: string
-          id_complemento: string
-          nome: string
-          preco: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          created_at?: string
-          id_complemento?: string
-          nome: string
-          preco?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          ativo?: boolean | null
-          created_at?: string
-          id_complemento?: string
-          nome?: string
-          preco?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      cortes: {
-        Row: {
-          agente_pode_usar: boolean | null
-          created_at: string
-          descricao: string | null
-          id_corte: string
-          image_corte: string | null
-          nome_corte: string
-          preco_corte: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          agente_pode_usar?: boolean | null
-          created_at?: string
-          descricao?: string | null
-          id_corte?: string
-          image_corte?: string | null
-          nome_corte: string
-          preco_corte?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          agente_pode_usar?: boolean | null
-          created_at?: string
-          descricao?: string | null
-          id_corte?: string
-          image_corte?: string | null
-          nome_corte?: string
-          preco_corte?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      cortes_complementos: {
-        Row: {
-          created_at: string
-          id: string
-          id_complemento: string
-          id_corte: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          id_complemento: string
-          id_corte: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          id_complemento?: string
-          id_corte?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cortes_complementos_id_complemento_fkey"
-            columns: ["id_complemento"]
-            isOneToOne: false
-            referencedRelation: "complementos"
-            referencedColumns: ["id_complemento"]
-          },
-          {
-            foreignKeyName: "cortes_complementos_id_corte_fkey"
-            columns: ["id_corte"]
-            isOneToOne: false
-            referencedRelation: "cortes"
-            referencedColumns: ["id_corte"]
           },
         ]
       }
@@ -451,6 +428,108 @@ export type Database = {
         }
         Relationships: []
       }
+      service_package_items: {
+        Row: {
+          created_at: string
+          id: string
+          package_id: string
+          quantity: number | null
+          service_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          package_id: string
+          quantity?: number | null
+          service_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          package_id?: string
+          quantity?: number | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_package_items_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_package_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          agent_enabled: boolean | null
+          barbershop_id: string
+          category_id: string | null
+          created_at: string
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          is_package: boolean | null
+          name: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          agent_enabled?: boolean | null
+          barbershop_id: string
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_package?: boolean | null
+          name: string
+          price?: number
+          updated_at?: string
+        }
+        Update: {
+          agent_enabled?: boolean | null
+          barbershop_id?: string
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_package?: boolean | null
+          name?: string
+          price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_checkout: {
         Row: {
           asaas_checkout_id: string | null
@@ -537,6 +616,38 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "plans"
             referencedColumns: ["slug"]
+          },
+        ]
+      }
+      user_barbershop_roles: {
+        Row: {
+          barbershop_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["barbershop_role"]
+          user_id: string
+        }
+        Insert: {
+          barbershop_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["barbershop_role"]
+          user_id: string
+        }
+        Update: {
+          barbershop_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["barbershop_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_barbershop_roles_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -666,8 +777,21 @@ export type Database = {
           vinculado_em: string
         }[]
       }
+      has_barbershop_role: {
+        Args: {
+          _barbershop_id: string
+          _role?: Database["public"]["Enums"]["barbershop_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      user_belongs_to_barbershop: {
+        Args: { _barbershop_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
+      barbershop_role: "owner" | "staff"
       subscription_status:
         | "trialing"
         | "active"
@@ -801,6 +925,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      barbershop_role: ["owner", "staff"],
       subscription_status: [
         "trialing",
         "active",

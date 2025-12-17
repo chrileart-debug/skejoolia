@@ -10,27 +10,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2, Upload, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
-import { ComplementosSelector, Complemento } from "@/components/services/ComplementosSelector";
 
 interface Service {
   id: string;
   name: string;
   description: string;
   price: number;
+  duration_minutes: number;
   image: string | null;
   agentEnabled: boolean;
-  complementos: Complemento[];
+  isPackage: boolean;
+  categoryId: string | null;
+  categoryName?: string;
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -43,6 +53,7 @@ interface OutletContextType {
 export default function Services() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop, categories, loading: barbershopLoading } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,7 +63,6 @@ export default function Services() {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedComplementos, setSelectedComplementos] = useState<string[]>([]);
   const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
     open: false,
     current: 0,
@@ -63,65 +73,44 @@ export default function Services() {
     name: "",
     description: "",
     price: "",
+    duration: "30",
     agentEnabled: true,
+    isPackage: false,
+    categoryId: "",
   });
 
   useEffect(() => {
-    if (user) {
+    if (barbershop) {
       fetchServices();
     }
-  }, [user]);
+  }, [barbershop]);
 
   const fetchServices = async () => {
+    if (!barbershop) return;
+
     try {
-      // Fetch services
-      const { data: cortesData, error: cortesError } = await supabase
-        .from("cortes")
-        .select("*")
+      const { data, error } = await supabase
+        .from("services")
+        .select(`
+          *,
+          categories (name)
+        `)
+        .eq("barbershop_id", barbershop.id)
         .order("created_at", { ascending: false });
 
-      if (cortesError) throw cortesError;
+      if (error) throw error;
 
-      // Fetch all cortes_complementos relationships
-      const corteIds = (cortesData || []).map(c => c.id_corte);
-      
-      let complementosMap: Record<string, Complemento[]> = {};
-      
-      if (corteIds.length > 0) {
-        const { data: relData } = await supabase
-          .from("cortes_complementos")
-          .select("id_corte, id_complemento")
-          .in("id_corte", corteIds);
-
-        if (relData && relData.length > 0) {
-          const complementoIds = [...new Set(relData.map(r => r.id_complemento))];
-          
-          const { data: compData } = await supabase
-            .from("complementos")
-            .select("*")
-            .in("id_complemento", complementoIds);
-
-          // Build map of corte -> complementos
-          relData.forEach(rel => {
-            if (!complementosMap[rel.id_corte]) {
-              complementosMap[rel.id_corte] = [];
-            }
-            const comp = compData?.find(c => c.id_complemento === rel.id_complemento);
-            if (comp) {
-              complementosMap[rel.id_corte].push(comp);
-            }
-          });
-        }
-      }
-
-      const mappedServices: Service[] = (cortesData || []).map((item) => ({
-        id: item.id_corte,
-        name: item.nome_corte,
-        description: item.descricao || "",
-        price: Number(item.preco_corte),
-        image: item.image_corte,
-        agentEnabled: item.agente_pode_usar ?? true,
-        complementos: complementosMap[item.id_corte] || [],
+      const mappedServices: Service[] = (data || []).map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description || "",
+        price: Number(item.price),
+        duration_minutes: item.duration_minutes || 30,
+        image: item.image_url,
+        agentEnabled: item.agent_enabled ?? true,
+        isPackage: item.is_package ?? false,
+        categoryId: item.category_id,
+        categoryName: item.categories?.name,
       }));
 
       setServices(mappedServices);
@@ -138,16 +127,17 @@ export default function Services() {
       name: "",
       description: "",
       price: "",
+      duration: "30",
       agentEnabled: true,
+      isPackage: false,
+      categoryId: categories[0]?.id || "",
     });
     setEditingService(null);
     setPendingFile(null);
     setPreviewUrl(null);
-    setSelectedComplementos([]);
   };
 
   const handleCreate = async () => {
-    // Check limit before creating
     const limitResult = await checkLimit("services");
     if (!limitResult.allowed && !limitResult.unlimited) {
       setLimitModal({
@@ -168,11 +158,13 @@ export default function Services() {
       name: service.name,
       description: service.description,
       price: service.price.toString(),
+      duration: service.duration_minutes.toString(),
       agentEnabled: service.agentEnabled,
+      isPackage: service.isPackage,
+      categoryId: service.categoryId || "",
     });
     setPreviewUrl(service.image);
     setPendingFile(null);
-    setSelectedComplementos(service.complementos.map(c => c.id_complemento));
     setIsDialogOpen(true);
   };
 
@@ -194,7 +186,6 @@ export default function Services() {
     setPreviewUrl(objectUrl);
     setPendingFile(file);
 
-    // If editing existing service, upload immediately
     if (editingService && user) {
       uploadImage(file, editingService.id);
     }
@@ -208,7 +199,6 @@ export default function Services() {
       const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const filePath = `${user.id}/servicos/${serviceId}.${extension}`;
 
-      // Delete existing images for this service
       const { data: existingFiles } = await supabase.storage
         .from("midia-imagens-cortes")
         .list(`${user.id}/servicos`);
@@ -223,7 +213,6 @@ export default function Services() {
         }
       }
 
-      // Upload new image
       const { error: uploadError } = await supabase.storage
         .from("midia-imagens-cortes")
         .upload(filePath, file, { cacheControl: "3600", upsert: true });
@@ -236,11 +225,10 @@ export default function Services() {
 
       const publicUrl = urlData.publicUrl;
 
-      // Update database
       await supabase
-        .from("cortes")
-        .update({ image_corte: publicUrl })
-        .eq("id_corte", serviceId);
+        .from("services")
+        .update({ image_url: publicUrl })
+        .eq("id", serviceId);
 
       setPreviewUrl(publicUrl);
       setServices((prev) =>
@@ -280,9 +268,9 @@ export default function Services() {
       }
 
       await supabase
-        .from("cortes")
-        .update({ image_corte: null })
-        .eq("id_corte", editingService.id);
+        .from("services")
+        .update({ image_url: null })
+        .eq("id", editingService.id);
 
       setPreviewUrl(null);
       setServices((prev) =>
@@ -298,9 +286,9 @@ export default function Services() {
   const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
-        .from("cortes")
+        .from("services")
         .delete()
-        .eq("id_corte", id);
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -318,9 +306,9 @@ export default function Services() {
 
     try {
       const { error } = await supabase
-        .from("cortes")
-        .update({ agente_pode_usar: !service.agentEnabled })
-        .eq("id_corte", id);
+        .from("services")
+        .update({ agent_enabled: !service.agentEnabled })
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -336,42 +324,14 @@ export default function Services() {
     }
   };
 
-  const saveComplementos = async (corteId: string) => {
-    // Delete existing relationships
-    await supabase
-      .from("cortes_complementos")
-      .delete()
-      .eq("id_corte", corteId);
-
-    // Insert new relationships
-    if (selectedComplementos.length > 0) {
-      const inserts = selectedComplementos.map(id_complemento => ({
-        id_corte: corteId,
-        id_complemento,
-      }));
-      
-      await supabase.from("cortes_complementos").insert(inserts);
-    }
-
-    // Fetch updated complementos for this service
-    if (selectedComplementos.length > 0) {
-      const { data } = await supabase
-        .from("complementos")
-        .select("*")
-        .in("id_complemento", selectedComplementos);
-      return data || [];
-    }
-    return [];
-  };
-
   const handleSubmit = async () => {
     if (!formData.name || !formData.price) {
       toast.error("Preencha os campos obrigatórios");
       return;
     }
 
-    if (!user) {
-      toast.error("Usuário não autenticado");
+    if (!barbershop) {
+      toast.error("Barbearia não encontrada");
       return;
     }
 
@@ -380,20 +340,22 @@ export default function Services() {
     try {
       if (editingService) {
         const { error } = await supabase
-          .from("cortes")
+          .from("services")
           .update({
-            nome_corte: formData.name,
-            descricao: formData.description,
-            preco_corte: parseFloat(formData.price),
-            agente_pode_usar: formData.agentEnabled,
+            name: formData.name,
+            description: formData.description,
+            price: parseFloat(formData.price),
+            duration_minutes: parseInt(formData.duration),
+            agent_enabled: formData.agentEnabled,
+            is_package: formData.isPackage,
+            category_id: formData.categoryId || null,
           })
-          .eq("id_corte", editingService.id);
+          .eq("id", editingService.id);
 
         if (error) throw error;
 
-        // Save complementos relationships
-        const updatedComplementos = await saveComplementos(editingService.id);
-
+        const category = categories.find((c) => c.id === formData.categoryId);
+        
         setServices(
           services.map((s) =>
             s.id === editingService.id
@@ -402,23 +364,28 @@ export default function Services() {
                   name: formData.name,
                   description: formData.description,
                   price: parseFloat(formData.price),
+                  duration_minutes: parseInt(formData.duration),
                   agentEnabled: formData.agentEnabled,
-                  complementos: updatedComplementos,
+                  isPackage: formData.isPackage,
+                  categoryId: formData.categoryId || null,
+                  categoryName: category?.name,
                 }
               : s
           )
         );
         toast.success("Serviço atualizado com sucesso");
       } else {
-        // Create service first
         const { data, error } = await supabase
-          .from("cortes")
+          .from("services")
           .insert({
-            user_id: user.id,
-            nome_corte: formData.name,
-            descricao: formData.description,
-            preco_corte: parseFloat(formData.price),
-            agente_pode_usar: formData.agentEnabled,
+            barbershop_id: barbershop.id,
+            name: formData.name,
+            description: formData.description,
+            price: parseFloat(formData.price),
+            duration_minutes: parseInt(formData.duration),
+            agent_enabled: formData.agentEnabled,
+            is_package: formData.isPackage,
+            category_id: formData.categoryId || null,
           })
           .select()
           .single();
@@ -426,23 +393,23 @@ export default function Services() {
         if (error) throw error;
 
         let imageUrl: string | null = null;
-
-        // If there's a pending file, upload it now
         if (pendingFile) {
-          imageUrl = await uploadImage(pendingFile, data.id_corte);
+          imageUrl = await uploadImage(pendingFile, data.id);
         }
 
-        // Save complementos relationships
-        const savedComplementos = await saveComplementos(data.id_corte);
+        const category = categories.find((c) => c.id === formData.categoryId);
 
         const newService: Service = {
-          id: data.id_corte,
-          name: data.nome_corte,
-          description: data.descricao || "",
-          price: Number(data.preco_corte),
-          image: imageUrl || data.image_corte,
-          agentEnabled: data.agente_pode_usar ?? true,
-          complementos: savedComplementos,
+          id: data.id,
+          name: data.name,
+          description: data.description || "",
+          price: Number(data.price),
+          duration_minutes: data.duration_minutes || 30,
+          image: imageUrl || data.image_url,
+          agentEnabled: data.agent_enabled ?? true,
+          isPackage: data.is_package ?? false,
+          categoryId: data.category_id,
+          categoryName: category?.name,
         };
         setServices([newService, ...services]);
         toast.success("Serviço criado com sucesso");
@@ -464,7 +431,7 @@ export default function Services() {
     return floatValue.toFixed(2);
   };
 
-  if (isLoading) {
+  if (isLoading || barbershopLoading) {
     return (
       <div className="min-h-screen">
         <Header title="Serviços" subtitle="Gerencie seus serviços" onMenuClick={onMenuClick} />
@@ -484,7 +451,7 @@ export default function Services() {
           <EmptyState
             icon={<Scissors className="w-10 h-10 text-muted-foreground" />}
             title="Nenhum serviço cadastrado"
-            description="Adicione os cortes e serviços que sua barbearia oferece."
+            description="Adicione os serviços que sua barbearia oferece."
             action={
               <Button onClick={handleCreate}>
                 <Plus className="w-4 h-4 mr-2" />
@@ -498,88 +465,80 @@ export default function Services() {
             {services.map((service) => (
               <div
                 key={service.id}
-                className="bg-card rounded-2xl shadow-card overflow-hidden hover:shadow-card-hover transition-all duration-300 animate-fade-in"
+                className="bg-card border border-border rounded-xl p-4 space-y-3"
               >
-                {/* Service Image */}
-                <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
-                  {service.image ? (
+                {service.image && (
+                  <div className="w-full h-32 rounded-lg overflow-hidden">
                     <img
                       src={service.image}
                       alt={service.name}
                       className="w-full h-full object-cover"
                     />
+                  </div>
+                )}
+
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold truncate">{service.name}</h3>
+                      {service.isPackage && (
+                        <Badge variant="secondary" className="shrink-0">
+                          <Package className="w-3 h-3 mr-1" />
+                          Pacote
+                        </Badge>
+                      )}
+                    </div>
+                    {service.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                        {service.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className="font-bold text-primary shrink-0 ml-2">
+                    R$ {service.price.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {service.categoryName && (
+                    <Badge variant="outline">{service.categoryName}</Badge>
+                  )}
+                  <Badge variant="outline">{service.duration_minutes} min</Badge>
+                  {service.agentEnabled ? (
+                    <Badge className="bg-primary/10 text-primary border-primary/20">
+                      <Bot className="w-3 h-3 mr-1" />
+                      Agente ativo
+                    </Badge>
                   ) : (
-                    <ImageIcon className="w-12 h-12 text-muted-foreground/50" />
+                    <Badge variant="secondary">
+                      <Bot className="w-3 h-3 mr-1" />
+                      Agente inativo
+                    </Badge>
                   )}
                 </div>
 
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0 mr-3">
-                      <h3 className="font-semibold text-foreground">
-                        {service.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {service.description}
-                      </p>
-                    </div>
-                    <span className="text-lg font-bold text-primary shrink-0">
-                      R$ {service.price.toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* Complementos badges */}
-                  {service.complementos.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {service.complementos.map((comp) => (
-                        <Badge 
-                          key={comp.id_complemento} 
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {comp.nome} +R${comp.preco.toFixed(2)}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Agent Toggle */}
-                  <div className="flex items-center justify-between py-3 border-t border-b border-border my-3">
-                    <div className="flex items-center gap-2">
-                      <Bot
-                        className={`w-4 h-4 ${
-                          service.agentEnabled
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        Agente pode oferecer
-                      </span>
-                    </div>
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Agente IA</span>
                     <Switch
                       checked={service.agentEnabled}
                       onCheckedChange={() => handleToggleAgent(service.id)}
                     />
                   </div>
-
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleEdit(service)}
                     >
-                      <Edit2 className="w-4 h-4 mr-1" />
-                      Editar
+                      <Edit2 className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      size="icon"
                       onClick={() => handleDelete(service.id)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
@@ -589,173 +548,197 @@ export default function Services() {
         )}
       </div>
 
-      {services.length > 0 && <FAB onClick={handleCreate} />}
+      {services.length > 0 && (
+        <FAB onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
+      )}
 
-      {/* Service Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingService ? "Editar Serviço" : "Novo Serviço"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 pt-4">
-            {/* Image upload */}
+          <div className="space-y-4">
+            {/* Image Upload */}
             <div className="space-y-2">
               <Label>Imagem</Label>
               <input
-                ref={fileInputRef}
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp"
-                onChange={handleFileSelect}
+                ref={fileInputRef}
                 className="hidden"
+                accept={ALLOWED_TYPES.join(",")}
+                onChange={handleFileSelect}
               />
-              <div
-                onClick={() => !isUploading && fileInputRef.current?.click()}
-                className={`
-                  relative h-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
-                  ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
-                  ${isUploading ? "pointer-events-none" : ""}
-                `}
-              >
-                {previewUrl ? (
-                  <>
-                    <img
-                      src={previewUrl}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                    {!isUploading && (
-                      <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
-                          }}
-                          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                        >
-                          <Upload className="w-5 h-5 text-white" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveImage();
-                          }}
-                          className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                        >
-                          <X className="w-5 h-5 text-white" />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                    <span className="text-sm text-muted-foreground">
-                      Clique para adicionar
-                    </span>
+              {previewUrl ? (
+                <div className="relative w-full h-40 rounded-lg overflow-hidden">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-32 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/50 transition-colors"
+                >
+                  <ImageIcon className="w-8 h-8" />
+                  <span className="text-sm">Clique para adicionar imagem</span>
+                </button>
+              )}
+            </div>
 
-                {isUploading && (
-                  <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  </div>
-                )}
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder="Ex: Corte Degradê"
+                />
               </div>
-              <p className="text-xs text-muted-foreground text-center">
-                JPG, PNG ou WEBP (máx. 50MB)
-              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor="price">Preço (R$) *</Label>
+                <Input
+                  id="price"
+                  value={formData.price}
+                  onChange={(e) =>
+                    setFormData({ ...formData, price: formatPrice(e.target.value) })
+                  }
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="duration">Duração (minutos)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  value={formData.duration}
+                  onChange={(e) =>
+                    setFormData({ ...formData, duration: e.target.value })
+                  }
+                  placeholder="30"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria</Label>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, categoryId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Nome *</Label>
-              <Input
-                placeholder="Ex: Corte Degradê"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Descrição</Label>
+              <Label htmlFor="description">Descrição</Label>
               <Textarea
-                placeholder="Descreva o serviço..."
+                id="description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
+                placeholder="Descreva o serviço..."
                 rows={3}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Valor (R$) *</Label>
-              <Input
-                placeholder="0,00"
-                value={formData.price}
-                onChange={(e) => {
-                  const formatted = formatPrice(e.target.value);
-                  setFormData({ ...formData, price: formatted });
-                }}
-              />
-            </div>
-
-            {/* Complementos selector */}
-            <ComplementosSelector
-              selectedIds={selectedComplementos}
-              onSelectionChange={setSelectedComplementos}
-            />
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
-              <div className="flex items-center gap-3">
-                <Bot className="w-5 h-5 text-primary" />
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Permitir que o Agente ofereça
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    O agente poderá sugerir este serviço
+                  <Label>Pacote/Combo</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Este serviço é um pacote de serviços
                   </p>
                 </div>
+                <Switch
+                  checked={formData.isPackage}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, isPackage: checked })
+                  }
+                />
               </div>
-              <Switch
-                checked={formData.agentEnabled}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, agentEnabled: checked })
-                }
-              />
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Disponível para Agente IA</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Permite que o agente ofereça este serviço
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.agentEnabled}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, agentEnabled: checked })
+                  }
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsDialogOpen(false)}
-                disabled={isSaving}
-              >
-                Cancelar
-              </Button>
-              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>
-                {isSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : editingService ? (
-                  "Salvar"
-                ) : (
-                  "Adicionar"
-                )}
-              </Button>
-            </div>
+            <Button
+              onClick={handleSubmit}
+              className="w-full"
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : editingService ? (
+                "Salvar Alterações"
+              ) : (
+                "Criar Serviço"
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Upgrade Limit Modal */}
       <UpgradeLimitModal
         open={limitModal.open}
         onOpenChange={(open) => setLimitModal({ ...limitModal, open })}
