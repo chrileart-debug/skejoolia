@@ -234,16 +234,25 @@ export default function Clients() {
         loadClients();
       }
     } else {
-      // Create new client
+      // Upsert new client: insert or update on conflict (barbershop_id, telefone)
+      const phoneClean = formData.telefone.trim().replace(/\D/g, "") || null;
+      
       const { error } = await supabase
         .from("clientes")
-        .insert({
-          user_id: user.id,
-          barbershop_id: barbershop.id,
-          nome: formData.nome.trim(),
-          telefone: formData.telefone.trim() || null,
-          id_agente: formData.id_agente || null,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            barbershop_id: barbershop.id,
+            nome: formData.nome.trim(),
+            telefone: phoneClean,
+            id_agente: formData.id_agente || null,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "barbershop_id,telefone",
+            ignoreDuplicates: false,
+          }
+        );
 
       setSaving(false);
 
