@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2 } from "lucide-react";
 import { StaffConfigSheet } from "@/components/staff/StaffConfigSheet";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop, Permissions } from "@/hooks/useBarbershop";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -58,6 +59,8 @@ const DEFAULT_PERMISSIONS: Permissions = {
 export default function Team() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { barbershop, isOwner } = useBarbershop();
+  const { subscription, loading: subscriptionLoading } = useSubscription();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -335,6 +338,14 @@ export default function Team() {
     </div>
   );
 
+  // Redirect basico plan users to plans page
+  useEffect(() => {
+    if (!subscriptionLoading && subscription?.plan_slug === "basico") {
+      toast.info("Gerencie sua equipe no plano Corporativo");
+      navigate("/plans");
+    }
+  }, [subscription, subscriptionLoading, navigate]);
+
   if (!isOwner) {
     return (
       <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -343,6 +354,15 @@ export default function Team() {
           title="Acesso Restrito"
           description="Apenas proprietários podem gerenciar a equipe."
         />
+      </div>
+    );
+  }
+  
+  // Show loading while checking subscription
+  if (subscriptionLoading) {
+    return (
+      <div className="container mx-auto px-4 py-6 max-w-4xl flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
