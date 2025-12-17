@@ -13,7 +13,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
   Wallet,
-  TrendingUp,
   Clock,
   User,
   Plus,
@@ -197,13 +196,15 @@ export default function Dashboard() {
     const service = apt.service_id ? servicesMap[apt.service_id] : null;
     return sum + (service?.price || 0);
   }, 0);
-  const avgTicket = todayCount > 0 ? todayRevenue / todayCount : 0;
 
   // Get upcoming appointments (from now onwards)
   const now = new Date().toISOString();
   const upcomingAppointments = todayAppointments.filter(
     (apt) => apt.start_time >= now && (apt.status === "pending" || apt.status === "confirmed")
   ).slice(0, 5);
+
+  // Next client (first upcoming appointment)
+  const nextClient = upcomingAppointments[0] || null;
 
   // Build weekly chart data
   const chartData = Array.from({ length: 7 }, (_, i) => {
@@ -307,16 +308,28 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground">Faturamento Estimado</p>
           </div>
 
-          {/* Average Ticket */}
+          {/* Next Client */}
           <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-amber-500" />
+                <User className="w-6 h-6 text-amber-500" />
               </div>
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hoje</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Próximo</span>
             </div>
-            <p className="text-3xl font-bold text-foreground">{formatCurrency(avgTicket)}</p>
-            <p className="text-sm text-muted-foreground">Ticket Médio</p>
+            {nextClient ? (
+              <>
+                <p className="text-2xl font-bold text-foreground truncate">{nextClient.nome_cliente || "Cliente"}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {formatTimeFromISO(nextClient.start_time)} - {getServiceName(nextClient.service_id)}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xl font-medium text-muted-foreground">Nenhum</p>
+                <p className="text-sm text-muted-foreground">Agenda livre!</p>
+              </>
+            )}
           </div>
         </div>
 
