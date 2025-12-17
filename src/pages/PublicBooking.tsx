@@ -421,13 +421,13 @@ const PublicBooking = () => {
     try {
       const phoneClean = clientPhone.replace(/\D/g, "");
 
-      // Check if client exists
+      // Check if client exists by phone (anti-duplicate logic)
       const { data: existingClient } = await supabase
         .from("clientes")
         .select("*")
         .eq("barbershop_id", barbershop.id)
         .eq("telefone", phoneClean)
-        .single();
+        .maybeSingle();
 
       let clientId: string;
 
