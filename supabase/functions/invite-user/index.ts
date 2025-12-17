@@ -151,6 +151,18 @@ serve(async (req) => {
 
           if (resetError) {
             console.error('Error sending reset email:', resetError);
+            
+            // Handle rate limit error gracefully
+            if (resetError.message?.includes('security purposes') || resetError.status === 429) {
+              return new Response(
+                JSON.stringify({ 
+                  error: 'Aguarde alguns segundos antes de reenviar o convite.',
+                  rate_limited: true 
+                }),
+                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
             return new Response(
               JSON.stringify({ error: resetError.message || 'Failed to resend invite' }),
               { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
