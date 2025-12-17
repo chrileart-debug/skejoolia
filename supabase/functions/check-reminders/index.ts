@@ -141,8 +141,8 @@ serve(async (req: Request) => {
 
           console.log(`Appointment ${appointment.id_agendamento} at ${appointmentTime.toISOString()}, reminder target: ${reminderTargetTime.toISOString()}, minutes until reminder: ${minutesUntilReminder.toFixed(1)}`);
 
-          // Send reminder if: target time passed (negative) or within next 10 minutes
-          if (minutesUntilReminder > 10) {
+          // Send reminder if: target time passed (negative) or within next 2 minutes (more precise)
+          if (minutesUntilReminder > 2) {
             console.log(`Reminder not yet due for appointment ${appointment.id_agendamento}, skipping`);
             continue;
           }
