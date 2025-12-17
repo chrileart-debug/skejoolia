@@ -29,6 +29,7 @@ import Clients from "./pages/Clients";
 import Billing from "./pages/Billing";
 import Plans from "./pages/Plans";
 import Team from "./pages/Team";
+import PublicBooking from "./pages/PublicBooking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -73,6 +74,7 @@ const App = () => {
                   <Route path="/privacidade" element={<Privacy />} />
                   <Route path="/termos" element={<Terms />} />
                   <Route path="/instalar" element={<Install />} />
+                  <Route path="/a/:slug" element={<PublicBooking />} />
                   
                   {/* Protected App routes */}
                   <Route element={
