@@ -254,12 +254,17 @@ export type Database = {
       clientes: {
         Row: {
           agente_ativo: boolean
+          avatar_url: string | null
           barbershop_id: string
+          birth_date: string | null
           client_id: string
           created_at: string
+          email: string | null
           faturamento_total: number | null
           id_agente: string | null
+          last_visit: string | null
           nome: string | null
+          notes: string | null
           telefone: string | null
           total_cortes: number | null
           updated_at: string
@@ -267,12 +272,17 @@ export type Database = {
         }
         Insert: {
           agente_ativo?: boolean
+          avatar_url?: string | null
           barbershop_id: string
+          birth_date?: string | null
           client_id?: string
           created_at?: string
+          email?: string | null
           faturamento_total?: number | null
           id_agente?: string | null
+          last_visit?: string | null
           nome?: string | null
+          notes?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
@@ -280,12 +290,17 @@ export type Database = {
         }
         Update: {
           agente_ativo?: boolean
+          avatar_url?: string | null
           barbershop_id?: string
+          birth_date?: string | null
           client_id?: string
           created_at?: string
+          email?: string | null
           faturamento_total?: number | null
           id_agente?: string | null
+          last_visit?: string | null
           nome?: string | null
+          notes?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
