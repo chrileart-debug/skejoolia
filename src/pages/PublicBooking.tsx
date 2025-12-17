@@ -421,29 +421,48 @@ const PublicBooking = () => {
     try {
       const phoneClean = clientPhone.replace(/\D/g, "");
 
-      // Upsert client: insert or update on conflict (barbershop_id, telefone)
-      const { data: upsertedClient, error: upsertError } = await supabase
+      // Check if client exists by phone (anti-duplicate logic)
+      const { data: existingClient } = await supabase
         .from("clientes")
-        .upsert(
-          {
+        .select("*")
+        .eq("barbershop_id", barbershop.id)
+        .eq("telefone", phoneClean)
+        .maybeSingle();
+
+      let clientId: string;
+
+      if (existingClient) {
+        // Update existing client
+        const { error: updateError } = await supabase
+          .from("clientes")
+          .update({
+            nome: clientName,
+            email: clientEmail || existingClient.email,
+            last_visit: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("client_id", existingClient.client_id);
+
+        if (updateError) throw updateError;
+        clientId = existingClient.client_id;
+      } else {
+        // Create new client
+        const { data: newClient, error: createError } = await supabase
+          .from("clientes")
+          .insert({
             barbershop_id: barbershop.id,
             user_id: selectedProfessional.user_id,
             nome: clientName,
             telefone: phoneClean,
             email: clientEmail || null,
             last_visit: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "barbershop_id,telefone",
-            ignoreDuplicates: false,
-          }
-        )
-        .select()
-        .single();
+          })
+          .select()
+          .single();
 
-      if (upsertError) throw upsertError;
-      const clientId = upsertedClient.client_id;
+        if (createError) throw createError;
+        clientId = newClient.client_id;
+      }
 
       // Calculate end time
       const duration = selectedService.duration_minutes || 30;
