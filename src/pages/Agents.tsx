@@ -26,6 +26,7 @@ import { criarAgenteAutomatico } from "@/lib/webhook";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { Json } from "@/integrations/supabase/types";
@@ -63,6 +64,7 @@ interface OutletContextType {
 export default function Agents() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
@@ -252,7 +254,7 @@ export default function Agents() {
       return;
     }
 
-    if (!user) {
+    if (!user || !barbershop) {
       toast.error("Usuário não autenticado");
       return;
     }
@@ -321,6 +323,7 @@ export default function Agents() {
           .from("agentes")
           .insert({
             user_id: user.id,
+            barbershop_id: barbershop.id,
             ...agentData,
           })
           .select()

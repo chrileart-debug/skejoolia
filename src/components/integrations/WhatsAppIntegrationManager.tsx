@@ -24,6 +24,7 @@ import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Che
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { z } from "zod";
 import {
   createWhatsAppInstance,
@@ -195,6 +196,7 @@ export function WhatsAppIntegrationManager({
   mode = "select",
 }: WhatsAppIntegrationManagerProps) {
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -360,6 +362,7 @@ export function WhatsAppIntegrationManager({
         .from("integracao_whatsapp")
         .insert({
           user_id: user.id,
+          barbershop_id: barbershop!.id,
           nome: formData.nome,
           numero: cleanNumero,
           email: user.email,

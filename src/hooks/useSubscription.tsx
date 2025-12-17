@@ -71,38 +71,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   const createFallbackSubscription = async (userId: string, fetchedPlans: Plan[]) => {
-    // Get the basic plan (default)
-    const basicPlan = fetchedPlans.find(p => p.slug === "basico") || fetchedPlans[0];
-    
-    if (!basicPlan) {
-      console.error("No plans available for fallback subscription");
-      return null;
-    }
-
-    // Calculate trial expiration (7 days from now)
-    const trialExpiresAt = new Date();
-    trialExpiresAt.setDate(trialExpiresAt.getDate() + 7);
-
-    const { data, error } = await supabase
-      .from("subscriptions")
-      .insert({
-        user_id: userId,
-        plan_slug: basicPlan.slug,
-        status: "trialing",
-        price_at_signup: basicPlan.price,
-        trial_started_at: new Date().toISOString(),
-        trial_expires_at: trialExpiresAt.toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error creating fallback subscription:", error);
-      return null;
-    }
-
-    console.log("Fallback subscription created successfully:", data);
-    return data;
+    // Fallback subscription creation is now handled by the database trigger
+    // This function is kept for backwards compatibility but should rarely be called
+    console.log("Fallback subscription not needed - database trigger handles creation");
+    return null;
   };
 
   const fetchSubscription = async () => {

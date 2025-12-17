@@ -268,7 +268,7 @@ export default function Schedule() {
       return;
     }
 
-    if (!user) {
+    if (!user || !barbershop) {
       toast.error("Você precisa estar logado");
       return;
     }
@@ -297,6 +297,7 @@ export default function Schedule() {
           .from("clientes")
           .insert({
             user_id: user.id,
+            barbershop_id: barbershop.id,
             nome: formData.client,
             telefone: formData.phone || null,
           })
@@ -321,6 +322,7 @@ export default function Schedule() {
       .from("agendamentos")
       .insert({
         user_id: user.id,
+        barbershop_id: barbershop.id,
         nome_cliente: formData.client || null,
         telefone_cliente: formData.phone || null,
         service_id: formData.service || null,
