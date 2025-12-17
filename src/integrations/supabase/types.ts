@@ -722,6 +722,7 @@ export type Database = {
           barbershop_id: string
           created_at: string
           id: string
+          permissions: Json | null
           role: Database["public"]["Enums"]["barbershop_role"]
           user_id: string
         }
@@ -729,6 +730,7 @@ export type Database = {
           barbershop_id: string
           created_at?: string
           id?: string
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
           user_id: string
         }
@@ -736,6 +738,7 @@ export type Database = {
           barbershop_id?: string
           created_at?: string
           id?: string
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
           user_id?: string
         }

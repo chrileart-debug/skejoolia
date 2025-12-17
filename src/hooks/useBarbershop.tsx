@@ -22,12 +22,34 @@ interface Category {
   is_active: boolean;
 }
 
+export interface Permissions {
+  can_view_dashboard: boolean;
+  can_manage_agents: boolean;
+  can_manage_schedule: boolean;
+  can_view_clients: boolean;
+}
+
+const DEFAULT_PERMISSIONS: Permissions = {
+  can_view_dashboard: false,
+  can_manage_agents: false,
+  can_manage_schedule: true,
+  can_view_clients: true,
+};
+
+const OWNER_PERMISSIONS: Permissions = {
+  can_view_dashboard: true,
+  can_manage_agents: true,
+  can_manage_schedule: true,
+  can_view_clients: true,
+};
+
 export function useBarbershop() {
   const { user } = useAuth();
   const [barbershop, setBarbershop] = useState<Barbershop | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<"owner" | "staff" | null>(null);
+  const [permissions, setPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
 
   useEffect(() => {
     if (user) {
@@ -39,17 +61,26 @@ export function useBarbershop() {
     if (!user) return;
 
     try {
-      // Get user's role and barbershop
+      // Get user's role, permissions and barbershop
       const { data: roleData, error: roleError } = await supabase
         .from("user_barbershop_roles")
-        .select("barbershop_id, role")
+        .select("barbershop_id, role, permissions")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (roleError) throw roleError;
 
       if (roleData) {
-        setRole(roleData.role as "owner" | "staff");
+        const userRole = roleData.role as "owner" | "staff";
+        setRole(userRole);
+
+        // Set permissions - owners always have full permissions
+        if (userRole === "owner") {
+          setPermissions(OWNER_PERMISSIONS);
+        } else {
+          const dbPermissions = roleData.permissions as unknown as Permissions | null;
+          setPermissions(dbPermissions || DEFAULT_PERMISSIONS);
+        }
 
         // Get barbershop details
         const { data: shopData, error: shopError } = await supabase
@@ -90,12 +121,23 @@ export function useBarbershop() {
     setCategories(data || []);
   };
 
+  // Helper functions for permission checks
+  const canViewDashboard = role === "owner" || permissions.can_view_dashboard;
+  const canManageAgents = role === "owner" || permissions.can_manage_agents;
+  const canManageSchedule = role === "owner" || permissions.can_manage_schedule;
+  const canViewClients = role === "owner" || permissions.can_view_clients;
+
   return {
     barbershop,
     categories,
     loading,
     role,
+    permissions,
     isOwner: role === "owner",
+    canViewDashboard,
+    canManageAgents,
+    canManageSchedule,
+    canViewClients,
     refreshBarbershop: fetchBarbershopData,
     refreshCategories,
   };
