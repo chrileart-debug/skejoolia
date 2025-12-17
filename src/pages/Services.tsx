@@ -607,6 +607,26 @@ export default function Services() {
           if (itemsError) throw itemsError;
         }
 
+        // Auto-assign service to owner on basico plan
+        // Since the owner is the only professional, they should be linked to all services
+        if (user) {
+          const { data: subData } = await supabase
+            .from("subscriptions")
+            .select("plan_slug")
+            .eq("barbershop_id", barbershop.id)
+            .single();
+
+          if (subData?.plan_slug === "basico") {
+            await supabase
+              .from("staff_services")
+              .insert({
+                barbershop_id: barbershop.id,
+                user_id: user.id,
+                service_id: data.id,
+              });
+          }
+        }
+
         // Upload image if pending
         let imageUrl: string | null = null;
         if (pendingFile) {
