@@ -1,13 +1,40 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppLayout() {
+  const { user } = useAuth();
+  const { barbershop, loading: barbershopLoading, refreshBarbershop } = useBarbershop();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [userPhone, setUserPhone] = useState<string | null>(null);
+
+  // Check if onboarding is needed (barbershop has default name)
+  useEffect(() => {
+    if (!barbershopLoading && barbershop && user) {
+      // Check if barbershop has default name
+      if (barbershop.name === "Minha Barbearia") {
+        // Fetch user phone from user_settings
+        supabase
+          .from("user_settings")
+          .select("numero")
+          .eq("user_id", user.id)
+          .single()
+          .then(({ data }) => {
+            setUserPhone(data?.numero || null);
+            setShowOnboarding(true);
+          });
+      }
+    }
+  }, [barbershop, barbershopLoading, user]);
 
   const handleMobileMenuToggle = () => {
     setMobileMenuOpen(!mobileMenuOpen);
@@ -17,8 +44,24 @@ export function AppLayout() {
     setMobileMenuOpen(false);
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    refreshBarbershop();
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
+      {/* Onboarding Modal */}
+      {showOnboarding && barbershop && user && (
+        <OnboardingModal
+          isOpen={showOnboarding}
+          barbershopId={barbershop.id}
+          userId={user.id}
+          currentPhone={userPhone}
+          onComplete={handleOnboardingComplete}
+        />
+      )}
+
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div
@@ -42,7 +85,7 @@ export function AppLayout() {
       )}>
         <TrialBanner />
         <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto">
-          <Outlet context={{ onMenuClick: handleMobileMenuToggle }} />
+          <Outlet context={{ onMenuClick: handleMobileMenuToggle, barbershop }} />
         </main>
       </div>
 

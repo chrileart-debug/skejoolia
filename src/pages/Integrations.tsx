@@ -28,6 +28,7 @@ import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Bot
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { z } from "zod";
@@ -188,6 +189,7 @@ interface OutletContextType {
 export default function Integrations() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -321,7 +323,7 @@ export default function Integrations() {
   const handleSubmitCreate = async () => {
     if (!validateForm()) return;
     
-    if (!user?.email) {
+    if (!user?.email || !barbershop) {
       toast.error("Usuário não autenticado");
       return;
     }
@@ -361,6 +363,7 @@ export default function Integrations() {
         .from("integracao_whatsapp")
         .insert({
           user_id: user.id,
+          barbershop_id: barbershop.id,
           nome: formData.nome,
           numero: cleanNumero,
           email: user.email,

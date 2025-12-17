@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ interface Agente {
 export default function Clients() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const [clients, setClients] = useState<Cliente[]>([]);
   const [agents, setAgents] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,7 +204,7 @@ export default function Clients() {
       return;
     }
 
-    if (!user) {
+    if (!user || !barbershop) {
       toast.error("Você precisa estar logado");
       return;
     }
@@ -237,6 +239,7 @@ export default function Clients() {
         .from("clientes")
         .insert({
           user_id: user.id,
+          barbershop_id: barbershop.id,
           nome: formData.nome.trim(),
           telefone: formData.telefone.trim() || null,
           id_agente: formData.id_agente || null,

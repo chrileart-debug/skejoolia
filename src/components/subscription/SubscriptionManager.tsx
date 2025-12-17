@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
@@ -50,6 +51,7 @@ interface Payment {
 
 export function SubscriptionManager() {
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { subscription, plan, isTrialing, isActive, daysRemaining, refreshSubscription } = useSubscription();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -105,6 +107,7 @@ export function SubscriptionManager() {
         // Save checkout session
         await supabase.from("session_checkout").upsert({
           user_id: user.id,
+          barbershop_id: barbershop!.id,
           asaas_checkout_id: null,
           asaas_checkout_link: checkoutUrl,
           status: "pending",
