@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2 } from "lucide-react";
+import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,8 @@ export default function Team() {
   const [loading, setLoading] = useState(true);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
   const [inviting, setInviting] = useState(false);
   const [deleteMemberId, setDeleteMemberId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -102,7 +104,7 @@ export default function Team() {
   };
 
   const handleInvite = async () => {
-    if (!inviteEmail.trim() || !barbershop?.id) return;
+    if (!inviteEmail.trim() || !inviteName.trim() || !barbershop?.id) return;
 
     setInviting(true);
     try {
@@ -112,6 +114,8 @@ export default function Team() {
       const response = await supabase.functions.invoke("invite-user", {
         body: {
           email: inviteEmail.trim(),
+          name: inviteName.trim(),
+          phone: invitePhone.trim() || null,
           barbershop_id: barbershop.id
         },
         headers: {
@@ -134,6 +138,8 @@ export default function Team() {
         : `Convite enviado para ${inviteEmail}`
       );
       setInviteEmail("");
+      setInviteName("");
+      setInvitePhone("");
       setInviteModalOpen(false);
       fetchTeamMembers();
     } catch (error: any) {
@@ -273,7 +279,21 @@ export default function Team() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="invite-email">Email</Label>
+              <Label htmlFor="invite-name">Nome *</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="invite-name"
+                  type="text"
+                  placeholder="Nome do membro"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email *</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -286,9 +306,23 @@ export default function Team() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-phone">Telefone</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="invite-phone"
+                  type="tel"
+                  placeholder="(11) 99999-9999"
+                  value={invitePhone}
+                  onChange={(e) => setInvitePhone(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
             <Button
               onClick={handleInvite}
-              disabled={!inviteEmail.trim() || inviting}
+              disabled={!inviteEmail.trim() || !inviteName.trim() || inviting}
               className="w-full"
             >
               {inviting ? (
