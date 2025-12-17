@@ -104,7 +104,7 @@ export default function Team() {
 
       if (rolesError) throw rolesError;
 
-      // Get user settings and auth status for each member
+      // Get user settings for each member
       const membersWithSettings = await Promise.all(
         (roles || []).map(async (role) => {
           const { data: settings } = await supabase
@@ -113,15 +113,16 @@ export default function Team() {
             .eq("user_id", role.user_id)
             .single();
 
-          // Check auth status via user email confirmation
-          // We'll use created_at as a proxy - if user_settings has email, user exists
-          const confirmed = settings?.email ? true : false;
+          // For staff members, check if they have logged in before
+          // If user_settings exists with nome and email, they're likely confirmed
+          // Owners are always confirmed
+          const isConfirmed = role.role === "owner" || (settings?.nome && settings?.email);
 
           return {
             ...role,
             permissions: role.permissions as unknown as Permissions | null,
             user_settings: settings,
-            confirmed_at: confirmed ? role.created_at : null
+            confirmed_at: isConfirmed ? role.created_at : null
           };
         })
       );
