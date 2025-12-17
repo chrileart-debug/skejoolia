@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/Header";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
+import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  Bell,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -126,6 +128,7 @@ export default function Schedule() {
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({
     service: "",
     date: "",
@@ -424,9 +427,15 @@ export default function Schedule() {
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <Button variant="outline" onClick={goToToday}>
-            Hoje
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={goToToday}>
+              Hoje
+            </Button>
+            <Button variant="outline" onClick={() => setIsReminderModalOpen(true)}>
+              <Bell className="w-4 h-4 mr-2" />
+              Lembretes
+            </Button>
+          </div>
         </div>
 
         {/* Calendar Grid */}
@@ -669,6 +678,15 @@ export default function Schedule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reminder Configuration Modal */}
+      {barbershop?.id && (
+        <ReminderConfigModal
+          open={isReminderModalOpen}
+          onOpenChange={setIsReminderModalOpen}
+          barbershopId={barbershop.id}
+        />
+      )}
     </div>
   );
 }

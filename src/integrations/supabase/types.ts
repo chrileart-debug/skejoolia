@@ -153,6 +153,83 @@ export type Database = {
           },
         ]
       }
+      appointment_reminders_sent: {
+        Row: {
+          appointment_id: string
+          id: string
+          reminder_id: string
+          sent_at: string | null
+        }
+        Insert: {
+          appointment_id: string
+          id?: string
+          reminder_id: string
+          sent_at?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          id?: string
+          reminder_id?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_reminders_sent_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id_agendamento"]
+          },
+          {
+            foreignKeyName: "appointment_reminders_sent_reminder_id_fkey"
+            columns: ["reminder_id"]
+            isOneToOne: false
+            referencedRelation: "barbershop_reminders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      barbershop_reminders: {
+        Row: {
+          barbershop_id: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_enabled: boolean | null
+          reminder_type: string
+          reminder_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          barbershop_id: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_enabled?: boolean | null
+          reminder_type: string
+          reminder_value: number
+          updated_at?: string | null
+        }
+        Update: {
+          barbershop_id?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_enabled?: boolean | null
+          reminder_type?: string
+          reminder_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "barbershop_reminders_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       barbershops: {
         Row: {
           address: string | null
