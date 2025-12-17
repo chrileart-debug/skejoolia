@@ -50,7 +50,7 @@ export function AppLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-x-hidden w-full max-w-full">
       {/* Onboarding Modal */}
       {showOnboarding && barbershop && user && (
         <OnboardingModal
@@ -80,11 +80,11 @@ export function AppLayout() {
       </div>
 
       <div className={cn(
-        "flex-1 flex flex-col min-h-screen transition-all duration-300",
+        "flex-1 flex flex-col min-h-screen transition-all duration-300 overflow-x-hidden",
         sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
       )}>
         <TrialBanner />
-        <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto">
+        <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto overflow-x-hidden">
           <Outlet context={{ onMenuClick: handleMobileMenuToggle, barbershop }} />
         </main>
       </div>

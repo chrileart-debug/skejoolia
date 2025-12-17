@@ -132,10 +132,13 @@
 
   html {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 }
 
