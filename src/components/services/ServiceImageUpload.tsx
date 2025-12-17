@@ -35,31 +35,24 @@ export function ServiceImageUpload({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!ALLOWED_TYPES.includes(file.type)) {
       toast.error("Formato inválido. Use JPG, PNG ou WEBP.");
       return;
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       toast.error("Arquivo muito grande. Máximo 50MB.");
       return;
     }
 
-    // Create preview immediately
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
 
-    // If no serviceId yet (creating new service), just show preview
-    // The actual upload will happen after service creation
     if (!serviceId) {
-      // Store file in a temporary way - we'll upload after service creation
       onImageUploaded(objectUrl);
       return;
     }
 
-    // Upload the file
     await uploadFile(file, serviceId);
   };
 
@@ -70,7 +63,6 @@ export function ServiceImageUpload({
       const extension = getFileExtension(file);
       const filePath = `${userId}/servicos/${targetServiceId}.${extension}`;
 
-      // Delete existing image first (if any)
       const { data: existingFiles } = await supabase.storage
         .from("midia-imagens-cortes")
         .list(`${userId}/servicos`, {
@@ -89,7 +81,6 @@ export function ServiceImageUpload({
         }
       }
 
-      // Upload new image
       const { error: uploadError } = await supabase.storage
         .from("midia-imagens-cortes")
         .upload(filePath, file, {
@@ -99,18 +90,16 @@ export function ServiceImageUpload({
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from("midia-imagens-cortes")
         .getPublicUrl(filePath);
 
       const publicUrl = urlData.publicUrl;
 
-      // Update service in database
       const { error: updateError } = await supabase
-        .from("cortes")
-        .update({ image_corte: publicUrl })
-        .eq("id_corte", targetServiceId);
+        .from("services")
+        .update({ image_url: publicUrl })
+        .eq("id", targetServiceId);
 
       if (updateError) throw updateError;
 
@@ -134,7 +123,6 @@ export function ServiceImageUpload({
     }
 
     try {
-      // List and delete files
       const { data: files } = await supabase.storage
         .from("midia-imagens-cortes")
         .list(`${userId}/servicos`, {
@@ -153,11 +141,10 @@ export function ServiceImageUpload({
         }
       }
 
-      // Update database
       await supabase
-        .from("cortes")
-        .update({ image_corte: null })
-        .eq("id_corte", serviceId);
+        .from("services")
+        .update({ image_url: null })
+        .eq("id", serviceId);
 
       setPreviewUrl(null);
       onImageRemoved();
@@ -171,35 +158,6 @@ export function ServiceImageUpload({
   const handleClick = () => {
     if (!isUploading) {
       fileInputRef.current?.click();
-    }
-  };
-
-  // Expose upload function for external use (when creating new service)
-  const uploadPendingImage = async (
-    file: File,
-    newServiceId: string
-  ): Promise<string | null> => {
-    try {
-      const extension = getFileExtension(file);
-      const filePath = `${userId}/servicos/${newServiceId}.${extension}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("midia-imagens-cortes")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("midia-imagens-cortes")
-        .getPublicUrl(filePath);
-
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error("Erro ao enviar imagem:", error);
-      return null;
     }
   };
 
@@ -276,7 +234,6 @@ export function ServiceImageUpload({
   );
 }
 
-// Export upload function for use in parent component
 export async function uploadServiceImage(
   file: File,
   userId: string,

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type Status = "online" | "offline" | "pending" | "confirmed" | "completed";
+type Status = "online" | "offline" | "pending" | "confirmed" | "completed" | "cancelled";
 
 interface StatusBadgeProps {
   status: Status;
@@ -28,6 +28,10 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
   completed: {
     label: "Concluído",
     className: "bg-success/10 text-success border-success/20",
+  },
+  cancelled: {
+    label: "Cancelado",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
   },
 };
 
