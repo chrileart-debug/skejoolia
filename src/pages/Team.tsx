@@ -33,18 +33,14 @@ import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 interface TeamMember {
-  id: string;
+  role_id: string;
   user_id: string;
   role: "owner" | "staff";
-  created_at: string;
   permissions: Permissions | null;
-  user_settings: {
-    nome: string | null;
-    email: string | null;
-    numero: string | null;
-  } | null;
-  // For checking invite status
-  confirmed_at: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: "active" | "pending";
 }
 
 type OutletContextType = {
@@ -96,38 +92,23 @@ export default function Team() {
     if (!barbershop?.id) return;
 
     try {
-      // Get roles with permissions
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_barbershop_roles")
-        .select("id, user_id, role, created_at, permissions")
-        .eq("barbershop_id", barbershop.id);
+      const { data, error } = await supabase
+        .rpc("get_barbershop_team", { p_barbershop_id: barbershop.id });
 
-      if (rolesError) throw rolesError;
+      if (error) throw error;
 
-      // Get user settings for each member
-      const membersWithSettings = await Promise.all(
-        (roles || []).map(async (role) => {
-          const { data: settings } = await supabase
-            .from("user_settings")
-            .select("nome, email, numero")
-            .eq("user_id", role.user_id)
-            .single();
+      const members: TeamMember[] = (data || []).map((m: any) => ({
+        role_id: m.role_id,
+        user_id: m.user_id,
+        role: m.role as "owner" | "staff",
+        permissions: m.permissions as Permissions | null,
+        name: m.name,
+        email: m.email,
+        phone: m.phone,
+        status: m.status as "active" | "pending",
+      }));
 
-          // For staff members, check if they have logged in before
-          // If user_settings exists with nome and email, they're likely confirmed
-          // Owners are always confirmed
-          const isConfirmed = role.role === "owner" || (settings?.nome && settings?.email);
-
-          return {
-            ...role,
-            permissions: role.permissions as unknown as Permissions | null,
-            user_settings: settings,
-            confirmed_at: isConfirmed ? role.created_at : null
-          };
-        })
-      );
-
-      setTeamMembers(membersWithSettings);
+      setTeamMembers(members);
     } catch (error) {
       console.error("Error fetching team members:", error);
       toast.error("Erro ao carregar equipe");
@@ -203,7 +184,7 @@ export default function Team() {
       const { error } = await supabase
         .from("user_barbershop_roles")
         .update({ permissions: editPermissions as unknown as Json })
-        .eq("id", editingMember.id)
+        .eq("id", editingMember.role_id)
         .eq("barbershop_id", barbershop.id);
 
       if (error) throw error;
@@ -245,7 +226,7 @@ export default function Team() {
   };
 
   const handleResendInvite = async (member: TeamMember) => {
-    if (!barbershop?.id || !member.user_settings?.email) return;
+    if (!barbershop?.id || !member.email) return;
 
     setResendingUserId(member.user_id);
     try {
@@ -254,7 +235,7 @@ export default function Team() {
 
       const response = await supabase.functions.invoke("invite-user", {
         body: {
-          email: member.user_settings.email,
+          email: member.email,
           barbershop_id: barbershop.id,
           resend: true
         },
@@ -273,7 +254,7 @@ export default function Team() {
         throw new Error(data.error);
       }
 
-      toast.success(`Convite reenviado para ${member.user_settings.email}`);
+      toast.success(`Convite reenviado para ${member.email}`);
     } catch (error: any) {
       console.error("Error resending invite:", error);
       toast.error(error.message || "Erro ao reenviar convite");
@@ -386,7 +367,7 @@ export default function Team() {
       ) : (
         <div className="space-y-4">
           {teamMembers.map((member) => (
-            <Card key={member.id}>
+            <Card key={member.role_id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -400,14 +381,14 @@ export default function Team() {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-foreground">
-                          {member.user_settings?.nome || "Sem nome"}
+                          {member.name || "Sem nome"}
                         </p>
                         <Badge variant={member.role === "owner" ? "default" : "secondary"}>
                           {member.role === "owner" ? "Proprietário" : "Funcionário"}
                         </Badge>
                         {/* Status Badge */}
                         {member.role === "staff" && (
-                          member.confirmed_at ? (
+                          member.status === "active" ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
                               <CheckCircle2 className="w-3 h-3 mr-1" />
                               Ativo
@@ -426,12 +407,12 @@ export default function Team() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Mail className="w-3 h-3" />
-                          {member.user_settings?.email || "Email não informado"}
+                          {member.email || "Email não informado"}
                         </span>
-                        {member.user_settings?.numero && (
+                        {member.phone && (
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3" />
-                            {member.user_settings.numero}
+                            {member.phone}
                           </span>
                         )}
                       </div>
@@ -442,7 +423,7 @@ export default function Team() {
                   {member.role === "staff" && member.user_id !== user?.id && (
                     <div className="flex items-center gap-1">
                       {/* Resend invite button - only for pending members */}
-                      {!member.confirmed_at && (
+                      {member.status === "pending" && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -470,7 +451,7 @@ export default function Team() {
                         variant="ghost"
                         size="icon"
                         className="text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteMemberId(member.id)}
+                        onClick={() => setDeleteMemberId(member.role_id)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -580,7 +561,7 @@ export default function Team() {
           <DialogHeader>
             <DialogTitle>Editar Permissões</DialogTitle>
             <DialogDescription>
-              Defina o que {editingMember?.user_settings?.nome || "este membro"} pode acessar
+              Defina o que {editingMember?.name || "este membro"} pode acessar
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
