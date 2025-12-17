@@ -856,6 +856,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      owner_can_view_user_settings: {
+        Args: { _target_user_id: string }
+        Returns: boolean
+      }
       user_belongs_to_barbershop: {
         Args: { _barbershop_id: string; _user_id: string }
         Returns: boolean
