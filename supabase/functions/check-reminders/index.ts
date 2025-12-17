@@ -29,7 +29,7 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current time in UTC
+    // Get current time
     const now = new Date();
     console.log("Current time (UTC):", now.toISOString());
 
@@ -77,9 +77,35 @@ serve(async (req: Request) => {
 
       console.log(`Found ${reminders.length} active reminders for ${barbershop.name}`);
 
+      // Fetch ALL upcoming appointments for this barbershop (status pending/confirmed, starting in the future)
+      const { data: appointments, error: appointmentsError } = await supabase
+        .from("agendamentos")
+        .select(`
+          id_agendamento,
+          start_time,
+          nome_cliente,
+          telefone_cliente,
+          service_id
+        `)
+        .eq("barbershop_id", barbershop.id)
+        .in("status", ["pending", "confirmed"])
+        .gte("start_time", now.toISOString());
+
+      if (appointmentsError) {
+        console.error(`Error fetching appointments for ${barbershop.name}:`, appointmentsError);
+        continue;
+      }
+
+      if (!appointments || appointments.length === 0) {
+        console.log(`No upcoming appointments for ${barbershop.name}`);
+        continue;
+      }
+
+      console.log(`Found ${appointments.length} upcoming appointments for ${barbershop.name}`);
+
       // Process each reminder configuration
       for (const reminder of reminders as Reminder[]) {
-        // Calculate target time based on reminder type
+        // Calculate reminder minutes
         let reminderMinutes: number;
         switch (reminder.reminder_type) {
           case "minutes":
@@ -95,42 +121,25 @@ serve(async (req: Request) => {
             reminderMinutes = 60;
         }
 
-        // Calculate the target window: appointments starting between now + reminder time and now + reminder time + 10 minutes
-        const targetStart = new Date(now.getTime() + reminderMinutes * 60 * 1000);
-        const targetEnd = new Date(targetStart.getTime() + 10 * 60 * 1000); // 10-minute window (cron interval)
-
-        console.log(`Reminder ${reminder.id} (${reminder.reminder_value} ${reminder.reminder_type}): checking appointments between ${targetStart.toISOString()} and ${targetEnd.toISOString()}`);
-
-        // Find appointments that need this reminder
-        const { data: appointments, error: appointmentsError } = await supabase
-          .from("agendamentos")
-          .select(`
-            id_agendamento,
-            start_time,
-            nome_cliente,
-            telefone_cliente,
-            service_id,
-            services!inner (name)
-          `)
-          .eq("barbershop_id", barbershop.id)
-          .neq("status", "cancelled")
-          .gte("start_time", targetStart.toISOString())
-          .lt("start_time", targetEnd.toISOString()) as { data: any[], error: any };
-
-        if (appointmentsError) {
-          console.error(`Error fetching appointments for reminder ${reminder.id}:`, appointmentsError);
-          continue;
-        }
-
-        if (!appointments || appointments.length === 0) {
-          console.log(`No appointments in window for reminder ${reminder.id}`);
-          continue;
-        }
-
-        console.log(`Found ${appointments.length} appointments for reminder ${reminder.id}`);
+        console.log(`Processing reminder ${reminder.id}: ${reminder.reminder_value} ${reminder.reminder_type} (${reminderMinutes} minutes)`);
 
         // Process each appointment
         for (const appointment of appointments) {
+          const appointmentTime = new Date(appointment.start_time);
+          const reminderTargetTime = new Date(appointmentTime.getTime() - reminderMinutes * 60 * 1000);
+          
+          // Check if it's time to send this reminder (target time has passed or is within 10 minutes)
+          const timeDiff = reminderTargetTime.getTime() - now.getTime();
+          const minutesUntilReminder = timeDiff / (60 * 1000);
+
+          console.log(`Appointment ${appointment.id_agendamento} at ${appointmentTime.toISOString()}, reminder target: ${reminderTargetTime.toISOString()}, minutes until reminder: ${minutesUntilReminder.toFixed(1)}`);
+
+          // Send reminder if: target time passed (negative) or within next 10 minutes
+          if (minutesUntilReminder > 10) {
+            console.log(`Reminder not yet due for appointment ${appointment.id_agendamento}, skipping`);
+            continue;
+          }
+
           // Check if this specific reminder was already sent for this appointment
           const { data: existingSent } = await supabase
             .from("appointment_reminders_sent")
@@ -146,7 +155,6 @@ serve(async (req: Request) => {
 
           try {
             // Format the appointment time for display
-            const appointmentTime = new Date(appointment.start_time);
             const formattedTime = appointmentTime.toLocaleString("pt-BR", {
               timeZone: "America/Sao_Paulo",
               year: "numeric",
@@ -156,12 +164,23 @@ serve(async (req: Request) => {
               minute: "2-digit",
             });
 
+            // Fetch service name if service_id exists
+            let serviceName = "Serviço";
+            if (appointment.service_id) {
+              const { data: service } = await supabase
+                .from("services")
+                .select("name")
+                .eq("id", appointment.service_id)
+                .maybeSingle();
+              serviceName = service?.name || "Serviço";
+            }
+
             const payload = {
               barbershop_name: barbershop.name,
               barbershop_phone: barbershop.phone || "",
               client_name: appointment.nome_cliente || "Cliente",
               client_phone: appointment.telefone_cliente || "",
-              service_name: appointment.services?.name || "Serviço",
+              service_name: serviceName,
               appointment_time: formattedTime,
               reminder_type: reminder.reminder_type,
               reminder_value: reminder.reminder_value,
