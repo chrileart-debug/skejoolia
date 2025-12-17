@@ -724,6 +724,7 @@ export type Database = {
           id: string
           permissions: Json | null
           role: Database["public"]["Enums"]["barbershop_role"]
+          status: string
           user_id: string
         }
         Insert: {
@@ -732,6 +733,7 @@ export type Database = {
           id?: string
           permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
+          status?: string
           user_id: string
         }
         Update: {
@@ -740,6 +742,7 @@ export type Database = {
           id?: string
           permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
+          status?: string
           user_id?: string
         }
         Relationships: [
@@ -827,6 +830,7 @@ export type Database = {
       }
     }
     Functions: {
+      activate_team_member_status: { Args: never; Returns: undefined }
       check_user_limit: {
         Args: { p_resource: string; p_user_id: string }
         Returns: Json

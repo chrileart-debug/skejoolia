@@ -71,6 +71,7 @@ serve(async (req) => {
 
     // Use provided permissions or defaults
     const memberPermissions: Permissions = permissions || DEFAULT_PERMISSIONS;
+    const origin = req.headers.get('origin') || 'https://skejool.lovable.app';
 
     console.log('Invite request:', { email, name, phone, barbershop_id, permissions: memberPermissions, invited_by: user.id, resend });
 
@@ -122,7 +123,7 @@ serve(async (req) => {
       // Check if user is already a member of this barbershop
       const { data: existingRole } = await supabaseAdmin
         .from('user_barbershop_roles')
-        .select('id')
+        .select('id, status')
         .eq('user_id', existingUser.id)
         .eq('barbershop_id', barbershop_id)
         .maybeSingle();
@@ -130,40 +131,41 @@ serve(async (req) => {
       if (existingRole) {
         // User is already a member - handle resend
         if (resend) {
-          if (!existingUser.email_confirmed_at) {
-            const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
-            
-            const { error: resendError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-              email,
-              {
-                redirectTo: redirectUrl,
-                data: existingUser.user_metadata
-              }
-            );
+          // Update status to pending and send password reset email
+          const { error: updateStatusError } = await supabaseAdmin
+            .from('user_barbershop_roles')
+            .update({ status: 'pending' })
+            .eq('id', existingRole.id);
 
-            if (resendError) {
-              console.error('Error resending invite:', resendError);
-              return new Response(
-                JSON.stringify({ error: resendError.message || 'Failed to resend invite' }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
+          if (updateStatusError) {
+            console.error('Error updating status:', updateStatusError);
+          }
 
-            console.log('Invite resent successfully to:', email);
+          // Send password reset email to re-activate
+          const redirectUrl = `${origin}/update-password`;
+          
+          const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(
+            email,
+            { redirectTo: redirectUrl }
+          );
+
+          if (resetError) {
+            console.error('Error sending reset email:', resetError);
             return new Response(
-              JSON.stringify({ 
-                success: true, 
-                message: `Convite reenviado para ${email}`,
-                resent: true
-              }),
-              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          } else {
-            return new Response(
-              JSON.stringify({ error: 'User has already confirmed their account' }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              JSON.stringify({ error: resetError.message || 'Failed to resend invite' }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
+
+          console.log('Password reset email sent to:', email);
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: `Convite reenviado para ${email}`,
+              resent: true
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
         
         return new Response(
@@ -172,8 +174,8 @@ serve(async (req) => {
         );
       }
 
-      // User exists but NOT a member of this barbershop - RE-INVITE
-      console.log('Re-inviting existing user to barbershop');
+      // User exists but NOT a member of this barbershop - RE-INVITE (Re-hiring)
+      console.log('Re-inviting existing user to barbershop (re-hiring flow)');
 
       // CRITICAL: Update/insert user_settings with the form data
       const { error: upsertSettingsError } = await supabaseAdmin
@@ -195,14 +197,15 @@ serve(async (req) => {
         console.log('User settings updated for existing user');
       }
 
-      // Insert role for this barbershop
+      // Insert role for this barbershop with status = 'pending'
       const { error: insertRoleError } = await supabaseAdmin
         .from('user_barbershop_roles')
         .insert({
           user_id: existingUser.id,
           barbershop_id: barbershop_id,
           role: 'staff',
-          permissions: memberPermissions
+          permissions: memberPermissions,
+          status: 'pending'  // <-- LOCAL STATUS: pending until they set password
         });
 
       if (insertRoleError) {
@@ -213,32 +216,27 @@ serve(async (req) => {
         );
       }
 
-      console.log('Existing user added to barbershop as staff with permissions');
+      console.log('Existing user added to barbershop as staff with pending status');
       
-      // Send a notification email to let them know they've been added
-      // We do this by sending a "magic link" style invite that logs them in
-      const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
+      // Send password reset email (acts as "Accept Invite" flow)
+      const redirectUrl = `${origin}/update-password`;
       
-      // Generate a magic link for the user
-      const { error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: email,
-        options: {
-          redirectTo: redirectUrl
-        }
-      });
+      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(
+        email,
+        { redirectTo: redirectUrl }
+      );
 
-      if (magicLinkError) {
-        console.error('Error sending notification email:', magicLinkError);
+      if (resetError) {
+        console.error('Error sending password reset email:', resetError);
         // Don't fail - user was still added successfully
       } else {
-        console.log('Notification email sent to existing user');
+        console.log('Password reset email sent to re-hired user');
       }
 
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Acesso restaurado com sucesso',
+          message: `Convite enviado para ${email}. O usuário precisará definir uma nova senha.`,
           existing_user: true,
           user_id: existingUser.id
         }),
@@ -256,8 +254,8 @@ serve(async (req) => {
       );
     }
 
-    // Invite new user via Supabase Auth
-    const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
+    // Invite new user via Supabase Auth - redirect to update-password
+    const redirectUrl = `${origin}/update-password`;
     
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
@@ -304,20 +302,21 @@ serve(async (req) => {
         console.log('User settings inserted for new user');
       }
 
-      // CRITICAL: Manually insert into user_barbershop_roles
+      // CRITICAL: Manually insert into user_barbershop_roles with status = 'pending'
       const { error: insertRoleError } = await supabaseAdmin
         .from('user_barbershop_roles')
         .insert({
           user_id: newUserId,
           barbershop_id: barbershop_id,
           role: 'staff',
-          permissions: memberPermissions
+          permissions: memberPermissions,
+          status: 'pending'  // <-- LOCAL STATUS: pending until they set password
         });
 
       if (insertRoleError) {
         console.error('Error inserting user_barbershop_roles:', insertRoleError);
       } else {
-        console.log('User role inserted for new user');
+        console.log('User role inserted for new user with pending status');
       }
     }
 
