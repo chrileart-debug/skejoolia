@@ -34,7 +34,7 @@ interface ReminderConfigModalProps {
   barbershopId: string;
 }
 
-const MINUTE_OPTIONS = [5, 10, 15, 20, 30, 45];
+const MINUTE_OPTIONS = [1, 5, 10, 15, 20, 30, 45];
 const HOUR_OPTIONS = [1, 2, 3, 4, 6, 12];
 const DAY_OPTIONS = [1, 2, 3, 4, 5, 7];
 
@@ -118,9 +118,11 @@ export function ReminderConfigModal({
   };
 
   const updateReminder = (index: number, field: keyof Reminder, value: any) => {
-    const updated = [...reminders];
-    updated[index] = { ...updated[index], [field]: value };
-    setReminders(updated);
+    setReminders((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
   const getValueOptions = (type: "minutes" | "hours" | "days") => {
