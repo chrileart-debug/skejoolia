@@ -59,6 +59,13 @@ export default function UpdatePassword() {
 
       if (error) throw error;
 
+      // Activate team member status after successful password set
+      const { error: activateError } = await supabase.rpc('activate_team_member_status');
+      if (activateError) {
+        console.error("Error activating team member status:", activateError);
+        // Don't fail - password was updated successfully
+      }
+
       toast.success("Senha definida com sucesso!");
       navigate("/dashboard");
     } catch (error: any) {
