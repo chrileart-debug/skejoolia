@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone } from "lucide-react";
+import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Json } from "@/integrations/supabase/types";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useBarbershop } from "@/hooks/useBarbershop";
+import { useBarbershop, Permissions } from "@/hooks/useBarbershop";
 import { useAuth } from "@/hooks/useAuth";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -35,15 +37,25 @@ interface TeamMember {
   user_id: string;
   role: "owner" | "staff";
   created_at: string;
+  permissions: Permissions | null;
   user_settings: {
     nome: string | null;
     email: string | null;
     numero: string | null;
   } | null;
+  // For checking invite status
+  confirmed_at: string | null;
 }
 
 type OutletContextType = {
   onMenuClick: () => void;
+};
+
+const DEFAULT_PERMISSIONS: Permissions = {
+  can_view_dashboard: false,
+  can_manage_agents: false,
+  can_manage_schedule: true,
+  can_view_clients: true,
 };
 
 export default function Team() {
@@ -52,11 +64,22 @@ export default function Team() {
   const { user } = useAuth();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Invite modal state
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [invitePhone, setInvitePhone] = useState("");
+  const [invitePermissions, setInvitePermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
   const [inviting, setInviting] = useState(false);
+  
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editPermissions, setEditPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
+  const [saving, setSaving] = useState(false);
+  
+  // Delete state
   const [deleteMemberId, setDeleteMemberId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -70,15 +93,15 @@ export default function Team() {
     if (!barbershop?.id) return;
 
     try {
-      // First get the roles
+      // Get roles with permissions
       const { data: roles, error: rolesError } = await supabase
         .from("user_barbershop_roles")
-        .select("id, user_id, role, created_at")
+        .select("id, user_id, role, created_at, permissions")
         .eq("barbershop_id", barbershop.id);
 
       if (rolesError) throw rolesError;
 
-      // Then get user settings for each member
+      // Get user settings and auth status for each member
       const membersWithSettings = await Promise.all(
         (roles || []).map(async (role) => {
           const { data: settings } = await supabase
@@ -87,9 +110,15 @@ export default function Team() {
             .eq("user_id", role.user_id)
             .single();
 
+          // Check auth status via user email confirmation
+          // We'll use created_at as a proxy - if user_settings has email, user exists
+          const confirmed = settings?.email ? true : false;
+
           return {
             ...role,
-            user_settings: settings
+            permissions: role.permissions as unknown as Permissions | null,
+            user_settings: settings,
+            confirmed_at: confirmed ? role.created_at : null
           };
         })
       );
@@ -116,7 +145,8 @@ export default function Team() {
           email: inviteEmail.trim(),
           name: inviteName.trim(),
           phone: invitePhone.trim() || null,
-          barbershop_id: barbershop.id
+          barbershop_id: barbershop.id,
+          permissions: invitePermissions
         },
         headers: {
           Authorization: `Bearer ${token}`
@@ -137,9 +167,7 @@ export default function Team() {
         ? "Membro adicionado à equipe!" 
         : `Convite enviado para ${inviteEmail}`
       );
-      setInviteEmail("");
-      setInviteName("");
-      setInvitePhone("");
+      resetInviteForm();
       setInviteModalOpen(false);
       fetchTeamMembers();
     } catch (error: any) {
@@ -147,6 +175,44 @@ export default function Team() {
       toast.error(error.message || "Erro ao enviar convite");
     } finally {
       setInviting(false);
+    }
+  };
+
+  const resetInviteForm = () => {
+    setInviteEmail("");
+    setInviteName("");
+    setInvitePhone("");
+    setInvitePermissions(DEFAULT_PERMISSIONS);
+  };
+
+  const handleEditMember = (member: TeamMember) => {
+    setEditingMember(member);
+    setEditPermissions(member.permissions || DEFAULT_PERMISSIONS);
+    setEditModalOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!editingMember || !barbershop?.id) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("user_barbershop_roles")
+        .update({ permissions: editPermissions as unknown as Json })
+        .eq("id", editingMember.id)
+        .eq("barbershop_id", barbershop.id);
+
+      if (error) throw error;
+
+      toast.success("Permissões atualizadas");
+      setEditModalOpen(false);
+      setEditingMember(null);
+      fetchTeamMembers();
+    } catch (error) {
+      console.error("Error updating permissions:", error);
+      toast.error("Erro ao atualizar permissões");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,6 +239,68 @@ export default function Team() {
       setDeleting(false);
     }
   };
+
+  const PermissionCheckboxes = ({ 
+    permissions, 
+    onChange 
+  }: { 
+    permissions: Permissions; 
+    onChange: (p: Permissions) => void;
+  }) => (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">Permissões de Acesso</Label>
+      <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="perm-dashboard"
+            checked={permissions.can_view_dashboard}
+            onCheckedChange={(checked) => 
+              onChange({ ...permissions, can_view_dashboard: !!checked })
+            }
+          />
+          <Label htmlFor="perm-dashboard" className="text-sm font-normal cursor-pointer">
+            Acessar Dashboard
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="perm-agents"
+            checked={permissions.can_manage_agents}
+            onCheckedChange={(checked) => 
+              onChange({ ...permissions, can_manage_agents: !!checked })
+            }
+          />
+          <Label htmlFor="perm-agents" className="text-sm font-normal cursor-pointer">
+            Gerenciar Agentes IA
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="perm-schedule"
+            checked={permissions.can_manage_schedule}
+            onCheckedChange={(checked) => 
+              onChange({ ...permissions, can_manage_schedule: !!checked })
+            }
+          />
+          <Label htmlFor="perm-schedule" className="text-sm font-normal cursor-pointer">
+            Gerenciar Agenda
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="perm-clients"
+            checked={permissions.can_view_clients}
+            onCheckedChange={(checked) => 
+              onChange({ ...permissions, can_view_clients: !!checked })
+            }
+          />
+          <Label htmlFor="perm-clients" className="text-sm font-normal cursor-pointer">
+            Ver Clientes
+          </Label>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!isOwner) {
     return (
@@ -228,13 +356,27 @@ export default function Team() {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-foreground">
                           {member.user_settings?.nome || "Sem nome"}
                         </p>
                         <Badge variant={member.role === "owner" ? "default" : "secondary"}>
                           {member.role === "owner" ? "Proprietário" : "Funcionário"}
                         </Badge>
+                        {/* Status Badge */}
+                        {member.role === "staff" && (
+                          member.confirmed_at ? (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Ativo
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                              <Clock className="w-3 h-3 mr-1" />
+                              Pendente
+                            </Badge>
+                          )
+                        )}
                         {member.user_id === user?.id && (
                           <Badge variant="outline">Você</Badge>
                         )}
@@ -245,16 +387,26 @@ export default function Team() {
                     </div>
                   </div>
                   
-                  {/* Only show delete for staff members, not owners or self */}
+                  {/* Actions for staff members */}
                   {member.role === "staff" && member.user_id !== user?.id && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleteMemberId(member.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary"
+                        onClick={() => handleEditMember(member)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteMemberId(member.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -269,8 +421,11 @@ export default function Team() {
       )}
 
       {/* Invite Modal */}
-      <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+      <Dialog open={inviteModalOpen} onOpenChange={(open) => {
+        setInviteModalOpen(open);
+        if (!open) resetInviteForm();
+      }}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Convidar Membro</DialogTitle>
             <DialogDescription>
@@ -320,6 +475,13 @@ export default function Team() {
                 />
               </div>
             </div>
+            
+            {/* Permissions */}
+            <PermissionCheckboxes 
+              permissions={invitePermissions} 
+              onChange={setInvitePermissions} 
+            />
+
             <Button
               onClick={handleInvite}
               disabled={!inviteEmail.trim() || !inviteName.trim() || inviting}
@@ -337,6 +499,51 @@ export default function Team() {
                 </>
               )}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Permissions Modal */}
+      <Dialog open={editModalOpen} onOpenChange={(open) => {
+        setEditModalOpen(open);
+        if (!open) setEditingMember(null);
+      }}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Permissões</DialogTitle>
+            <DialogDescription>
+              Defina o que {editingMember?.user_settings?.nome || "este membro"} pode acessar
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <PermissionCheckboxes 
+              permissions={editPermissions} 
+              onChange={setEditPermissions} 
+            />
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setEditModalOpen(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSavePermissions}
+                disabled={saving}
+                className="flex-1"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

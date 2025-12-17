@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface Permissions {
+  can_view_dashboard: boolean;
+  can_manage_agents: boolean;
+  can_manage_schedule: boolean;
+  can_view_clients: boolean;
+}
+
+const DEFAULT_PERMISSIONS: Permissions = {
+  can_view_dashboard: false,
+  can_manage_agents: false,
+  can_manage_schedule: true,
+  can_view_clients: true,
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -44,7 +58,7 @@ serve(async (req) => {
     console.log('Authenticated user:', user.id);
 
     // Parse request body
-    const { email, name, phone, barbershop_id } = await req.json();
+    const { email, name, phone, barbershop_id, permissions } = await req.json();
 
     if (!email || !barbershop_id || !name) {
       return new Response(
@@ -53,7 +67,10 @@ serve(async (req) => {
       );
     }
 
-    console.log('Invite request:', { email, name, phone, barbershop_id, invited_by: user.id });
+    // Use provided permissions or defaults
+    const memberPermissions: Permissions = permissions || DEFAULT_PERMISSIONS;
+
+    console.log('Invite request:', { email, name, phone, barbershop_id, permissions: memberPermissions, invited_by: user.id });
 
     // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -109,13 +126,14 @@ serve(async (req) => {
         );
       }
 
-      // Add existing user to barbershop as staff
+      // Add existing user to barbershop as staff with permissions
       const { error: insertError } = await supabaseAdmin
         .from('user_barbershop_roles')
         .insert({
           user_id: existingUser.id,
           barbershop_id: barbershop_id,
-          role: 'staff'
+          role: 'staff',
+          permissions: memberPermissions
         });
 
       if (insertError) {
@@ -126,7 +144,7 @@ serve(async (req) => {
         );
       }
 
-      console.log('Existing user added to barbershop as staff');
+      console.log('Existing user added to barbershop as staff with permissions');
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -149,6 +167,7 @@ serve(async (req) => {
           numero: phone,
           barbershop_id: barbershop_id,
           role: 'staff',
+          permissions: memberPermissions,
           invited_by: user.id
         }
       }

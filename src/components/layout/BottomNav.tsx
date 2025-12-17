@@ -6,16 +6,38 @@ import {
   Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBarbershop } from "@/hooks/useBarbershop";
 
-const navItems = [
-  { title: "Home", icon: LayoutDashboard, href: "/dashboard" },
-  { title: "Agenda", icon: Calendar, href: "/schedule" },
+interface NavItem {
+  title: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
+}
+
+const allNavItems: NavItem[] = [
+  { title: "Home", icon: LayoutDashboard, href: "/dashboard", permissionKey: "can_view_dashboard" },
+  { title: "Agenda", icon: Calendar, href: "/schedule", permissionKey: "can_manage_schedule" },
   { title: "Serviços", icon: Scissors, href: "/services" },
-  { title: "Agentes", icon: Bot, href: "/agents" },
+  { title: "Agentes", icon: Bot, href: "/agents", permissionKey: "can_manage_agents" },
 ];
 
 export function BottomNav() {
   const location = useLocation();
+  const { isOwner, permissions } = useBarbershop();
+
+  // Filter nav items based on permissions
+  const navItems = allNavItems.filter(item => {
+    // Owners have access to everything
+    if (isOwner) return true;
+    
+    // For staff, check granular permissions
+    if (item.permissionKey) {
+      return permissions[item.permissionKey];
+    }
+    
+    return true;
+  });
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-area-pb">

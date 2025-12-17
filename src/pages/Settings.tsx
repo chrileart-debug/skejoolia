@@ -25,6 +25,7 @@ import {
   Download,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +39,7 @@ export default function Settings() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { isOwner } = useBarbershop();
   const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function Settings() {
     email: "",
   });
   
-  // Business data (from barbershops)
+  // Business data (from barbershops) - only for owners
   const [businessData, setBusinessData] = useState({
     company: "",
     niche: "",
@@ -139,8 +141,8 @@ export default function Settings() {
       return;
     }
 
-    // Save business data to barbershops
-    if (barbershopId) {
+    // Save business data to barbershops - only for owners
+    if (barbershopId && isOwner) {
       const { error: businessError } = await supabase
         .from("barbershops")
         .update({
@@ -183,7 +185,7 @@ export default function Settings() {
       <Header title="Configurações" subtitle="Gerencie sua conta" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
-        {/* Profile Section */}
+        {/* Profile Section - Always visible */}
         <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
@@ -193,7 +195,7 @@ export default function Settings() {
               <h2 className="text-lg font-semibold text-foreground">
                 {profileData.name}
               </h2>
-              <p className="text-sm text-muted-foreground">{businessData.company}</p>
+              {isOwner && <p className="text-sm text-muted-foreground">{businessData.company}</p>}
             </div>
           </div>
 
@@ -242,128 +244,132 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Business Section */}
-        <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-primary" />
-            Dados da Empresa
-          </h3>
+        {/* Business Section - Only for owners */}
+        {isOwner && (
+          <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />
+              Dados da Empresa
+            </h3>
 
-          <div className="space-y-4">
-            {/* Company Name */}
-            <div className="space-y-2">
-              <Label>Empresa</Label>
-              <Input
-                value={businessData.company}
-                onChange={(e) =>
-                  setBusinessData({ ...businessData, company: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Niche / SubNiche */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {/* Company Name */}
               <div className="space-y-2">
-                <Label>Nicho</Label>
+                <Label>Empresa</Label>
                 <Input
-                  value={businessData.niche}
+                  value={businessData.company}
                   onChange={(e) =>
-                    setBusinessData({ ...businessData, niche: e.target.value })
+                    setBusinessData({ ...businessData, company: e.target.value })
                   }
                 />
               </div>
+
+              {/* Niche / SubNiche */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nicho</Label>
+                  <Input
+                    value={businessData.niche}
+                    onChange={(e) =>
+                      setBusinessData({ ...businessData, niche: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Subnicho</Label>
+                  <Input
+                    value={businessData.subNiche}
+                    onChange={(e) =>
+                      setBusinessData({ ...businessData, subNiche: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* CPF/CNPJ */}
               <div className="space-y-2">
-                <Label>Subnicho</Label>
+                <Label className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  CPF/CNPJ
+                </Label>
                 <Input
-                  value={businessData.subNiche}
+                  value={businessData.cpfCnpj}
                   onChange={(e) =>
-                    setBusinessData({ ...businessData, subNiche: e.target.value })
+                    setBusinessData({ ...businessData, cpfCnpj: e.target.value })
                   }
                 />
-              </div>
-            </div>
-
-            {/* CPF/CNPJ */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-muted-foreground" />
-                CPF/CNPJ
-              </Label>
-              <Input
-                value={businessData.cpfCnpj}
-                onChange={(e) =>
-                  setBusinessData({ ...businessData, cpfCnpj: e.target.value })
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Address Section */}
-        <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" />
-            Endereço
-          </h3>
-
-          <div className="space-y-4">
-            {/* CEP */}
-            <div className="space-y-2">
-              <Label>CEP</Label>
-              <Input
-                value={businessData.cep}
-                onChange={(e) =>
-                  setBusinessData({ ...businessData, cep: e.target.value })
-                }
-                placeholder="00000-000"
-              />
-            </div>
-
-            {/* Address */}
-            <div className="space-y-2">
-              <Label>Endereço</Label>
-              <Input
-                value={businessData.address}
-                onChange={(e) =>
-                  setBusinessData({ ...businessData, address: e.target.value })
-                }
-              />
-            </div>
-
-            {/* City / State */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Cidade</Label>
-                <Input
-                  value={businessData.city}
-                  onChange={(e) =>
-                    setBusinessData({ ...businessData, city: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <Select
-                  value={businessData.state}
-                  onValueChange={(value) =>
-                    setBusinessData({ ...businessData, state: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {states.map((state) => (
-                      <SelectItem key={state} value={state}>
-                        {state}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Address Section - Only for owners */}
+        {isOwner && (
+          <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-primary" />
+              Endereço
+            </h3>
+
+            <div className="space-y-4">
+              {/* CEP */}
+              <div className="space-y-2">
+                <Label>CEP</Label>
+                <Input
+                  value={businessData.cep}
+                  onChange={(e) =>
+                    setBusinessData({ ...businessData, cep: e.target.value })
+                  }
+                  placeholder="00000-000"
+                />
+              </div>
+
+              {/* Address */}
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input
+                  value={businessData.address}
+                  onChange={(e) =>
+                    setBusinessData({ ...businessData, address: e.target.value })
+                  }
+                />
+              </div>
+
+              {/* City / State */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input
+                    value={businessData.city}
+                    onChange={(e) =>
+                      setBusinessData({ ...businessData, city: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <Select
+                    value={businessData.state}
+                    onValueChange={(value) =>
+                      setBusinessData({ ...businessData, state: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* PWA Download Section - Only on mobile/tablet */}
         {isMobile && (

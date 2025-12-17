@@ -20,14 +20,22 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 
-// Navigation items with role restrictions
-const allNavItems = [
-  { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard", ownerOnly: false },
-  { title: "Agentes", icon: Bot, href: "/agents", ownerOnly: false },
-  { title: "Integrações", icon: MessageSquare, href: "/integrations", ownerOnly: false },
+interface NavItem {
+  title: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+  ownerOnly: boolean;
+  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
+}
+
+// Navigation items with role and permission restrictions
+const allNavItems: NavItem[] = [
+  { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard", ownerOnly: false, permissionKey: "can_view_dashboard" },
+  { title: "Agentes", icon: Bot, href: "/agents", ownerOnly: false, permissionKey: "can_manage_agents" },
+  { title: "Integrações", icon: MessageSquare, href: "/integrations", ownerOnly: false, permissionKey: "can_manage_agents" },
   { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false },
-  { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false },
-  { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false },
+  { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
+  { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
   { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
@@ -45,10 +53,20 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { isOwner } = useBarbershop();
+  const { isOwner, permissions } = useBarbershop();
 
-  // Filter nav items based on role
-  const navItems = allNavItems.filter(item => !item.ownerOnly || isOwner);
+  // Filter nav items based on role and permissions
+  const navItems = allNavItems.filter(item => {
+    // Owner-only items require owner role
+    if (item.ownerOnly && !isOwner) return false;
+    
+    // For staff, check granular permissions
+    if (!isOwner && item.permissionKey) {
+      return permissions[item.permissionKey];
+    }
+    
+    return true;
+  });
 
   const handleLogout = async () => {
     await signOut();
