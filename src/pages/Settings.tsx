@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   User,
   Phone,
@@ -26,6 +28,7 @@ import {
   Link,
   Copy,
   Check,
+  Bell,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -71,6 +74,13 @@ export default function Settings() {
     address: "",
     city: "",
     state: "",
+  });
+
+  // Reminder settings (from barbershops) - only for owners
+  const [reminderSettings, setReminderSettings] = useState({
+    enabled: false,
+    minutes: 60,
+    messageTemplate: "",
   });
 
   // Load user settings and barbershop data
@@ -129,6 +139,11 @@ export default function Settings() {
           address: barbershop.address || "",
           city: barbershop.city || "",
           state: barbershop.state || "",
+        });
+        setReminderSettings({
+          enabled: barbershop.webhook_reminders_enabled || false,
+          minutes: barbershop.reminder_minutes || 60,
+          messageTemplate: barbershop.reminder_message_template || "",
         });
       }
     }
@@ -219,6 +234,9 @@ export default function Settings() {
           address: businessData.address,
           city: businessData.city,
           state: businessData.state,
+          webhook_reminders_enabled: reminderSettings.enabled,
+          reminder_minutes: reminderSettings.minutes,
+          reminder_message_template: reminderSettings.messageTemplate || null,
         })
         .eq("id", barbershopId);
 
@@ -502,6 +520,77 @@ export default function Settings() {
                   </Select>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Automatic Reminders Section - Only for owners */}
+        {isOwner && (
+          <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Bell className="w-5 h-5 text-primary" />
+              Lembretes Automáticos
+            </h3>
+
+            <div className="space-y-6">
+              {/* Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Ativar Lembretes</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enviar lembrete automático via WhatsApp
+                  </p>
+                </div>
+                <Switch
+                  checked={reminderSettings.enabled}
+                  onCheckedChange={(checked) =>
+                    setReminderSettings({ ...reminderSettings, enabled: checked })
+                  }
+                />
+              </div>
+
+              {reminderSettings.enabled && (
+                <>
+                  {/* Minutes before */}
+                  <div className="space-y-2">
+                    <Label>Tempo de Antecedência (minutos)</Label>
+                    <Input
+                      type="number"
+                      min={10}
+                      max={1440}
+                      value={reminderSettings.minutes}
+                      onChange={(e) =>
+                        setReminderSettings({
+                          ...reminderSettings,
+                          minutes: parseInt(e.target.value) || 60,
+                        })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ex: 60 para avisar 1 hora antes, 1440 para 24 horas antes
+                    </p>
+                  </div>
+
+                  {/* Custom message template */}
+                  <div className="space-y-2">
+                    <Label>Mensagem Personalizada (opcional)</Label>
+                    <Textarea
+                      placeholder="Ex: Olá! Lembrando do seu horário agendado..."
+                      value={reminderSettings.messageTemplate}
+                      onChange={(e) =>
+                        setReminderSettings({
+                          ...reminderSettings,
+                          messageTemplate: e.target.value,
+                        })
+                      }
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      A IA usará esta mensagem como base para compor o lembrete
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
