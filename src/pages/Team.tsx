@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop, Permissions } from "@/hooks/useBarbershop";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -59,6 +60,10 @@ export default function Team() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { barbershop, isOwner } = useBarbershop();
   const { user } = useAuth();
+  const { subscription } = useSubscription();
+  
+  // Check if user is on basico plan (solo barber mode)
+  const isBasicoPlan = subscription?.plan_slug === "basico";
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -366,12 +371,14 @@ export default function Team() {
         <EmptyState
           icon={<Users className="w-10 h-10 text-muted-foreground" />}
           title="Nenhum membro na equipe"
-          description="Convide membros para sua equipe"
+          description={isBasicoPlan ? "Configure seu perfil profissional" : "Convide membros para sua equipe"}
           action={
-            <Button onClick={() => setInviteModalOpen(true)}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Convidar Membro
-            </Button>
+            !isBasicoPlan ? (
+              <Button onClick={() => setInviteModalOpen(true)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Convidar Membro
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -429,67 +436,83 @@ export default function Team() {
                     </div>
                   </div>
                   
-                  {/* Actions for all members (except yourself) */}
-                  {member.user_id !== user?.id && (
-                    <div className="flex items-center gap-1">
-                      {/* Config button - for active members */}
-                      {member.status === "active" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-primary"
-                          onClick={() => handleOpenConfig(member)}
-                          title="Configurar especialidades e horários"
-                        >
-                          <Settings2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      
-                      {/* Resend invite button - only for pending staff members */}
-                      {member.role === "staff" && member.status === "pending" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-primary"
-                          onClick={() => handleResendInvite(member)}
-                          disabled={resendingUserId === member.user_id}
-                          title="Reenviar convite"
-                        >
-                          {resendingUserId === member.user_id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="w-4 h-4" />
-                          )}
-                        </Button>
-                      )}
-                      
-                      {/* Edit permissions - only for staff */}
-                      {member.role === "staff" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-primary"
-                          onClick={() => handleEditMember(member)}
-                          title="Editar permissões"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                      )}
-                      
-                      {/* Delete - only for staff */}
-                      {member.role === "staff" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteMemberId(member.role_id)}
-                          title="Remover da equipe"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                  {/* Actions */}
+                  <div className="flex items-center gap-1">
+                    {/* Config button for owner on basico plan (self-config) */}
+                    {isBasicoPlan && member.role === "owner" && member.user_id === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary"
+                        onClick={() => handleOpenConfig(member)}
+                        title="Configurar especialidades e horários"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                    
+                    {/* Actions for staff members (only on corporativo plan or for non-self) */}
+                    {member.user_id !== user?.id && !isBasicoPlan && (
+                      <>
+                        {/* Config button - for active members */}
+                        {member.status === "active" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-primary"
+                            onClick={() => handleOpenConfig(member)}
+                            title="Configurar especialidades e horários"
+                          >
+                            <Settings2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        
+                        {/* Resend invite button - only for pending staff members */}
+                        {member.role === "staff" && member.status === "pending" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-primary"
+                            onClick={() => handleResendInvite(member)}
+                            disabled={resendingUserId === member.user_id}
+                            title="Reenviar convite"
+                          >
+                            {resendingUserId === member.user_id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                          </Button>
+                        )}
+                        
+                        {/* Edit permissions - only for staff */}
+                        {member.role === "staff" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-primary"
+                            onClick={() => handleEditMember(member)}
+                            title="Editar permissões"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        )}
+                        
+                        {/* Delete - only for staff */}
+                        {member.role === "staff" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteMemberId(member.role_id)}
+                            title="Remover da equipe"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -497,8 +520,8 @@ export default function Team() {
         </div>
       )}
 
-      {/* FAB */}
-      {teamMembers.length > 0 && (
+      {/* FAB - only show for corporativo plan */}
+      {teamMembers.length > 0 && !isBasicoPlan && (
         <FAB onClick={() => setInviteModalOpen(true)} />
       )}
 
