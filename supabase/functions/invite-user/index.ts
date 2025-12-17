@@ -40,13 +40,15 @@ serve(async (req) => {
       );
     }
 
-    // Create client with user's token to verify identity
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } }
+    // Create admin client for privileged operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Get the authenticated user
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    // Verify the caller using the token
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    
     if (userError || !user) {
       console.error('User authentication failed:', userError);
       return new Response(
@@ -71,9 +73,6 @@ serve(async (req) => {
     const memberPermissions: Permissions = permissions || DEFAULT_PERMISSIONS;
 
     console.log('Invite request:', { email, name, phone, barbershop_id, permissions: memberPermissions, invited_by: user.id, resend });
-
-    // Create admin client for privileged operations
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify the caller is an owner of the barbershop
     const { data: roleData, error: roleError } = await supabaseAdmin
@@ -106,25 +105,32 @@ serve(async (req) => {
       );
     }
 
-    // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(u => u.email === email);
+    // Check if user already exists in auth
+    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing users:', listError);
+      throw new Error('Failed to check existing users');
+    }
 
+    const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    // SCENARIO A: User Already Exists
     if (existingUser) {
+      console.log('User already exists:', existingUser.id);
+
       // Check if user is already a member of this barbershop
       const { data: existingRole } = await supabaseAdmin
         .from('user_barbershop_roles')
         .select('id')
         .eq('user_id', existingUser.id)
         .eq('barbershop_id', barbershop_id)
-        .single();
+        .maybeSingle();
 
       if (existingRole) {
-        // If resend flag is true and user hasn't confirmed yet, resend the invite
+        // User is already a member - handle resend
         if (resend) {
-          // Check if user has confirmed their account
           if (!existingUser.email_confirmed_at) {
-            // Resend invite email
             const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
             
             const { error: resendError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
@@ -166,8 +172,31 @@ serve(async (req) => {
         );
       }
 
-      // Add existing user to barbershop as staff with permissions
-      const { error: insertError } = await supabaseAdmin
+      // User exists but NOT a member of this barbershop - RE-INVITE
+      console.log('Re-inviting existing user to barbershop');
+
+      // CRITICAL: Update/insert user_settings with the form data
+      const { error: upsertSettingsError } = await supabaseAdmin
+        .from('user_settings')
+        .upsert({
+          user_id: existingUser.id,
+          email: email,
+          nome: name || existingUser.user_metadata?.nome || null,
+          numero: phone || existingUser.user_metadata?.numero || null,
+          updated_at: new Date().toISOString(),
+        }, { 
+          onConflict: 'user_id',
+          ignoreDuplicates: false 
+        });
+
+      if (upsertSettingsError) {
+        console.error('Error upserting user_settings:', upsertSettingsError);
+      } else {
+        console.log('User settings updated for existing user');
+      }
+
+      // Insert role for this barbershop
+      const { error: insertRoleError } = await supabaseAdmin
         .from('user_barbershop_roles')
         .insert({
           user_id: existingUser.id,
@@ -176,8 +205,8 @@ serve(async (req) => {
           permissions: memberPermissions
         });
 
-      if (insertError) {
-        console.error('Error adding existing user to barbershop:', insertError);
+      if (insertRoleError) {
+        console.error('Error adding existing user to barbershop:', insertRoleError);
         return new Response(
           JSON.stringify({ error: 'Failed to add user to team' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -185,13 +214,45 @@ serve(async (req) => {
       }
 
       console.log('Existing user added to barbershop as staff with permissions');
+      
+      // Send a notification email to let them know they've been added
+      // We do this by sending a "magic link" style invite that logs them in
+      const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
+      
+      // Generate a magic link for the user
+      const { error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: redirectUrl
+        }
+      });
+
+      if (magicLinkError) {
+        console.error('Error sending notification email:', magicLinkError);
+        // Don't fail - user was still added successfully
+      } else {
+        console.log('Notification email sent to existing user');
+      }
+
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'User added to team',
-          existing_user: true 
+          message: 'Acesso restaurado com sucesso',
+          existing_user: true,
+          user_id: existingUser.id
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // SCENARIO B: New User - Fresh Invite
+    console.log('Creating new user invite');
+
+    if (!name) {
+      return new Response(
+        JSON.stringify({ error: 'Nome é obrigatório para novos convites' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -204,7 +265,7 @@ serve(async (req) => {
         redirectTo: redirectUrl,
         data: {
           nome: name,
-          numero: phone,
+          numero: phone || null,
           barbershop_id: barbershop_id,
           role: 'staff',
           permissions: memberPermissions,
@@ -221,13 +282,51 @@ serve(async (req) => {
       );
     }
 
-    console.log('Invite sent successfully:', inviteData);
+    const newUserId = inviteData.user?.id;
+    console.log('Invite sent successfully, new user ID:', newUserId);
+
+    // CRITICAL: Manually insert into user_settings immediately
+    if (newUserId) {
+      const { error: insertSettingsError } = await supabaseAdmin
+        .from('user_settings')
+        .upsert({
+          user_id: newUserId,
+          email: email,
+          nome: name,
+          numero: phone || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+      if (insertSettingsError) {
+        console.error('Error inserting user_settings:', insertSettingsError);
+      } else {
+        console.log('User settings inserted for new user');
+      }
+
+      // CRITICAL: Manually insert into user_barbershop_roles
+      const { error: insertRoleError } = await supabaseAdmin
+        .from('user_barbershop_roles')
+        .insert({
+          user_id: newUserId,
+          barbershop_id: barbershop_id,
+          role: 'staff',
+          permissions: memberPermissions
+        });
+
+      if (insertRoleError) {
+        console.error('Error inserting user_barbershop_roles:', insertRoleError);
+      } else {
+        console.log('User role inserted for new user');
+      }
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Invite sent to ${email}`,
-        user_id: inviteData.user?.id
+        message: `Convite enviado para ${email}`,
+        user_id: newUserId,
+        existing_user: false
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
