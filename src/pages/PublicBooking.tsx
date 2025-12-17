@@ -34,6 +34,7 @@ interface Barbershop {
   slug: string;
   phone: string | null;
   address: string | null;
+  owner_id: string;
 }
 
 interface Service {
@@ -73,6 +74,10 @@ interface StaffSchedule {
 interface TimeSlot {
   time: string;
   available: boolean;
+}
+
+interface SubscriptionInfo {
+  plan_slug: string;
 }
 
 // Constants
@@ -138,6 +143,11 @@ const PublicBooking = () => {
   const [staffServices, setStaffServices] = useState<{ user_id: string; service_id: string }[]>([]);
   const [staffSchedules, setStaffSchedules] = useState<StaffSchedule[]>([]);
   const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
+  const [ownerInfo, setOwnerInfo] = useState<StaffMember | null>(null);
+  
+  // Check if this is a solo professional (basico plan)
+  const isSoloProfessional = subscriptionInfo?.plan_slug === "basico";
 
   // Wizard states
   const [currentStep, setCurrentStep] = useState(1);
@@ -176,6 +186,33 @@ const PublicBooking = () => {
         }
 
         setBarbershop(barbershopData);
+
+        // Fetch subscription info for this barbershop
+        const { data: subData } = await supabase
+          .from("subscriptions")
+          .select("plan_slug")
+          .eq("barbershop_id", barbershopData.id)
+          .in("status", ["trialing", "active"])
+          .maybeSingle();
+        
+        if (subData) {
+          setSubscriptionInfo(subData);
+        }
+
+        // Fetch owner's name from user_settings
+        const { data: ownerSettings } = await supabase
+          .from("user_settings")
+          .select("user_id, nome, email")
+          .eq("user_id", barbershopData.owner_id)
+          .maybeSingle();
+
+        if (ownerSettings) {
+          setOwnerInfo({
+            user_id: ownerSettings.user_id,
+            name: ownerSettings.nome,
+            email: ownerSettings.email,
+          });
+        }
 
         // Fetch services, categories, staff in parallel
         const [servicesRes, categoriesRes, staffRes, staffServicesRes, staffSchedulesRes] = await Promise.all([
@@ -359,24 +396,53 @@ const PublicBooking = () => {
     return { grouped, uncategorized };
   }, [services]);
 
-  // Navigation
-  const goToStep = (step: number) => setCurrentStep(step);
+  // Navigation - adjust step numbers for solo professional mode
+  const getActualStep = (displayStep: number) => {
+    if (isSoloProfessional) {
+      // In solo mode: 1=Service, 2=Time, 3=Data
+      if (displayStep === 2) return 3; // Time is step 2 in display but 3 in logic
+      if (displayStep === 3) return 4; // Data is step 3 in display but 4 in logic
+    }
+    return displayStep;
+  };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      if (currentStep === 2) setSelectedService(null);
-      if (currentStep === 3) setSelectedProfessional(null);
-      if (currentStep === 4) setSelectedTime(null);
-      setCurrentStep(currentStep - 1);
+      if (isSoloProfessional) {
+        // Solo mode: Skip professional step when going back
+        if (currentStep === 3) {
+          setSelectedTime(null);
+          setSelectedProfessional(null);
+          setSelectedService(null);
+          setCurrentStep(1);
+        } else if (currentStep === 4) {
+          setSelectedTime(null);
+          setCurrentStep(3);
+        }
+      } else {
+        // Normal mode
+        if (currentStep === 2) setSelectedService(null);
+        if (currentStep === 3) setSelectedProfessional(null);
+        if (currentStep === 4) setSelectedTime(null);
+        setCurrentStep(currentStep - 1);
+      }
     }
   };
 
   // Handlers
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
-    setSelectedProfessional(null);
     setSelectedTime(null);
-    setCurrentStep(2);
+    
+    if (isSoloProfessional && ownerInfo && barbershop) {
+      // Solo professional: auto-select owner and skip to time selection (step 3)
+      setSelectedProfessional(ownerInfo);
+      setCurrentStep(3);
+    } else {
+      // Normal flow: go to professional selection (step 2)
+      setSelectedProfessional(null);
+      setCurrentStep(2);
+    }
   };
 
   const handleProfessionalSelect = (pro: StaffMember) => {
@@ -556,13 +622,31 @@ const PublicBooking = () => {
     );
   }
 
-  // Step indicators
-  const steps = [
-    { num: 1, label: "Serviço", icon: Scissors },
-    { num: 2, label: "Profissional", icon: Users },
-    { num: 3, label: "Horário", icon: Clock },
-    { num: 4, label: "Seus Dados", icon: User },
-  ];
+  // Step indicators - different steps for solo vs team
+  const steps = isSoloProfessional
+    ? [
+        { num: 1, label: "Serviço", icon: Scissors, actualStep: 1 },
+        { num: 2, label: "Horário", icon: Clock, actualStep: 3 },
+        { num: 3, label: "Seus Dados", icon: User, actualStep: 4 },
+      ]
+    : [
+        { num: 1, label: "Serviço", icon: Scissors, actualStep: 1 },
+        { num: 2, label: "Profissional", icon: Users, actualStep: 2 },
+        { num: 3, label: "Horário", icon: Clock, actualStep: 3 },
+        { num: 4, label: "Seus Dados", icon: User, actualStep: 4 },
+      ];
+
+  // Map current step to display step for solo mode
+  const getDisplayStep = () => {
+    if (isSoloProfessional) {
+      if (currentStep === 1) return 1;
+      if (currentStep === 3) return 2; // Time step
+      if (currentStep === 4) return 3; // Data step
+    }
+    return currentStep;
+  };
+  
+  const displayStep = getDisplayStep();
 
   return (
     <div className="min-h-screen bg-background">
@@ -598,14 +682,14 @@ const PublicBooking = () => {
                 <div
                   className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all",
-                    currentStep > step.num
+                    displayStep > step.num
                       ? "bg-primary text-primary-foreground"
-                      : currentStep === step.num
+                      : displayStep === step.num
                       ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
                       : "bg-muted text-muted-foreground"
                   )}
                 >
-                  {currentStep > step.num ? (
+                  {displayStep > step.num ? (
                     <Check className="w-4 h-4" />
                   ) : (
                     step.num
@@ -615,7 +699,7 @@ const PublicBooking = () => {
                   <div
                     className={cn(
                       "w-12 sm:w-20 h-1 mx-1 rounded-full transition-all",
-                      currentStep > step.num ? "bg-primary" : "bg-muted"
+                      displayStep > step.num ? "bg-primary" : "bg-muted"
                     )}
                   />
                 )}
@@ -628,7 +712,7 @@ const PublicBooking = () => {
                 key={step.num}
                 className={cn(
                   "text-xs font-medium text-center w-16",
-                  currentStep === step.num ? "text-primary" : "text-muted-foreground"
+                  displayStep === step.num ? "text-primary" : "text-muted-foreground"
                 )}
               >
                 {step.label}

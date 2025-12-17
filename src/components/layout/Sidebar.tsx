@@ -19,12 +19,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface NavItem {
   title: string;
   icon: typeof LayoutDashboard;
   href: string;
   ownerOnly: boolean;
+  corporateOnly?: boolean;
   permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
 }
 
@@ -36,7 +38,7 @@ const allNavItems: NavItem[] = [
   { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false },
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
-  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
+  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true, corporateOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
   { title: "Configurações", icon: Settings, href: "/settings", ownerOnly: true },
@@ -54,11 +56,17 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { isOwner, permissions } = useBarbershop();
+  const { subscription } = useSubscription();
+  
+  const isBasicPlan = subscription?.plan_slug === "basico";
 
-  // Filter nav items based on role and permissions
+  // Filter nav items based on role, permissions, and plan
   const navItems = allNavItems.filter(item => {
     // Owner-only items require owner role
     if (item.ownerOnly && !isOwner) return false;
+    
+    // Corporate-only items are hidden for basico plan
+    if (item.corporateOnly && isBasicPlan) return false;
     
     // For staff, check granular permissions
     if (!isOwner && item.permissionKey) {
