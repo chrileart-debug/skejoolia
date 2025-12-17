@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2 } from "lucide-react";
+import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,6 +82,9 @@ export default function Team() {
   // Delete state
   const [deleteMemberId, setDeleteMemberId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  
+  // Resend invite state
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (barbershop?.id) {
@@ -240,7 +243,45 @@ export default function Team() {
     }
   };
 
-  const PermissionCheckboxes = ({ 
+  const handleResendInvite = async (member: TeamMember) => {
+    if (!barbershop?.id || !member.user_settings?.email) return;
+
+    setResendingUserId(member.user_id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const response = await supabase.functions.invoke("invite-user", {
+        body: {
+          email: member.user_settings.email,
+          barbershop_id: barbershop.id,
+          resend: true
+        },
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || "Erro ao reenviar convite");
+      }
+
+      const data = response.data;
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      toast.success(`Convite reenviado para ${member.user_settings.email}`);
+    } catch (error: any) {
+      console.error("Error resending invite:", error);
+      toast.error(error.message || "Erro ao reenviar convite");
+    } finally {
+      setResendingUserId(null);
+    }
+  };
+
+  const PermissionCheckboxes = ({
     permissions, 
     onChange 
   }: { 
@@ -399,6 +440,23 @@ export default function Team() {
                   {/* Actions for staff members */}
                   {member.role === "staff" && member.user_id !== user?.id && (
                     <div className="flex items-center gap-1">
+                      {/* Resend invite button - only for pending members */}
+                      {!member.confirmed_at && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary"
+                          onClick={() => handleResendInvite(member)}
+                          disabled={resendingUserId === member.user_id}
+                          title="Reenviar convite"
+                        >
+                          {resendingUserId === member.user_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

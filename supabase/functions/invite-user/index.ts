@@ -58,11 +58,11 @@ serve(async (req) => {
     console.log('Authenticated user:', user.id);
 
     // Parse request body
-    const { email, name, phone, barbershop_id, permissions } = await req.json();
+    const { email, name, phone, barbershop_id, permissions, resend } = await req.json();
 
-    if (!email || !barbershop_id || !name) {
+    if (!email || !barbershop_id) {
       return new Response(
-        JSON.stringify({ error: 'Email, name, and barbershop_id are required' }),
+        JSON.stringify({ error: 'Email and barbershop_id are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -70,7 +70,7 @@ serve(async (req) => {
     // Use provided permissions or defaults
     const memberPermissions: Permissions = permissions || DEFAULT_PERMISSIONS;
 
-    console.log('Invite request:', { email, name, phone, barbershop_id, permissions: memberPermissions, invited_by: user.id });
+    console.log('Invite request:', { email, name, phone, barbershop_id, permissions: memberPermissions, invited_by: user.id, resend });
 
     // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -120,6 +120,46 @@ serve(async (req) => {
         .single();
 
       if (existingRole) {
+        // If resend flag is true and user hasn't confirmed yet, resend the invite
+        if (resend) {
+          // Check if user has confirmed their account
+          if (!existingUser.email_confirmed_at) {
+            // Resend invite email
+            const redirectUrl = `${req.headers.get('origin') || 'https://skejool.lovable.app'}/dashboard`;
+            
+            const { error: resendError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+              email,
+              {
+                redirectTo: redirectUrl,
+                data: existingUser.user_metadata
+              }
+            );
+
+            if (resendError) {
+              console.error('Error resending invite:', resendError);
+              return new Response(
+                JSON.stringify({ error: resendError.message || 'Failed to resend invite' }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+
+            console.log('Invite resent successfully to:', email);
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                message: `Convite reenviado para ${email}`,
+                resent: true
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          } else {
+            return new Response(
+              JSON.stringify({ error: 'User has already confirmed their account' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        
         return new Response(
           JSON.stringify({ error: 'User is already a member of this barbershop' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
