@@ -44,16 +44,16 @@ serve(async (req) => {
     console.log('Authenticated user:', user.id);
 
     // Parse request body
-    const { email, barbershop_id } = await req.json();
+    const { email, name, phone, barbershop_id } = await req.json();
 
-    if (!email || !barbershop_id) {
+    if (!email || !barbershop_id || !name) {
       return new Response(
-        JSON.stringify({ error: 'Email and barbershop_id are required' }),
+        JSON.stringify({ error: 'Email, name, and barbershop_id are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Invite request:', { email, barbershop_id, invited_by: user.id });
+    console.log('Invite request:', { email, name, phone, barbershop_id, invited_by: user.id });
 
     // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -145,6 +145,8 @@ serve(async (req) => {
       {
         redirectTo: redirectUrl,
         data: {
+          nome: name,
+          numero: phone,
           barbershop_id: barbershop_id,
           role: 'staff',
           invited_by: user.id
