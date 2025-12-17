@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       agendamentos: {
         Row: {
+          barbershop_id: string
           client_id: string | null
           created_at: string
           end_time: string | null
@@ -29,6 +30,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          barbershop_id: string
           client_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          barbershop_id?: string
           client_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -56,6 +59,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "agendamentos_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "agendamentos_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -67,6 +77,7 @@ export type Database = {
       agentes: {
         Row: {
           ativo: boolean | null
+          barbershop_id: string
           created_at: string
           funcao: string | null
           horario_trabalho: Json | null
@@ -83,6 +94,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          barbershop_id: string
           created_at?: string
           funcao?: string | null
           horario_trabalho?: Json | null
@@ -99,6 +111,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          barbershop_id?: string
           created_at?: string
           funcao?: string | null
           horario_trabalho?: Json | null
@@ -114,6 +127,13 @@ export type Database = {
           whatsapp_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "agentes_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "agentes_whatsapp_id_fkey"
             columns: ["whatsapp_id"]
@@ -234,6 +254,7 @@ export type Database = {
       clientes: {
         Row: {
           agente_ativo: boolean
+          barbershop_id: string
           client_id: string
           created_at: string
           faturamento_total: number | null
@@ -246,6 +267,7 @@ export type Database = {
         }
         Insert: {
           agente_ativo?: boolean
+          barbershop_id: string
           client_id?: string
           created_at?: string
           faturamento_total?: number | null
@@ -258,6 +280,7 @@ export type Database = {
         }
         Update: {
           agente_ativo?: boolean
+          barbershop_id?: string
           client_id?: string
           created_at?: string
           faturamento_total?: number | null
@@ -269,6 +292,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clientes_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "clientes_id_agente_fkey"
             columns: ["id_agente"]
@@ -287,6 +317,7 @@ export type Database = {
       }
       integracao_whatsapp: {
         Row: {
+          barbershop_id: string
           created_at: string
           email: string | null
           id: string
@@ -300,6 +331,7 @@ export type Database = {
           vinculado_em: string | null
         }
         Insert: {
+          barbershop_id: string
           created_at?: string
           email?: string | null
           id?: string
@@ -313,6 +345,7 @@ export type Database = {
           vinculado_em?: string | null
         }
         Update: {
+          barbershop_id?: string
           created_at?: string
           email?: string | null
           id?: string
@@ -325,33 +358,53 @@ export type Database = {
           user_id?: string
           vinculado_em?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "integracao_whatsapp_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       memoria: {
         Row: {
+          barbershop_id: string
           id: number
           message: Json
           session_id: string
           user_id: string | null
         }
         Insert: {
+          barbershop_id: string
           id?: number
           message: Json
           session_id: string
           user_id?: string | null
         }
         Update: {
+          barbershop_id?: string
           id?: number
           message?: Json
           session_id?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "memoria_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payments: {
         Row: {
           amount: number
           asaas_payment_id: string | null
+          barbershop_id: string
           created_at: string | null
           due_date: string | null
           id: string
@@ -366,6 +419,7 @@ export type Database = {
         Insert: {
           amount: number
           asaas_payment_id?: string | null
+          barbershop_id: string
           created_at?: string | null
           due_date?: string | null
           id?: string
@@ -380,6 +434,7 @@ export type Database = {
         Update: {
           amount?: number
           asaas_payment_id?: string | null
+          barbershop_id?: string
           created_at?: string | null
           due_date?: string | null
           id?: string
@@ -392,6 +447,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_subscription_id_fkey"
             columns: ["subscription_id"]
@@ -549,6 +611,7 @@ export type Database = {
         Row: {
           asaas_checkout_id: string | null
           asaas_checkout_link: string | null
+          barbershop_id: string
           created_at: string | null
           id: string
           plan_name: string | null
@@ -560,6 +623,7 @@ export type Database = {
         Insert: {
           asaas_checkout_id?: string | null
           asaas_checkout_link?: string | null
+          barbershop_id: string
           created_at?: string | null
           id?: string
           plan_name?: string | null
@@ -571,6 +635,7 @@ export type Database = {
         Update: {
           asaas_checkout_id?: string | null
           asaas_checkout_link?: string | null
+          barbershop_id?: string
           created_at?: string | null
           id?: string
           plan_name?: string | null
@@ -579,11 +644,20 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "session_checkout_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {
           asaas_subscription_id: string | null
+          barbershop_id: string
           created_at: string | null
           current_period_end: string | null
           current_period_start: string | null
@@ -598,6 +672,7 @@ export type Database = {
         }
         Insert: {
           asaas_subscription_id?: string | null
+          barbershop_id: string
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
@@ -612,6 +687,7 @@ export type Database = {
         }
         Update: {
           asaas_subscription_id?: string | null
+          barbershop_id?: string
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
@@ -625,6 +701,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "subscriptions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscriptions_plan_slug_fkey"
             columns: ["plan_slug"]
