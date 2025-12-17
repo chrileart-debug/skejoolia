@@ -189,6 +189,7 @@ serve(async (req: Request) => {
             }
 
             const payload = {
+              barbershop_id: barbershop.id,
               barbershop_name: barbershop.name,
               barbershop_phone: barbershop.phone || "",
               client_name: appointment.nome_cliente || "Cliente",
