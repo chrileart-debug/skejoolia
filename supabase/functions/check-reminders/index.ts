@@ -77,7 +77,11 @@ serve(async (req: Request) => {
 
       console.log(`Found ${reminders.length} active reminders for ${barbershop.name}`);
 
-      // Fetch ALL upcoming appointments for this barbershop (status pending/confirmed, starting in the future)
+      // Fetch appointments for this barbershop (status pending/confirmed)
+      // Include appointments from 10 minutes ago to catch recently passed reminder windows
+      const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+      console.log(`Fetching appointments from ${tenMinutesAgo.toISOString()} onwards`);
+      
       const { data: appointments, error: appointmentsError } = await supabase
         .from("agendamentos")
         .select(`
@@ -89,7 +93,7 @@ serve(async (req: Request) => {
         `)
         .eq("barbershop_id", barbershop.id)
         .in("status", ["pending", "confirmed"])
-        .gte("start_time", now.toISOString());
+        .gte("start_time", tenMinutesAgo.toISOString());
 
       if (appointmentsError) {
         console.error(`Error fetching appointments for ${barbershop.name}:`, appointmentsError);
@@ -97,11 +101,14 @@ serve(async (req: Request) => {
       }
 
       if (!appointments || appointments.length === 0) {
-        console.log(`No upcoming appointments for ${barbershop.name}`);
+        console.log(`No appointments found for ${barbershop.name} (checked from ${tenMinutesAgo.toISOString()})`);
         continue;
       }
 
-      console.log(`Found ${appointments.length} upcoming appointments for ${barbershop.name}`);
+      console.log(`Found ${appointments.length} appointments for ${barbershop.name}:`);
+      appointments.forEach(apt => {
+        console.log(`  - ${apt.id_agendamento}: ${apt.nome_cliente} at ${apt.start_time}`);
+      });
 
       // Process each reminder configuration
       for (const reminder of reminders as Reminder[]) {
