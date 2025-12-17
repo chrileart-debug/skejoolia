@@ -848,6 +848,19 @@ export type Database = {
           vinculado_em: string
         }[]
       }
+      get_barbershop_team: {
+        Args: { p_barbershop_id: string }
+        Returns: {
+          email: string
+          name: string
+          permissions: Json
+          phone: string
+          role: string
+          role_id: string
+          status: string
+          user_id: string
+        }[]
+      }
       has_barbershop_role: {
         Args: {
           _barbershop_id: string
