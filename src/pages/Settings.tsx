@@ -40,50 +40,82 @@ export default function Settings() {
   const { user, signOut } = useAuth();
   const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [barbershopId, setBarbershopId] = useState<string | null>(null);
+  
+  // User profile data (from user_settings)
+  const [profileData, setProfileData] = useState({
     name: "",
     phone: "",
+    email: "",
+  });
+  
+  // Business data (from barbershops)
+  const [businessData, setBusinessData] = useState({
     company: "",
     niche: "",
     subNiche: "",
-    cnpj: "",
+    cpfCnpj: "",
+    cep: "",
     address: "",
     city: "",
     state: "",
-    email: "",
   });
 
-  // Load user settings
+  // Load user settings and barbershop data
   useEffect(() => {
     if (user) {
-      loadUserSettings();
+      loadData();
     }
   }, [user]);
 
-  const loadUserSettings = async () => {
+  const loadData = async () => {
     if (!user) return;
     
-    const { data, error } = await supabase
+    // Load user profile from user_settings
+    const { data: userSettings } = await supabase
       .from("user_settings")
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (data) {
-      setFormData({
-        name: data.nome || "",
-        phone: data.numero || "",
-        company: data.nome_empresa || "",
-        niche: data.nicho || "",
-        subNiche: data.subnicho || "",
-        cnpj: data.cnpj || "",
-        address: data.endereco || "",
-        city: data.cidade || "",
-        state: data.estado || "",
-        email: data.email || user.email || "",
+    if (userSettings) {
+      setProfileData({
+        name: userSettings.nome || "",
+        phone: userSettings.numero || "",
+        email: userSettings.email || user.email || "",
       });
     } else {
-      setFormData(prev => ({ ...prev, email: user.email || "" }));
+      setProfileData(prev => ({ ...prev, email: user.email || "" }));
+    }
+
+    // Load business data from barbershops (via user_barbershop_roles)
+    const { data: roleData } = await supabase
+      .from("user_barbershop_roles")
+      .select("barbershop_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (roleData?.barbershop_id) {
+      setBarbershopId(roleData.barbershop_id);
+      
+      const { data: barbershop } = await supabase
+        .from("barbershops")
+        .select("*")
+        .eq("id", roleData.barbershop_id)
+        .maybeSingle();
+
+      if (barbershop) {
+        setBusinessData({
+          company: barbershop.name || "",
+          niche: barbershop.nicho || "",
+          subNiche: barbershop.subnicho || "",
+          cpfCnpj: barbershop.cpf_cnpj || "",
+          cep: barbershop.cep || "",
+          address: barbershop.address || "",
+          city: barbershop.city || "",
+          state: barbershop.state || "",
+        });
+      }
     }
   };
 
@@ -91,27 +123,46 @@ export default function Settings() {
     if (!user) return;
     setIsLoading(true);
 
-    const { error } = await supabase
+    // Save user profile to user_settings
+    const { error: userError } = await supabase
       .from("user_settings")
       .upsert({
         user_id: user.id,
-        nome: formData.name,
-        numero: formData.phone,
-        nome_empresa: formData.company,
-        nicho: formData.niche,
-        subnicho: formData.subNiche,
-        cnpj: formData.cnpj,
-        endereco: formData.address,
-        cidade: formData.city,
-        estado: formData.state,
-        email: formData.email,
+        nome: profileData.name,
+        numero: profileData.phone,
+        email: profileData.email,
       });
 
-    if (error) {
-      toast.error("Erro ao salvar configurações");
-    } else {
-      toast.success("Configurações salvas com sucesso");
+    if (userError) {
+      toast.error("Erro ao salvar perfil");
+      setIsLoading(false);
+      return;
     }
+
+    // Save business data to barbershops
+    if (barbershopId) {
+      const { error: businessError } = await supabase
+        .from("barbershops")
+        .update({
+          name: businessData.company,
+          nicho: businessData.niche,
+          subnicho: businessData.subNiche,
+          cpf_cnpj: businessData.cpfCnpj,
+          cep: businessData.cep,
+          address: businessData.address,
+          city: businessData.city,
+          state: businessData.state,
+        })
+        .eq("id", barbershopId);
+
+      if (businessError) {
+        toast.error("Erro ao salvar dados da empresa");
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    toast.success("Configurações salvas com sucesso");
     setIsLoading(false);
   };
 
@@ -136,13 +187,13 @@ export default function Settings() {
         <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
-              {formData.name.charAt(0)}
+              {profileData.name.charAt(0)}
             </div>
             <div>
               <h2 className="text-lg font-semibold text-foreground">
-                {formData.name}
+                {profileData.name}
               </h2>
-              <p className="text-sm text-muted-foreground">{formData.company}</p>
+              <p className="text-sm text-muted-foreground">{businessData.company}</p>
             </div>
           </div>
 
@@ -154,9 +205,9 @@ export default function Settings() {
                 Nome
               </Label>
               <Input
-                value={formData.name}
+                value={profileData.name}
                 onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
+                  setProfileData({ ...profileData, name: e.target.value })
                 }
               />
             </div>
@@ -168,9 +219,9 @@ export default function Settings() {
                 Celular
               </Label>
               <Input
-                value={formData.phone}
+                value={profileData.phone}
                 onChange={(e) =>
-                  setFormData({ ...formData, phone: e.target.value })
+                  setProfileData({ ...profileData, phone: e.target.value })
                 }
               />
             </div>
@@ -183,7 +234,7 @@ export default function Settings() {
                 <span className="text-xs text-muted-foreground">(somente leitura)</span>
               </Label>
               <Input
-                value={formData.email}
+                value={profileData.email}
                 readOnly
                 className="bg-muted cursor-not-allowed"
               />
@@ -203,9 +254,9 @@ export default function Settings() {
             <div className="space-y-2">
               <Label>Empresa</Label>
               <Input
-                value={formData.company}
+                value={businessData.company}
                 onChange={(e) =>
-                  setFormData({ ...formData, company: e.target.value })
+                  setBusinessData({ ...businessData, company: e.target.value })
                 }
               />
             </div>
@@ -215,33 +266,33 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label>Nicho</Label>
                 <Input
-                  value={formData.niche}
+                  value={businessData.niche}
                   onChange={(e) =>
-                    setFormData({ ...formData, niche: e.target.value })
+                    setBusinessData({ ...businessData, niche: e.target.value })
                   }
                 />
               </div>
               <div className="space-y-2">
                 <Label>Subnicho</Label>
                 <Input
-                  value={formData.subNiche}
+                  value={businessData.subNiche}
                   onChange={(e) =>
-                    setFormData({ ...formData, subNiche: e.target.value })
+                    setBusinessData({ ...businessData, subNiche: e.target.value })
                   }
                 />
               </div>
             </div>
 
-            {/* CNPJ */}
+            {/* CPF/CNPJ */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-muted-foreground" />
-                CNPJ
+                CPF/CNPJ
               </Label>
               <Input
-                value={formData.cnpj}
+                value={businessData.cpfCnpj}
                 onChange={(e) =>
-                  setFormData({ ...formData, cnpj: e.target.value })
+                  setBusinessData({ ...businessData, cpfCnpj: e.target.value })
                 }
               />
             </div>
@@ -256,13 +307,25 @@ export default function Settings() {
           </h3>
 
           <div className="space-y-4">
+            {/* CEP */}
+            <div className="space-y-2">
+              <Label>CEP</Label>
+              <Input
+                value={businessData.cep}
+                onChange={(e) =>
+                  setBusinessData({ ...businessData, cep: e.target.value })
+                }
+                placeholder="00000-000"
+              />
+            </div>
+
             {/* Address */}
             <div className="space-y-2">
               <Label>Endereço</Label>
               <Input
-                value={formData.address}
+                value={businessData.address}
                 onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
+                  setBusinessData({ ...businessData, address: e.target.value })
                 }
               />
             </div>
@@ -272,18 +335,18 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label>Cidade</Label>
                 <Input
-                  value={formData.city}
+                  value={businessData.city}
                   onChange={(e) =>
-                    setFormData({ ...formData, city: e.target.value })
+                    setBusinessData({ ...businessData, city: e.target.value })
                   }
                 />
               </div>
               <div className="space-y-2">
                 <Label>Estado</Label>
                 <Select
-                  value={formData.state}
+                  value={businessData.state}
                   onValueChange={(value) =>
-                    setFormData({ ...formData, state: value })
+                    setBusinessData({ ...businessData, state: value })
                   }
                 >
                   <SelectTrigger>

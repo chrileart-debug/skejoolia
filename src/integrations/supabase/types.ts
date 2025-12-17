@@ -133,44 +133,59 @@ export type Database = {
       barbershops: {
         Row: {
           address: string | null
+          asaas_customer_id: string | null
+          cep: string | null
           city: string | null
+          cpf_cnpj: string | null
           created_at: string
           id: string
           is_active: boolean | null
           logo_url: string | null
           name: string
+          nicho: string | null
           owner_id: string
           phone: string | null
           slug: string | null
           state: string | null
+          subnicho: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          asaas_customer_id?: string | null
+          cep?: string | null
           city?: string | null
+          cpf_cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
           name: string
+          nicho?: string | null
           owner_id: string
           phone?: string | null
           slug?: string | null
           state?: string | null
+          subnicho?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          asaas_customer_id?: string | null
+          cep?: string | null
           city?: string | null
+          cpf_cnpj?: string | null
           created_at?: string
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
           name?: string
+          nicho?: string | null
           owner_id?: string
           phone?: string | null
           slug?: string | null
           state?: string | null
+          subnicho?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -653,56 +668,26 @@ export type Database = {
       }
       user_settings: {
         Row: {
-          asaas_customer_id: string | null
-          cep: string | null
-          cidade: string | null
-          cnpj: string | null
-          cpf_cnpj: string | null
           created_at: string
           email: string | null
-          endereco: string | null
-          estado: string | null
-          nicho: string | null
           nome: string | null
-          nome_empresa: string | null
           numero: string | null
-          subnicho: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          asaas_customer_id?: string | null
-          cep?: string | null
-          cidade?: string | null
-          cnpj?: string | null
-          cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
-          endereco?: string | null
-          estado?: string | null
-          nicho?: string | null
           nome?: string | null
-          nome_empresa?: string | null
           numero?: string | null
-          subnicho?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          asaas_customer_id?: string | null
-          cep?: string | null
-          cidade?: string | null
-          cnpj?: string | null
-          cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
-          endereco?: string | null
-          estado?: string | null
-          nicho?: string | null
           nome?: string | null
-          nome_empresa?: string | null
           numero?: string | null
-          subnicho?: string | null
           updated_at?: string
           user_id?: string
         }
