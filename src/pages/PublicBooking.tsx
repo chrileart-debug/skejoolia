@@ -419,53 +419,31 @@ const PublicBooking = () => {
     setSubmitting(true);
 
     try {
-      const phoneClean = clientPhone.replace(/\D/g, "");
-
-      // Upsert client: insert or update on conflict (barbershop_id, telefone)
-      const { data: upsertedClient, error: upsertError } = await supabase
-        .from("clientes")
-        .upsert(
-          {
-            barbershop_id: barbershop.id,
-            user_id: selectedProfessional.user_id,
-            nome: clientName,
-            telefone: phoneClean,
-            email: clientEmail || null,
-            last_visit: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "barbershop_id,telefone",
-            ignoreDuplicates: false,
-          }
-        )
-        .select()
-        .single();
-
-      if (upsertError) throw upsertError;
-      const clientId = upsertedClient.client_id;
-
-      // Calculate end time
-      const duration = selectedService.duration_minutes || 30;
+      // Build start_time as ISO timestamp with Brasilia offset
       const startDateTime = `${selectedDate}T${selectedTime}:00-03:00`;
-      const startDate = new Date(startDateTime);
-      const endDate = new Date(startDate.getTime() + duration * 60000);
-      const endDateTime = endDate.toISOString();
 
-      // Create appointment
-      const { error: aptError } = await supabase.from("agendamentos").insert({
-        barbershop_id: barbershop.id,
-        user_id: selectedProfessional.user_id,
-        client_id: clientId,
-        nome_cliente: clientName,
-        telefone_cliente: phoneClean,
-        service_id: selectedService.id,
-        start_time: startDateTime,
-        end_time: endDateTime,
-        status: "pending",
+      // Call RPC function that handles client upsert + appointment creation atomically
+      const { data, error } = await supabase.rpc("handle_public_booking", {
+        p_barbershop_id: barbershop.id,
+        p_nome: clientName.trim(),
+        p_telefone: clientPhone,
+        p_service_id: selectedService.id,
+        p_start_time: startDateTime,
+        p_user_id: selectedProfessional.user_id,
+        p_email: clientEmail || null,
       });
 
-      if (aptError) throw aptError;
+      if (error) {
+        console.error("RPC error:", error);
+        if (error.message.includes("invalid_phone")) {
+          toast.error("Telefone inválido");
+        } else if (error.message.includes("invalid_name")) {
+          toast.error("Nome é obrigatório");
+        } else {
+          toast.error("Erro ao realizar agendamento. Tente novamente.");
+        }
+        return;
+      }
 
       setSuccess(true);
       toast.success("Agendamento realizado com sucesso!");

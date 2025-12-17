@@ -969,6 +969,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      handle_public_booking: {
+        Args: {
+          p_barbershop_id: string
+          p_email?: string
+          p_nome: string
+          p_service_id: string
+          p_start_time: string
+          p_telefone: string
+          p_user_id: string
+        }
+        Returns: {
+          appointment_id: string
+          client_id: string
+        }[]
+      }
       has_barbershop_role: {
         Args: {
           _barbershop_id: string
