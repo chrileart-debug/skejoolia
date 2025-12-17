@@ -1,12 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock, Loader2, Eye, EyeOff, Clock } from "lucide-react";
+import { Lock, Loader2, Eye, EyeOff, Clock, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+interface PasswordRequirement {
+  label: string;
+  test: (password: string) => boolean;
+}
+
+const passwordRequirements: PasswordRequirement[] = [
+  { label: "Mínimo 8 caracteres", test: (p) => p.length >= 8 },
+  { label: "Uma letra maiúscula", test: (p) => /[A-Z]/.test(p) },
+  { label: "Uma letra minúscula", test: (p) => /[a-z]/.test(p) },
+  { label: "Um número", test: (p) => /[0-9]/.test(p) },
+];
 
 export default function UpdatePassword() {
   const navigate = useNavigate();
@@ -16,15 +28,25 @@ export default function UpdatePassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const passwordValidation = useMemo(() => {
+    return passwordRequirements.map((req) => ({
+      ...req,
+      valid: req.test(password),
+    }));
+  }, [password]);
+
+  const isPasswordValid = passwordValidation.every((req) => req.valid);
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres");
+    if (!isPasswordValid) {
+      toast.error("A senha não atende aos requisitos de segurança");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (!passwordsMatch) {
       toast.error("As senhas não coincidem");
       return;
     }
@@ -77,7 +99,6 @@ export default function UpdatePassword() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10"
                   required
-                  minLength={6}
                 />
                 <button
                   type="button"
@@ -87,6 +108,27 @@ export default function UpdatePassword() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Password requirements checklist */}
+              {password.length > 0 && (
+                <div className="mt-3 space-y-1.5 p-3 bg-muted/50 rounded-lg">
+                  {passwordValidation.map((req, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-2 text-sm transition-colors ${
+                        req.valid ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                      }`}
+                    >
+                      {req.valid ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -101,7 +143,6 @@ export default function UpdatePassword() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="pl-10 pr-10"
                   required
-                  minLength={6}
                 />
                 <button
                   type="button"
@@ -111,9 +152,29 @@ export default function UpdatePassword() {
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Password match indicator */}
+              {confirmPassword.length > 0 && (
+                <div
+                  className={`flex items-center gap-2 text-sm mt-2 ${
+                    passwordsMatch ? "text-green-600 dark:text-green-400" : "text-destructive"
+                  }`}
+                >
+                  {passwordsMatch ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <X className="w-4 h-4" />
+                  )}
+                  <span>{passwordsMatch ? "Senhas coincidem" : "Senhas não coincidem"}</span>
+                </div>
+              )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !isPasswordValid || !passwordsMatch}
+            >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
