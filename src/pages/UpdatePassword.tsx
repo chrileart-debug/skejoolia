@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, Loader2, Eye, EyeOff, Clock, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,73 @@ export default function UpdatePassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  // Handle auth state and recovery token from URL
+  useEffect(() => {
+    const handleAuthChange = async () => {
+      // Check if there's a hash fragment with tokens (from email link)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
+
+      // If we have tokens in the URL, set the session
+      if (accessToken && refreshToken && type === 'recovery') {
+        console.log('Recovery tokens found in URL, setting session...');
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          console.error('Error setting session from recovery link:', error);
+          setSessionError('Link de recuperação inválido ou expirado. Solicite um novo convite.');
+          setCheckingSession(false);
+          return;
+        }
+
+        // Clear hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+        setSessionReady(true);
+        setCheckingSession(false);
+        return;
+      }
+
+      // Check for existing session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error);
+        setSessionError('Erro ao verificar sessão. Tente novamente.');
+        setCheckingSession(false);
+        return;
+      }
+
+      if (session) {
+        setSessionReady(true);
+      } else {
+        setSessionError('Sessão não encontrada. Use o link enviado por email.');
+      }
+      setCheckingSession(false);
+    };
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+        setSessionReady(true);
+        setCheckingSession(false);
+        setSessionError(null);
+      }
+    });
+
+    handleAuthChange();
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const passwordValidation = useMemo(() => {
     return passwordRequirements.map((req) => ({
@@ -75,6 +142,49 @@ export default function UpdatePassword() {
       setLoading(false);
     }
   };
+
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Verificando sessão...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if session is missing
+  if (sessionError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-4">
+            <div className="mx-auto w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
+              <X className="w-6 h-6 text-destructive" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-bold">Sessão Inválida</CardTitle>
+              <CardDescription className="mt-2">
+                {sessionError}
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              className="w-full" 
+              onClick={() => navigate('/login')}
+            >
+              Ir para Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
