@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,12 +26,9 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
-  UserPlus,
-  Search,
-  ArrowLeft,
-  Phone,
   Pencil,
   Trash2,
+  Plus,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -47,7 +45,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { cn } from "@/lib/utils";
-import { formatPhoneMask } from "@/lib/phoneMask";
 
 interface Appointment {
   id_agendamento: string;
@@ -58,24 +55,23 @@ interface Appointment {
   status: string | null;
   service_id: string | null;
   client_id: string | null;
+  user_id: string;
 }
 
 interface Service {
   id: string;
   name: string;
+  duration_minutes: number | null;
 }
 
-interface Cliente {
-  client_id: string;
-  nome: string | null;
-  telefone: string | null;
+interface StaffMember {
+  user_id: string;
+  name: string | null;
 }
 
 interface OutletContextType {
   onMenuClick: () => void;
 }
-
-type ModalStep = "selection" | "new-client" | "existing-client" | "form";
 
 const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
 
@@ -121,25 +117,15 @@ export default function Schedule() {
   const { barbershop } = useBarbershop();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [clients, setClients] = useState<Cliente[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedDayAppointments, setSelectedDayAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modalStep, setModalStep] = useState<ModalStep>("selection");
-  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
-  const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    client: "",
-    phone: "",
-    service: "",
-    date: "",
-    time: "",
-  });
   const [editFormData, setEditFormData] = useState({
     service: "",
     date: "",
@@ -160,14 +146,14 @@ export default function Schedule() {
   };
 
   const fetchAppointments = async () => {
-    if (!user) return;
+    if (!barbershop?.id) return;
 
     const { start, end } = getMonthRange(selectedDate);
     
     const { data, error } = await supabase
       .from("agendamentos")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("barbershop_id", barbershop.id)
       .gte("start_time", start)
       .lte("start_time", end)
       .order("start_time", { ascending: true });
@@ -182,12 +168,13 @@ export default function Schedule() {
   };
 
   const fetchServices = async () => {
-    if (!barbershop) return;
+    if (!barbershop?.id) return;
 
     const { data, error } = await supabase
       .from("services")
-      .select("id, name")
-      .eq("barbershop_id", barbershop.id);
+      .select("id, name, duration_minutes")
+      .eq("barbershop_id", barbershop.id)
+      .eq("is_active", true);
 
     if (error) {
       console.error("Error fetching services:", error);
@@ -196,151 +183,38 @@ export default function Schedule() {
     }
   };
 
-  const fetchClients = async () => {
-    if (!user) return;
+  const fetchStaffMembers = async () => {
+    if (!barbershop?.id) return;
 
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("client_id, nome, telefone")
-      .eq("user_id", user.id)
-      .order("nome", { ascending: true });
+    const { data, error } = await supabase.rpc("get_barbershop_team", {
+      p_barbershop_id: barbershop.id
+    });
 
-    if (error) {
-      console.error("Error fetching clients:", error);
-    } else {
-      setClients(data || []);
+    if (!error && data) {
+      const members = data
+        .filter((m: any) => m.status === "active")
+        .map((m: any) => ({
+          user_id: m.user_id,
+          name: m.name
+        }));
+      setStaffMembers(members);
     }
   };
 
   useEffect(() => {
-    if (user) {
+    if (barbershop?.id) {
       fetchAppointments();
-      fetchClients();
-    }
-  }, [user, selectedDate.getMonth(), selectedDate.getFullYear()]);
-
-  useEffect(() => {
-    if (barbershop) {
       fetchServices();
+      fetchStaffMembers();
     }
-  }, [barbershop]);
+  }, [barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()]);
 
   const handleCreate = () => {
-    setFormData({ client: "", phone: "", service: "", date: getTodayInBrasilia(), time: "" });
-    setModalStep("selection");
-    setSelectedClient(null);
-    setClientSearchTerm("");
-    setIsDialogOpen(true);
+    setIsBookingModalOpen(true);
   };
 
-  const handleSelectNewClient = () => {
-    setSelectedClient(null);
-    setFormData({ ...formData, client: "", phone: "" });
-    setModalStep("form");
-  };
-
-  const handleSelectExistingClient = () => {
-    setClientSearchTerm("");
-    setModalStep("existing-client");
-  };
-
-  const handleClientSelect = (client: Cliente) => {
-    setSelectedClient(client);
-    setFormData({
-      ...formData,
-      client: client.nome || "",
-      phone: client.telefone || "",
-    });
-    setModalStep("form");
-  };
-
-  const handleBack = () => {
-    if (modalStep === "form" && selectedClient) {
-      setModalStep("existing-client");
-    } else if (modalStep === "form" || modalStep === "existing-client") {
-      setModalStep("selection");
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.client.trim() || !formData.date || !formData.time) {
-      toast.error("Preencha todos os campos obrigatórios");
-      return;
-    }
-
-    if (!user || !barbershop) {
-      toast.error("Você precisa estar logado");
-      return;
-    }
-
-    let clientId: string | null = selectedClient?.client_id || null;
-
-    if (!selectedClient && formData.client) {
-      const { data: existingClient } = await supabase
-        .from("clientes")
-        .select("client_id")
-        .eq("user_id", user.id)
-        .eq("nome", formData.client)
-        .maybeSingle();
-
-      if (existingClient) {
-        clientId = existingClient.client_id;
-        
-        if (formData.phone) {
-          await supabase
-            .from("clientes")
-            .update({ telefone: formData.phone })
-            .eq("client_id", clientId);
-        }
-      } else {
-        const { data: newClient, error: clientError } = await supabase
-          .from("clientes")
-          .insert({
-            user_id: user.id,
-            barbershop_id: barbershop.id,
-            nome: formData.client,
-            telefone: formData.phone || null,
-          })
-          .select("client_id")
-          .single();
-
-        if (clientError) {
-          console.error("Error creating client:", clientError);
-          toast.error("Erro ao criar cliente");
-          return;
-        }
-        clientId = newClient.client_id;
-      }
-    }
-
-    const startTime = createISODateTime(formData.date, formData.time);
-    const [hours, minutes] = formData.time.split(":").map(Number);
-    const endHours = String((hours + 1) % 24).padStart(2, "0");
-    const endTime = `${formData.date}T${endHours}:${String(minutes).padStart(2, "0")}:00-03:00`;
-
-    const { error } = await supabase
-      .from("agendamentos")
-      .insert({
-        user_id: user.id,
-        barbershop_id: barbershop.id,
-        nome_cliente: formData.client || null,
-        telefone_cliente: formData.phone || null,
-        service_id: formData.service || null,
-        start_time: startTime,
-        end_time: endTime,
-        status: "pending",
-        client_id: clientId,
-      });
-
-    if (error) {
-      console.error("Error creating appointment:", error);
-      toast.error("Erro ao criar agendamento");
-    } else {
-      toast.success("Agendamento criado com sucesso");
-      setIsDialogOpen(false);
-      fetchAppointments();
-      fetchClients();
-    }
+  const handleBookingSuccess = () => {
+    fetchAppointments();
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -382,10 +256,15 @@ export default function Schedule() {
       return;
     }
 
+    const service = services.find(s => s.id === editFormData.service);
+    const durationMinutes = service?.duration_minutes || 60;
+
     const startTime = createISODateTime(editFormData.date, editFormData.time);
     const [hours, minutes] = editFormData.time.split(":").map(Number);
-    const endHours = String((hours + 1) % 24).padStart(2, "0");
-    const endTime = `${editFormData.date}T${endHours}:${String(minutes).padStart(2, "0")}:00-03:00`;
+    const totalMinutes = hours * 60 + minutes + durationMinutes;
+    const endHours = Math.floor(totalMinutes / 60) % 24;
+    const endMins = totalMinutes % 60;
+    const endTime = `${editFormData.date}T${String(endHours).padStart(2, "0")}:${String(endMins).padStart(2, "0")}:00-03:00`;
 
     const { error } = await supabase
       .from("agendamentos")
@@ -457,6 +336,11 @@ export default function Schedule() {
     return service?.name || "Serviço não encontrado";
   };
 
+  const getStaffName = (user_id: string) => {
+    const staff = staffMembers.find((s) => s.user_id === user_id);
+    return staff?.name || "Profissional";
+  };
+
   const generateCalendarDays = () => {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
@@ -515,12 +399,6 @@ export default function Schedule() {
     return today === dateStr;
   };
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.nome?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
-      client.telefone?.includes(clientSearchTerm)
-  );
-
   const calendarDays = generateCalendarDays();
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   const monthNames = [
@@ -529,17 +407,17 @@ export default function Schedule() {
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-hidden">
       <Header title="Agenda" subtitle="Gerencie seus agendamentos" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => navigateMonth("prev")}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <h2 className="text-lg font-semibold min-w-[180px] text-center">
+            <h2 className="text-lg font-semibold min-w-[160px] text-center">
               {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
             </h2>
             <Button variant="outline" size="icon" onClick={() => navigateMonth("next")}>
@@ -558,7 +436,7 @@ export default function Schedule() {
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="p-2 text-center text-sm font-medium text-muted-foreground"
+                className="p-2 text-center text-xs sm:text-sm font-medium text-muted-foreground"
               >
                 {day}
               </div>
@@ -576,38 +454,39 @@ export default function Schedule() {
                   key={index}
                   onClick={() => handleDayClick(day.date)}
                   className={cn(
-                    "min-h-[80px] p-2 border-b border-r border-border text-left transition-colors hover:bg-muted/50",
+                    "min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border text-left transition-colors hover:bg-muted/50",
                     !day.isCurrentMonth && "bg-muted/30 text-muted-foreground",
                     isToday(day.date) && "bg-primary/10"
                   )}
                 >
                   <span
                     className={cn(
-                      "inline-flex items-center justify-center w-7 h-7 text-sm rounded-full",
+                      "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full",
                       isToday(day.date) && "bg-primary text-primary-foreground font-semibold"
                     )}
                   >
                     {day.date.getDate()}
                   </span>
                   {hasAppointments && (
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-1 space-y-0.5">
                       {dayAppointments.slice(0, 2).map((apt) => (
                         <div
                           key={apt.id_agendamento}
                           className={cn(
-                            "text-xs px-1.5 py-0.5 rounded truncate",
+                            "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate",
                             apt.status === "completed" && "bg-green-500/20 text-green-700 dark:text-green-400",
                             apt.status === "pending" && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
                             apt.status === "confirmed" && "bg-blue-500/20 text-blue-700 dark:text-blue-400",
                             apt.status === "cancelled" && "bg-red-500/20 text-red-700 dark:text-red-400"
                           )}
                         >
-                          {formatTimeFromISO(apt.start_time)} - {apt.nome_cliente || "Cliente"}
+                          <span className="hidden sm:inline">{formatTimeFromISO(apt.start_time)} - </span>
+                          {apt.nome_cliente || "Cliente"}
                         </div>
                       ))}
                       {dayAppointments.length > 2 && (
-                        <div className="text-xs text-muted-foreground px-1.5">
-                          +{dayAppointments.length - 2} mais
+                        <div className="text-[10px] text-muted-foreground px-1">
+                          +{dayAppointments.length - 2}
                         </div>
                       )}
                     </div>
@@ -619,7 +498,14 @@ export default function Schedule() {
         </div>
       </div>
 
-      <FAB onClick={handleCreate} icon={<Calendar className="w-6 h-6" />} />
+      <FAB onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
+
+      {/* Smart Booking Modal */}
+      <SmartBookingModal
+        open={isBookingModalOpen}
+        onOpenChange={setIsBookingModalOpen}
+        onSuccess={handleBookingSuccess}
+      />
 
       {/* Day Detail Dialog */}
       <Dialog open={isDayDialogOpen} onOpenChange={setIsDayDialogOpen}>
@@ -640,13 +526,17 @@ export default function Schedule() {
                   className="p-3 bg-muted/50 rounded-lg space-y-2"
                 >
                   <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium">{apt.nome_cliente || "Cliente não informado"}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{apt.nome_cliente || "Cliente não informado"}</p>
                       <p className="text-sm text-muted-foreground">
                         {formatTimeFromISO(apt.start_time)} - {getServiceName(apt.service_id)}
                       </p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <User className="w-3 h-3" />
+                        {getStaffName(apt.user_id)}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -665,13 +555,13 @@ export default function Schedule() {
                       </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <StatusBadge status={(apt.status || "pending") as "pending" | "confirmed" | "completed" | "cancelled"} />
                     <Select
                       value={apt.status || "pending"}
                       onValueChange={(value) => handleStatusChange(apt.id_agendamento, value)}
                     >
-                      <SelectTrigger className="h-7 text-xs w-auto">
+                      <SelectTrigger className="h-7 text-xs w-auto min-w-[100px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -684,159 +574,6 @@ export default function Schedule() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Appointment Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {modalStep === "selection" && "Novo Agendamento"}
-              {modalStep === "existing-client" && "Selecionar Cliente"}
-              {modalStep === "form" && (selectedClient ? "Agendar para Cliente" : "Novo Cliente")}
-            </DialogTitle>
-          </DialogHeader>
-
-          {modalStep === "selection" && (
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full h-20 flex flex-col gap-1"
-                onClick={handleSelectNewClient}
-              >
-                <UserPlus className="w-6 h-6" />
-                <span>Novo Cliente</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-20 flex flex-col gap-1"
-                onClick={handleSelectExistingClient}
-              >
-                <Search className="w-6 h-6" />
-                <span>Cliente Existente</span>
-              </Button>
-            </div>
-          )}
-
-          {modalStep === "existing-client" && (
-            <div className="space-y-4">
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
-              
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nome ou telefone..."
-                  value={clientSearchTerm}
-                  onChange={(e) => setClientSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <div className="max-h-[300px] overflow-y-auto space-y-2">
-                {filteredClients.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4">
-                    Nenhum cliente encontrado
-                  </p>
-                ) : (
-                  filteredClients.map((client) => (
-                    <button
-                      key={client.client_id}
-                      onClick={() => handleClientSelect(client)}
-                      className="w-full p-3 text-left bg-muted/50 hover:bg-muted rounded-lg transition-colors"
-                    >
-                      <p className="font-medium">{client.nome || "Sem nome"}</p>
-                      {client.telefone && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          {client.telefone}
-                        </p>
-                      )}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {modalStep === "form" && (
-            <div className="space-y-4">
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Voltar
-              </Button>
-
-              <div className="space-y-2">
-                <Label htmlFor="client">Cliente *</Label>
-                <Input
-                  id="client"
-                  value={formData.client}
-                  onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                  placeholder="Nome do cliente"
-                  disabled={!!selectedClient}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: formatPhoneMask(e.target.value) })}
-                  placeholder="(11) 99999-9999"
-                  maxLength={16}
-                  disabled={!!selectedClient}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="service">Serviço</Label>
-                <Select
-                  value={formData.service}
-                  onValueChange={(value) => setFormData({ ...formData, service: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um serviço" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date">Data *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="time">Horário *</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <Button onClick={handleSubmit} className="w-full">
-                Criar Agendamento
-              </Button>
             </div>
           )}
         </DialogContent>
