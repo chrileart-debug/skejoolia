@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -22,13 +23,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Scissors, Plus, Edit2, Trash2, Bot, ImageIcon, Loader2, Upload, X, Package } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Scissors,
+  Plus,
+  Edit2,
+  Trash2,
+  Bot,
+  ImageIcon,
+  Loader2,
+  Upload,
+  X,
+  Package,
+  Clock,
+  FolderOpen,
+  ListTree,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
+import { CategoryManager } from "@/components/services/CategoryManager";
+import { ServiceSelector } from "@/components/services/ServiceSelector";
 
 interface Service {
   id: string;
@@ -43,7 +70,12 @@ interface Service {
   categoryName?: string;
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+interface PackageItem {
+  serviceId: string;
+  quantity: number;
+}
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 interface OutletContextType {
@@ -53,7 +85,7 @@ interface OutletContextType {
 export default function Services() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop, categories, loading: barbershopLoading } = useBarbershop();
+  const { barbershop, categories, loading: barbershopLoading, refreshCategories } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,12 +95,19 @@ export default function Services() {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("services");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; service: Service | null }>({
+    open: false,
+    service: null,
+  });
   const [limitModal, setLimitModal] = useState<{ open: boolean; current: number; limit: number }>({
     open: false,
     current: 0,
     limit: 0,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Form state
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -78,12 +117,71 @@ export default function Services() {
     isPackage: false,
     categoryId: "",
   });
+  const [selectedPackageItems, setSelectedPackageItems] = useState<PackageItem[]>([]);
+  const [existingPackageItems, setExistingPackageItems] = useState<PackageItem[]>([]);
+
+  // Count services per category
+  const servicesCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = {};
+    services.forEach((s) => {
+      if (s.categoryId) {
+        counts[s.categoryId] = (counts[s.categoryId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [services]);
+
+  // Group services by category
+  const servicesByCategory = useMemo(() => {
+    const grouped: Record<string, Service[]> = { uncategorized: [] };
+    
+    categories.forEach((cat) => {
+      grouped[cat.id] = [];
+    });
+
+    services.forEach((service) => {
+      if (service.categoryId && grouped[service.categoryId]) {
+        grouped[service.categoryId].push(service);
+      } else {
+        grouped.uncategorized.push(service);
+      }
+    });
+
+    return grouped;
+  }, [services, categories]);
+
+  // Get only single services (non-packages) for package selector
+  const singleServices = useMemo(() => {
+    return services.filter((s) => !s.isPackage);
+  }, [services]);
 
   useEffect(() => {
     if (barbershop) {
       fetchServices();
     }
   }, [barbershop]);
+
+  // Calculate suggested price and duration when package items change
+  useEffect(() => {
+    if (formData.isPackage && selectedPackageItems.length > 0 && !editingService) {
+      let totalPrice = 0;
+      let totalDuration = 0;
+
+      selectedPackageItems.forEach((item) => {
+        const service = services.find((s) => s.id === item.serviceId);
+        if (service) {
+          totalPrice += service.price * item.quantity;
+          totalDuration += service.duration_minutes * item.quantity;
+        }
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        price: totalPrice.toFixed(2),
+        duration: totalDuration.toString(),
+      }));
+    }
+  }, [selectedPackageItems, formData.isPackage, services, editingService]);
 
   const fetchServices = async () => {
     if (!barbershop) return;
@@ -135,6 +233,8 @@ export default function Services() {
     setEditingService(null);
     setPendingFile(null);
     setPreviewUrl(null);
+    setSelectedPackageItems([]);
+    setExistingPackageItems([]);
   };
 
   const handleCreate = async () => {
@@ -147,12 +247,12 @@ export default function Services() {
       });
       return;
     }
-    
+
     resetForm();
     setIsDialogOpen(true);
   };
 
-  const handleEdit = (service: Service) => {
+  const handleEdit = async (service: Service) => {
     setEditingService(service);
     setFormData({
       name: service.name,
@@ -165,6 +265,31 @@ export default function Services() {
     });
     setPreviewUrl(service.image);
     setPendingFile(null);
+
+    // Load package items if it's a package
+    if (service.isPackage) {
+      try {
+        const { data, error } = await supabase
+          .from("service_package_items")
+          .select("service_id, quantity")
+          .eq("package_id", service.id);
+
+        if (!error && data) {
+          const items = data.map((item) => ({
+            serviceId: item.service_id,
+            quantity: item.quantity || 1,
+          }));
+          setSelectedPackageItems(items);
+          setExistingPackageItems(items);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar itens do pacote:", error);
+      }
+    } else {
+      setSelectedPackageItems([]);
+      setExistingPackageItems([]);
+    }
+
     setIsDialogOpen(true);
   };
 
@@ -283,20 +408,64 @@ export default function Services() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const checkServiceInPackages = async (serviceId: string): Promise<string[]> => {
     try {
-      const { error } = await supabase
-        .from("services")
-        .delete()
-        .eq("id", id);
+      const { data, error } = await supabase
+        .from("service_package_items")
+        .select("package_id, services!service_package_items_package_id_fkey(name)")
+        .eq("service_id", serviceId);
 
       if (error) throw error;
 
-      setServices(services.filter((s) => s.id !== id));
+      return (data || [])
+        .map((item) => (item.services as any)?.name)
+        .filter(Boolean);
+    } catch (error) {
+      console.error("Erro ao verificar pacotes:", error);
+      return [];
+    }
+  };
+
+  const handleDeleteClick = async (service: Service) => {
+    // Check if service is part of any package
+    if (!service.isPackage) {
+      const packageNames = await checkServiceInPackages(service.id);
+      if (packageNames.length > 0) {
+        toast.error(
+          `Este serviço faz parte de: ${packageNames.join(", ")}. Remova-o dos pacotes primeiro.`
+        );
+        return;
+      }
+    }
+    setDeleteConfirm({ open: true, service });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm.service) return;
+
+    try {
+      // If it's a package, delete package items first
+      if (deleteConfirm.service.isPackage) {
+        await supabase
+          .from("service_package_items")
+          .delete()
+          .eq("package_id", deleteConfirm.service.id);
+      }
+
+      const { error } = await supabase
+        .from("services")
+        .delete()
+        .eq("id", deleteConfirm.service.id);
+
+      if (error) throw error;
+
+      setServices(services.filter((s) => s.id !== deleteConfirm.service!.id));
       toast.success("Serviço removido com sucesso");
     } catch (error) {
       console.error("Erro ao remover serviço:", error);
       toast.error("Erro ao remover serviço");
+    } finally {
+      setDeleteConfirm({ open: false, service: null });
     }
   };
 
@@ -330,6 +499,11 @@ export default function Services() {
       return;
     }
 
+    if (formData.isPackage && selectedPackageItems.length === 0) {
+      toast.error("Selecione ao menos um serviço para o pacote");
+      return;
+    }
+
     if (!barbershop) {
       toast.error("Barbearia não encontrada");
       return;
@@ -339,6 +513,7 @@ export default function Services() {
 
     try {
       if (editingService) {
+        // Update service
         const { error } = await supabase
           .from("services")
           .update({
@@ -354,8 +529,32 @@ export default function Services() {
 
         if (error) throw error;
 
+        // Update package items if it's a package
+        if (formData.isPackage) {
+          // Delete existing items
+          await supabase
+            .from("service_package_items")
+            .delete()
+            .eq("package_id", editingService.id);
+
+          // Insert new items
+          if (selectedPackageItems.length > 0) {
+            const packageItems = selectedPackageItems.map((item) => ({
+              package_id: editingService.id,
+              service_id: item.serviceId,
+              quantity: item.quantity,
+            }));
+
+            const { error: itemsError } = await supabase
+              .from("service_package_items")
+              .insert(packageItems);
+
+            if (itemsError) throw itemsError;
+          }
+        }
+
         const category = categories.find((c) => c.id === formData.categoryId);
-        
+
         setServices(
           services.map((s) =>
             s.id === editingService.id
@@ -375,6 +574,7 @@ export default function Services() {
         );
         toast.success("Serviço atualizado com sucesso");
       } else {
+        // Create new service
         const { data, error } = await supabase
           .from("services")
           .insert({
@@ -392,6 +592,22 @@ export default function Services() {
 
         if (error) throw error;
 
+        // Insert package items if it's a package
+        if (formData.isPackage && selectedPackageItems.length > 0) {
+          const packageItems = selectedPackageItems.map((item) => ({
+            package_id: data.id,
+            service_id: item.serviceId,
+            quantity: item.quantity,
+          }));
+
+          const { error: itemsError } = await supabase
+            .from("service_package_items")
+            .insert(packageItems);
+
+          if (itemsError) throw itemsError;
+        }
+
+        // Upload image if pending
         let imageUrl: string | null = null;
         if (pendingFile) {
           imageUrl = await uploadImage(pendingFile, data.id);
@@ -434,7 +650,7 @@ export default function Services() {
   if (isLoading || barbershopLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Serviços" subtitle="Gerencie seus serviços" onMenuClick={onMenuClick} />
+        <Header title="Serviços" subtitle="Gerencie seu cardápio" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -442,116 +658,176 @@ export default function Services() {
     );
   }
 
-  return (
-    <div className="min-h-screen">
-      <Header title="Serviços" subtitle="Gerencie seus serviços" onMenuClick={onMenuClick} />
-
-      <div className="p-4 lg:p-6">
-        {services.length === 0 ? (
-          <EmptyState
-            icon={<Scissors className="w-10 h-10 text-muted-foreground" />}
-            title="Nenhum serviço cadastrado"
-            description="Adicione os serviços que sua barbearia oferece."
-            action={
-              <Button onClick={handleCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Serviço
-              </Button>
-            }
-            className="min-h-[60vh]"
+  const renderServiceCard = (service: Service) => (
+    <div
+      key={service.id}
+      className="bg-card border border-border rounded-xl p-4 space-y-3"
+    >
+      {service.image && (
+        <div className="w-full h-32 rounded-lg overflow-hidden">
+          <img
+            src={service.image}
+            alt={service.name}
+            className="w-full h-full object-cover"
           />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {services.map((service) => (
-              <div
-                key={service.id}
-                className="bg-card border border-border rounded-xl p-4 space-y-3"
-              >
-                {service.image && (
-                  <div className="w-full h-32 rounded-lg overflow-hidden">
-                    <img
-                      src={service.image}
-                      alt={service.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
+        </div>
+      )}
 
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold truncate">{service.name}</h3>
-                      {service.isPackage && (
-                        <Badge variant="secondary" className="shrink-0">
-                          <Package className="w-3 h-3 mr-1" />
-                          Pacote
-                        </Badge>
-                      )}
-                    </div>
-                    {service.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                        {service.description}
-                      </p>
-                    )}
-                  </div>
-                  <span className="font-bold text-primary shrink-0 ml-2">
-                    R$ {service.price.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {service.categoryName && (
-                    <Badge variant="outline">{service.categoryName}</Badge>
-                  )}
-                  <Badge variant="outline">{service.duration_minutes} min</Badge>
-                  {service.agentEnabled ? (
-                    <Badge className="bg-primary/10 text-primary border-primary/20">
-                      <Bot className="w-3 h-3 mr-1" />
-                      Agente ativo
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      <Bot className="w-3 h-3 mr-1" />
-                      Agente inativo
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Agente IA</span>
-                    <Switch
-                      checked={service.agentEnabled}
-                      onCheckedChange={() => handleToggleAgent(service.id)}
-                    />
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(service)}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(service.id)}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold truncate">{service.name}</h3>
+            {service.isPackage && (
+              <Badge variant="secondary" className="shrink-0">
+                <Package className="w-3 h-3 mr-1" />
+                Pacote
+              </Badge>
+            )}
           </div>
+          {service.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+              {service.description}
+            </p>
+          )}
+        </div>
+        <span className="font-bold text-primary shrink-0 ml-2">
+          R$ {service.price.toFixed(2)}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline">
+          <Clock className="w-3 h-3 mr-1" />
+          {service.duration_minutes} min
+        </Badge>
+        {service.agentEnabled ? (
+          <Badge className="bg-primary/10 text-primary border-primary/20">
+            <Bot className="w-3 h-3 mr-1" />
+            Agente ativo
+          </Badge>
+        ) : (
+          <Badge variant="secondary">
+            <Bot className="w-3 h-3 mr-1" />
+            Agente inativo
+          </Badge>
         )}
       </div>
 
-      {services.length > 0 && (
+      <div className="flex items-center justify-between pt-2 border-t border-border">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Agente IA</span>
+          <Switch
+            checked={service.agentEnabled}
+            onCheckedChange={() => handleToggleAgent(service.id)}
+          />
+        </div>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={() => handleEdit(service)}>
+            <Edit2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDeleteClick(service)}
+          >
+            <Trash2 className="w-4 h-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen">
+      <Header title="Serviços" subtitle="Gerencie seu cardápio" onMenuClick={onMenuClick} />
+
+      <div className="p-4 lg:p-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="services" className="flex items-center gap-2">
+              <Scissors className="w-4 h-4" />
+              Serviços
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="flex items-center gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Categorias
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Services Tab */}
+          <TabsContent value="services" className="space-y-6">
+            {services.length === 0 ? (
+              <EmptyState
+                icon={<Scissors className="w-10 h-10 text-muted-foreground" />}
+                title="Nenhum serviço cadastrado"
+                description="Adicione os serviços que sua barbearia oferece."
+                action={
+                  <Button onClick={handleCreate}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar Serviço
+                  </Button>
+                }
+                className="min-h-[60vh]"
+              />
+            ) : (
+              <>
+                {/* Services grouped by category */}
+                {categories.map((category) => {
+                  const categoryServices = servicesByCategory[category.id] || [];
+                  if (categoryServices.length === 0) return null;
+
+                  return (
+                    <div key={category.id} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold text-lg">{category.name}</h2>
+                        <Badge variant="secondary">{categoryServices.length}</Badge>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {categoryServices.map(renderServiceCard)}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Uncategorized services */}
+                {servicesByCategory.uncategorized.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-semibold text-lg text-muted-foreground">
+                        Sem Categoria
+                      </h2>
+                      <Badge variant="secondary">
+                        {servicesByCategory.uncategorized.length}
+                      </Badge>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {servicesByCategory.uncategorized.map(renderServiceCard)}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </TabsContent>
+
+          {/* Categories Tab */}
+          <TabsContent value="categories">
+            {barbershop && (
+              <CategoryManager
+                categories={categories}
+                barbershopId={barbershop.id}
+                onCategoriesChange={refreshCategories}
+                servicesCount={servicesCountByCategory}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {activeTab === "services" && services.length > 0 && (
         <FAB onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
       )}
 
+      {/* Create/Edit Service Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -561,6 +837,54 @@ export default function Services() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Service Type Selector (only for new services) */}
+            {!editingService && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...formData, isPackage: false });
+                    setSelectedPackageItems([]);
+                  }}
+                  className={`p-4 rounded-lg border-2 transition-colors text-left ${
+                    !formData.isPackage
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <Scissors className="w-5 h-5 mb-2 text-primary" />
+                  <p className="font-medium">Serviço</p>
+                  <p className="text-xs text-muted-foreground">Serviço individual</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, isPackage: true })}
+                  className={`p-4 rounded-lg border-2 transition-colors text-left ${
+                    formData.isPackage
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <Package className="w-5 h-5 mb-2 text-primary" />
+                  <p className="font-medium">Pacote</p>
+                  <p className="text-xs text-muted-foreground">Combo de serviços</p>
+                </button>
+              </div>
+            )}
+
+            {/* Package Service Selector */}
+            {formData.isPackage && (
+              <div className="space-y-2">
+                <Label>Serviços do Pacote *</Label>
+                <ServiceSelector
+                  services={singleServices}
+                  selectedServices={selectedPackageItems}
+                  onSelectionChange={setSelectedPackageItems}
+                  excludeServiceId={editingService?.id}
+                />
+              </div>
+            )}
+
             {/* Image Upload */}
             <div className="space-y-2">
               <Label>Imagem</Label>
@@ -620,15 +944,18 @@ export default function Services() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Ex: Corte Degradê"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="price">Preço (R$) *</Label>
+                <Label htmlFor="price">
+                  Preço (R$) *
+                  {formData.isPackage && selectedPackageItems.length > 0 && (
+                    <span className="text-xs text-muted-foreground ml-1">(sugerido)</span>
+                  )}
+                </Label>
                 <Input
                   id="price"
                   value={formData.price}
@@ -640,38 +967,43 @@ export default function Services() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="duration">Duração (minutos)</Label>
+                <Label htmlFor="duration">
+                  Duração (minutos)
+                  {formData.isPackage && selectedPackageItems.length > 0 && (
+                    <span className="text-xs text-muted-foreground ml-1">(calculado)</span>
+                  )}
+                </Label>
                 <Input
                   id="duration"
                   type="number"
                   value={formData.duration}
-                  onChange={(e) =>
-                    setFormData({ ...formData, duration: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
                   placeholder="30"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="category">Categoria</Label>
-                <Select
-                  value={formData.categoryId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, categoryId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!formData.isPackage && (
+                <div className="space-y-2">
+                  <Label htmlFor="category">Categoria</Label>
+                  <Select
+                    value={formData.categoryId}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, categoryId: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -687,43 +1019,22 @@ export default function Services() {
               />
             </div>
 
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Pacote/Combo</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Este serviço é um pacote de serviços
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.isPackage}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isPackage: checked })
-                  }
-                />
+            <div className="flex items-center justify-between pt-2">
+              <div>
+                <Label>Disponível para Agente IA</Label>
+                <p className="text-sm text-muted-foreground">
+                  Permite que o agente ofereça este serviço
+                </p>
               </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Disponível para Agente IA</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Permite que o agente ofereça este serviço
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.agentEnabled}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, agentEnabled: checked })
-                  }
-                />
-              </div>
+              <Switch
+                checked={formData.agentEnabled}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, agentEnabled: checked })
+                }
+              />
             </div>
 
-            <Button
-              onClick={handleSubmit}
-              className="w-full"
-              disabled={isSaving}
-            >
+            <Button onClick={handleSubmit} className="w-full" disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -732,12 +1043,40 @@ export default function Services() {
               ) : editingService ? (
                 "Salvar Alterações"
               ) : (
-                "Criar Serviço"
+                `Criar ${formData.isPackage ? "Pacote" : "Serviço"}`
               )}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover serviço?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteConfirm.service?.isPackage ? (
+                "Este pacote será removido. Os serviços que o compõem não serão afetados."
+              ) : (
+                "Tem certeza que deseja remover este serviço? Esta ação não pode ser desfeita."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <UpgradeLimitModal
         open={limitModal.open}
