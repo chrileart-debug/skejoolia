@@ -381,9 +381,18 @@ export default function Team() {
                           <Badge variant="outline">Você</Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {member.user_settings?.email || "Email não informado"}
-                      </p>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {member.user_settings?.email || "Email não informado"}
+                        </span>
+                        {member.user_settings?.numero && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            {member.user_settings.numero}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
