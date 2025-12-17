@@ -23,6 +23,9 @@ import {
   Smartphone,
   CheckCircle,
   Download,
+  Link,
+  Copy,
+  Check,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -30,6 +33,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { LogoUploader } from "@/components/settings/LogoUploader";
+import { formatPhoneMask } from "@/lib/phoneMask";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -43,6 +48,8 @@ export default function Settings() {
   const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
+  const [slugCopied, setSlugCopied] = useState(false);
+  const [slugError, setSlugError] = useState("");
   
   // User profile data (from user_settings)
   const [profileData, setProfileData] = useState({
@@ -54,6 +61,9 @@ export default function Settings() {
   // Business data (from barbershops) - only for owners
   const [businessData, setBusinessData] = useState({
     company: "",
+    slug: "",
+    publicPhone: "",
+    logoUrl: "",
     niche: "",
     subNiche: "",
     cpfCnpj: "",
@@ -109,6 +119,9 @@ export default function Settings() {
       if (barbershop) {
         setBusinessData({
           company: barbershop.name || "",
+          slug: barbershop.slug || "",
+          publicPhone: barbershop.phone || "",
+          logoUrl: barbershop.logo_url || "",
           niche: barbershop.nicho || "",
           subNiche: barbershop.subnicho || "",
           cpfCnpj: barbershop.cpf_cnpj || "",
@@ -121,9 +134,41 @@ export default function Settings() {
     }
   };
 
+  // Generate slug from company name
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  };
+
+  // Validate slug format
+  const validateSlugFormat = (slug: string) => {
+    return /^[a-z0-9-]*$/.test(slug);
+  };
+
+  // Handle slug change
+  const handleSlugChange = (value: string) => {
+    const formatted = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+    setBusinessData({ ...businessData, slug: formatted });
+    setSlugError("");
+  };
+
+  // Copy public link to clipboard
+  const copyPublicLink = () => {
+    const link = `${window.location.origin}/a/${businessData.slug}`;
+    navigator.clipboard.writeText(link);
+    setSlugCopied(true);
+    toast.success("Link copiado!");
+    setTimeout(() => setSlugCopied(false), 2000);
+  };
+
   const handleSave = async () => {
     if (!user) return;
     setIsLoading(true);
+    setSlugError("");
 
     // Save user profile to user_settings
     const { error: userError } = await supabase
@@ -143,10 +188,30 @@ export default function Settings() {
 
     // Save business data to barbershops - only for owners
     if (barbershopId && isOwner) {
+      // Check slug uniqueness if slug is provided
+      if (businessData.slug) {
+        const { data: existingSlug } = await supabase
+          .from("barbershops")
+          .select("id")
+          .eq("slug", businessData.slug)
+          .neq("id", barbershopId)
+          .maybeSingle();
+
+        if (existingSlug) {
+          setSlugError("Este link já está em uso. Escolha outro.");
+          toast.error("Este link já está em uso");
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const { error: businessError } = await supabase
         .from("barbershops")
         .update({
           name: businessData.company,
+          slug: businessData.slug || null,
+          phone: businessData.publicPhone || null,
+          logo_url: businessData.logoUrl || null,
           nicho: businessData.niche,
           subnicho: businessData.subNiche,
           cpf_cnpj: businessData.cpfCnpj,
@@ -245,27 +310,97 @@ export default function Settings() {
         </div>
 
         {/* Business Section - Only for owners */}
-        {isOwner && (
+        {isOwner && barbershopId && (
           <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
             <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
               Dados da Empresa
             </h3>
 
-            <div className="space-y-4">
-              {/* Company Name */}
-              <div className="space-y-2">
-                <Label>Empresa</Label>
-                <Input
-                  value={businessData.company}
-                  onChange={(e) =>
-                    setBusinessData({ ...businessData, company: e.target.value })
-                  }
+            <div className="space-y-6">
+              {/* Logo Upload */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <LogoUploader
+                  logoUrl={businessData.logoUrl}
+                  barbershopId={barbershopId}
+                  barbershopName={businessData.company || "B"}
+                  onLogoChange={(url) => setBusinessData({ ...businessData, logoUrl: url })}
                 />
+                <div className="flex-1 space-y-2">
+                  {/* Company Name */}
+                  <Label>Nome da Empresa</Label>
+                  <Input
+                    value={businessData.company}
+                    onChange={(e) => {
+                      setBusinessData({ ...businessData, company: e.target.value });
+                      // Auto-suggest slug if empty
+                      if (!businessData.slug) {
+                        const suggestedSlug = generateSlug(e.target.value);
+                        setBusinessData(prev => ({ ...prev, company: e.target.value, slug: suggestedSlug }));
+                      }
+                    }}
+                    placeholder="Nome da sua barbearia"
+                  />
+                </div>
+              </div>
+
+              {/* Public Link (Slug) */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Link className="w-4 h-4 text-muted-foreground" />
+                  Link de Agendamento (Slug)
+                </Label>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center rounded-md border border-input bg-background">
+                    <span className="px-3 py-2 text-sm text-muted-foreground bg-muted rounded-l-md border-r whitespace-nowrap">
+                      {window.location.origin}/a/
+                    </span>
+                    <Input
+                      value={businessData.slug}
+                      onChange={(e) => handleSlugChange(e.target.value)}
+                      placeholder="minha-barbearia"
+                      className="border-0 rounded-l-none focus-visible:ring-0"
+                    />
+                  </div>
+                  {businessData.slug && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={copyPublicLink}
+                    >
+                      {slugCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  )}
+                </div>
+                {slugError && (
+                  <p className="text-sm text-destructive">{slugError}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Use apenas letras minúsculas, números e hífens
+                </p>
+              </div>
+
+              {/* Public Phone (WhatsApp) */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-muted-foreground" />
+                  Telefone da Loja (WhatsApp)
+                </Label>
+                <Input
+                  value={businessData.publicPhone}
+                  onChange={(e) =>
+                    setBusinessData({ ...businessData, publicPhone: formatPhoneMask(e.target.value) })
+                  }
+                  placeholder="(11) 99999-9999"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Número exibido na página pública de agendamento
+                </p>
               </div>
 
               {/* Niche / SubNiche */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nicho</Label>
                   <Input
