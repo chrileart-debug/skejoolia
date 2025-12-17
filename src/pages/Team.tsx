@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw } from "lucide-react";
+import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2 } from "lucide-react";
+import { StaffConfigSheet } from "@/components/staff/StaffConfigSheet";
 import { Button } from "@/components/ui/button";
 import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +82,15 @@ export default function Team() {
   
   // Resend invite state
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  
+  // Config sheet state
+  const [configSheetOpen, setConfigSheetOpen] = useState(false);
+  const [configMember, setConfigMember] = useState<TeamMember | null>(null);
+
+  const handleOpenConfig = (member: TeamMember) => {
+    setConfigMember(member);
+    setConfigSheetOpen(true);
+  };
 
   useEffect(() => {
     if (barbershop?.id) {
@@ -419,11 +429,24 @@ export default function Team() {
                     </div>
                   </div>
                   
-                  {/* Actions for staff members */}
-                  {member.role === "staff" && member.user_id !== user?.id && (
+                  {/* Actions for all members (except yourself) */}
+                  {member.user_id !== user?.id && (
                     <div className="flex items-center gap-1">
-                      {/* Resend invite button - only for pending members */}
-                      {member.status === "pending" && (
+                      {/* Config button - for active members */}
+                      {member.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary"
+                          onClick={() => handleOpenConfig(member)}
+                          title="Configurar especialidades e horários"
+                        >
+                          <Settings2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      
+                      {/* Resend invite button - only for pending staff members */}
+                      {member.role === "staff" && member.status === "pending" && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -439,22 +462,32 @@ export default function Team() {
                           )}
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-primary"
-                        onClick={() => handleEditMember(member)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteMemberId(member.role_id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      
+                      {/* Edit permissions - only for staff */}
+                      {member.role === "staff" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-primary"
+                          onClick={() => handleEditMember(member)}
+                          title="Editar permissões"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
+                      
+                      {/* Delete - only for staff */}
+                      {member.role === "staff" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteMemberId(member.role_id)}
+                          title="Remover da equipe"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -625,6 +658,15 @@ export default function Team() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Staff Config Sheet */}
+      <StaffConfigSheet
+        open={configSheetOpen}
+        onOpenChange={setConfigSheetOpen}
+        staffMember={configMember}
+        barbershopId={barbershop?.id || ""}
+        isOwner={isOwner}
+      />
     </div>
   );
 }
