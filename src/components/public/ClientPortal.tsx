@@ -3,6 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   User,
   Crown,
@@ -10,8 +21,10 @@ import {
   Calendar,
   LogOut,
   Sparkles,
-  Check,
   Gift,
+  Clock,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 
 interface ClientData {
@@ -51,12 +64,24 @@ interface ServiceUsage {
   count: number;
 }
 
+interface Appointment {
+  id_agendamento: string;
+  start_time: string;
+  end_time: string | null;
+  status: string | null;
+  service_id: string | null;
+  user_id: string;
+  service_name?: string;
+  professional_name?: string;
+}
+
 interface ClientPortalProps {
   client: ClientData;
   barbershopId: string;
   barbershopName: string;
   onLogout: () => void;
   onNavigateToBooking: () => void;
+  onRescheduleAppointment?: (appointment: Appointment) => void;
 }
 
 const formatPrice = (price: number): string => {
@@ -73,6 +98,17 @@ const formatDate = (dateStr: string | null): string => {
     day: "2-digit",
     month: "short",
     year: "numeric",
+  });
+};
+
+const formatDateTime = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
   });
 };
 
@@ -93,6 +129,7 @@ export const ClientPortal = ({
   barbershopName,
   onLogout,
   onNavigateToBooking,
+  onRescheduleAppointment,
 }: ClientPortalProps) => {
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -100,6 +137,11 @@ export const ClientPortal = ({
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
   const [usage, setUsage] = useState<ServiceUsage[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
 
   useEffect(() => {
     const fetchSubscriptionData = async () => {
@@ -179,6 +221,91 @@ export const ClientPortal = ({
     fetchSubscriptionData();
   }, [client.client_id, barbershopId]);
 
+  // Fetch future appointments
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      setAppointmentsLoading(true);
+      try {
+        const now = new Date().toISOString();
+        
+        const { data: appointmentsData, error } = await supabase
+          .from("agendamentos")
+          .select("*")
+          .eq("barbershop_id", barbershopId)
+          .eq("client_id", client.client_id)
+          .gte("start_time", now)
+          .neq("status", "cancelled")
+          .order("start_time", { ascending: true });
+
+        if (error) {
+          console.error("Error fetching appointments:", error);
+          return;
+        }
+
+        if (appointmentsData && appointmentsData.length > 0) {
+          // Fetch service names
+          const serviceIds = [...new Set(appointmentsData.map(a => a.service_id).filter(Boolean))];
+          const userIds = [...new Set(appointmentsData.map(a => a.user_id))];
+
+          const [servicesRes, usersRes] = await Promise.all([
+            serviceIds.length > 0 
+              ? supabase.from("services").select("id, name").in("id", serviceIds)
+              : Promise.resolve({ data: [] }),
+            supabase.from("user_settings").select("user_id, nome").in("user_id", userIds)
+          ]);
+
+          const serviceMap: Record<string, string> = {};
+          const userMap: Record<string, string> = {};
+
+          if (servicesRes.data) {
+            servicesRes.data.forEach(s => { serviceMap[s.id] = s.name; });
+          }
+          if (usersRes.data) {
+            usersRes.data.forEach(u => { userMap[u.user_id] = u.nome || "Profissional"; });
+          }
+
+          setAppointments(appointmentsData.map(apt => ({
+            ...apt,
+            service_name: apt.service_id ? serviceMap[apt.service_id] : "Serviço",
+            professional_name: userMap[apt.user_id] || "Profissional"
+          })));
+        } else {
+          setAppointments([]);
+        }
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      } finally {
+        setAppointmentsLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [client.client_id, barbershopId]);
+
+  const handleCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
+
+    setCancellingAppointment(appointmentToCancel.id_agendamento);
+    try {
+      const { error } = await supabase
+        .from("agendamentos")
+        .update({ status: "cancelled" })
+        .eq("id_agendamento", appointmentToCancel.id_agendamento);
+
+      if (error) throw error;
+
+      setAppointments(prev => prev.filter(a => a.id_agendamento !== appointmentToCancel.id_agendamento));
+      toast.success("Agendamento cancelado com sucesso");
+    } catch (error) {
+      console.error("Error cancelling appointment:", error);
+      toast.error("Erro ao cancelar agendamento");
+    } finally {
+      setCancellingAppointment(null);
+      setConfirmCancelOpen(false);
+      setAppointmentToCancel(null);
+    }
+  };
+
   const getServiceName = (serviceId: string): string => {
     const service = services.find((s) => s.id === serviceId);
     return service?.name || "Serviço";
@@ -256,6 +383,99 @@ export const ClientPortal = ({
               <p className="text-xs text-muted-foreground">Última visita</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* My Appointments Section */}
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border">
+          <h3 className="font-bold text-foreground flex items-center gap-2">
+            <Clock className="w-5 h-5 text-primary" />
+            Meus Agendamentos
+          </h3>
+        </div>
+        
+        <div className="p-4">
+          {appointmentsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 rounded-lg" />
+              <Skeleton className="h-20 rounded-lg" />
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground">Nenhum agendamento futuro</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={onNavigateToBooking}
+              >
+                Agendar agora
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {appointments.map((apt) => (
+                <div
+                  key={apt.id_agendamento}
+                  className="bg-muted/50 rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-foreground">{apt.service_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        com {apt.professional_name}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-foreground">
+                        {formatDateTime(apt.start_time)}
+                      </p>
+                      <span className={cn(
+                        "text-xs px-2 py-0.5 rounded-full",
+                        apt.status === "pending" 
+                          ? "bg-warning/10 text-warning" 
+                          : "bg-success/10 text-success"
+                      )}>
+                        {apt.status === "pending" ? "Pendente" : "Confirmado"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    {onRescheduleAppointment && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 gap-2"
+                        onClick={() => onRescheduleAppointment(apt)}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Remarcar
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        setAppointmentToCancel(apt);
+                        setConfirmCancelOpen(true);
+                      }}
+                      disabled={cancellingAppointment === apt.id_agendamento}
+                    >
+                      {cancellingAppointment === apt.id_agendamento ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -347,6 +567,27 @@ export const ClientPortal = ({
         <Sparkles className="w-4 h-4" />
         {subscription ? "Agendar com meus créditos" : "Fazer um agendamento"}
       </Button>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar agendamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelAppointment}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancelar agendamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
