@@ -119,9 +119,15 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
 
   // Direct webhook call for identified clients
   const handleDirectCheckout = async (plan: BarberPlan) => {
-    if (!loggedInClient) return;
+    if (!loggedInClient?.client_id) {
+      console.error("❌ No client_id available for direct checkout");
+      return;
+    }
 
-    console.log("🚀 Direct checkout for identified client:", loggedInClient.client_id);
+    console.log("🚀 DIRECT CHECKOUT INICIADO");
+    console.log("📋 Client data:", JSON.stringify(loggedInClient, null, 2));
+    console.log("📋 Plan:", plan.id, plan.name);
+    
     setDirectCheckoutLoading(plan.id);
 
     try {
@@ -133,11 +139,13 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
         plan_id: plan.id,
         client_id: loggedInClient.client_id,
         customer_details: {
-          name: loggedInClient.nome || "",
+          name: loggedInClient.nome || "Cliente",
           email: loggedInClient.email || "",
           phone: cleanPhone,
         },
       };
+      
+      console.log("📤 PAYLOAD ENVIADO:", JSON.stringify(payload, null, 2));
 
       console.log("📤 Sending direct payload to n8n:", payload);
 
@@ -187,13 +195,18 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
   };
 
   const handleSubscribe = (plan: BarberPlan) => {
-    // Path B: Client already identified - skip modal, send directly
-    if (loggedInClient?.client_id && loggedInClient?.nome && loggedInClient?.telefone) {
+    console.log("🔘 BOTÃO ASSINAR CLICADO");
+    console.log("📋 loggedInClient:", JSON.stringify(loggedInClient, null, 2));
+    
+    // Path B: Client already identified (has client_id) - go directly to checkout
+    if (loggedInClient?.client_id) {
+      console.log("✅ Cliente identificado, indo direto para checkout...");
       handleDirectCheckout(plan);
       return;
     }
 
-    // Path A: Client not identified - show modal
+    // Path A: Client not identified - show modal to collect data
+    console.log("⚠️ Cliente não identificado, abrindo modal...");
     setSelectedPlan(plan);
     setCheckoutOpen(true);
   };
