@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PublicClubSection } from "@/components/public/PublicClubSection";
+import { ClientLoginModal } from "@/components/public/ClientLoginModal";
+import { ClientPortal } from "@/components/public/ClientPortal";
 import {
   ArrowLeft,
   Calendar as CalendarIcon,
@@ -27,6 +28,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Crown,
+  Gift,
 } from "lucide-react";
 
 // Types
@@ -76,6 +78,22 @@ interface StaffSchedule {
 interface TimeSlot {
   time: string;
   available: boolean;
+}
+
+interface ClientData {
+  client_id: string;
+  nome: string | null;
+  telefone: string | null;
+  email: string | null;
+  total_cortes: number | null;
+  faturamento_total: number | null;
+  last_visit: string | null;
+}
+
+interface SubscriberPlanItem {
+  service_id: string;
+  quantity_limit: number | null;
+  used_count: number;
 }
 
 // Constants
@@ -141,6 +159,11 @@ const PublicBooking = () => {
   const [staffServices, setStaffServices] = useState<{ user_id: string; service_id: string }[]>([]);
   const [staffSchedules, setStaffSchedules] = useState<StaffSchedule[]>([]);
   const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
+
+  // Client recognition states
+  const [loggedInClient, setLoggedInClient] = useState<ClientData | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [subscriberPlanItems, setSubscriberPlanItems] = useState<SubscriberPlanItem[]>([]);
 
   // Wizard states
   const [activeTab, setActiveTab] = useState<string>("agendar");
@@ -245,6 +268,84 @@ const PublicBooking = () => {
     fetchBarbershopData();
   }, [slug]);
 
+  // Fetch subscriber plan items when client logs in
+  useEffect(() => {
+    const fetchSubscriberData = async () => {
+      if (!loggedInClient || !barbershop) {
+        setSubscriberPlanItems([]);
+        return;
+      }
+
+      try {
+        // Fetch active subscription
+        const { data: subData } = await supabase
+          .from("client_club_subscriptions")
+          .select("id, plan_id")
+          .eq("client_id", loggedInClient.client_id)
+          .eq("barbershop_id", barbershop.id)
+          .eq("status", "active")
+          .single();
+
+        if (!subData) {
+          setSubscriberPlanItems([]);
+          return;
+        }
+
+        // Fetch plan items
+        const { data: itemsData } = await supabase
+          .from("barber_plan_items")
+          .select("service_id, quantity_limit")
+          .eq("plan_id", subData.plan_id);
+
+        if (!itemsData) {
+          setSubscriberPlanItems([]);
+          return;
+        }
+
+        // Fetch usage for current month
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { data: usageData } = await supabase
+          .from("client_subscription_usage")
+          .select("service_id")
+          .eq("subscription_id", subData.id)
+          .gte("used_at", startOfMonth.toISOString());
+
+        // Build subscriber plan items with usage
+        const usageMap: Record<string, number> = {};
+        if (usageData) {
+          usageData.forEach((u) => {
+            usageMap[u.service_id] = (usageMap[u.service_id] || 0) + 1;
+          });
+        }
+
+        setSubscriberPlanItems(
+          itemsData.map((item) => ({
+            service_id: item.service_id,
+            quantity_limit: item.quantity_limit,
+            used_count: usageMap[item.service_id] || 0,
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching subscriber data:", error);
+        setSubscriberPlanItems([]);
+      }
+    };
+
+    fetchSubscriberData();
+  }, [loggedInClient, barbershop]);
+
+  // Pre-fill client data when logged in
+  useEffect(() => {
+    if (loggedInClient) {
+      setClientName(loggedInClient.nome || "");
+      setClientPhone(loggedInClient.telefone ? formatPhoneMask(loggedInClient.telefone) : "");
+      setClientEmail(loggedInClient.email || "");
+    }
+  }, [loggedInClient]);
+
   // Fetch appointments when date changes
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -265,6 +366,26 @@ const PublicBooking = () => {
 
     fetchAppointments();
   }, [barbershop, selectedDate]);
+
+  // Check if service is included in subscriber plan with remaining credits
+  const isServiceIncludedInPlan = (serviceId: string): { included: boolean; hasCredits: boolean } => {
+    const planItem = subscriberPlanItems.find((item) => item.service_id === serviceId);
+    if (!planItem) return { included: false, hasCredits: false };
+    
+    const isUnlimited = planItem.quantity_limit === 0 || planItem.quantity_limit === null;
+    const hasCredits = isUnlimited || planItem.used_count < (planItem.quantity_limit || 0);
+    
+    return { included: true, hasCredits };
+  };
+
+  // Get display price for service (R$0,00 if included with credits)
+  const getDisplayPrice = (service: Service): { price: string; isIncluded: boolean } => {
+    const { included, hasCredits } = isServiceIncludedInPlan(service.id);
+    if (included && hasCredits) {
+      return { price: "R$ 0,00", isIncluded: true };
+    }
+    return { price: formatPrice(service.price), isIncluded: false };
+  };
 
   // Get professionals for selected service
   const professionalsForService = useMemo(() => {
@@ -465,9 +586,30 @@ const PublicBooking = () => {
     setSelectedService(null);
     setSelectedProfessional(null);
     setSelectedTime(null);
+    // Preserve client data if logged in
+    if (!loggedInClient) {
+      setClientName("");
+      setClientPhone("");
+      setClientEmail("");
+    }
+  };
+
+  const handleClientLogin = (client: ClientData) => {
+    setLoggedInClient(client);
+    setActiveTab("minha-area");
+  };
+
+  const handleClientLogout = () => {
+    setLoggedInClient(null);
+    setSubscriberPlanItems([]);
     setClientName("");
     setClientPhone("");
     setClientEmail("");
+    setActiveTab("agendar");
+  };
+
+  const handleNavigateToBooking = () => {
+    setActiveTab("agendar");
   };
 
   // Loading state
@@ -573,22 +715,37 @@ const PublicBooking = () => {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            {barbershop?.logo_url ? (
-              <img
-                src={barbershop.logo_url}
-                alt={barbershop.name}
-                className="w-12 h-12 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Scissors className="w-6 h-6 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {barbershop?.logo_url ? (
+                <img
+                  src={barbershop.logo_url}
+                  alt={barbershop.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Scissors className="w-6 h-6 text-primary" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-lg font-bold text-foreground">{barbershop?.name}</h1>
+                <p className="text-sm text-muted-foreground">
+                  {loggedInClient ? `Olá, ${loggedInClient.nome || "Cliente"}!` : "Bem-vindo(a)!"}
+                </p>
               </div>
-            )}
-            <div>
-              <h1 className="text-lg font-bold text-foreground">{barbershop?.name}</h1>
-              <p className="text-sm text-muted-foreground">Bem-vindo(a)!</p>
             </div>
+            {!loggedInClient && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLoginModalOpen(true)}
+                className="gap-2"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Minha Área</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -610,8 +767,17 @@ const PublicBooking = () => {
                 className="h-12 px-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none bg-transparent"
               >
                 <Crown className="w-4 h-4 mr-2" />
-                Clubes de Assinatura
+                Clubes
               </TabsTrigger>
+              {loggedInClient && (
+                <TabsTrigger
+                  value="minha-area"
+                  className="h-12 px-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none bg-transparent"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Minha Área
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
         </div>
@@ -696,59 +862,79 @@ const PublicBooking = () => {
                     {category.name}
                   </h3>
                   <div className="grid gap-3">
-                    {categoryServices.map((service) => (
-                      <button
-                        key={service.id}
-                        onClick={() => handleServiceSelect(service)}
-                        className="w-full bg-card hover:bg-accent rounded-xl border border-border p-4 text-left transition-all hover:shadow-md group"
-                      >
-                        <div className="flex items-start gap-4">
-                          {service.image_url ? (
-                            <img
-                              src={service.image_url}
-                              alt={service.name}
-                              className="w-16 h-16 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                              {service.is_package ? (
-                                <Package className="w-6 h-6 text-primary" />
-                              ) : (
-                                <Scissors className="w-6 h-6 text-primary" />
-                              )}
-                            </div>
+                    {categoryServices.map((service) => {
+                      const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                      return (
+                        <button
+                          key={service.id}
+                          onClick={() => handleServiceSelect(service)}
+                          className={cn(
+                            "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
+                            isIncluded ? "border-success/50 bg-success/5" : "border-border"
                           )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                                {service.name}
-                              </p>
-                              {service.is_package && (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
-                                  Combo
-                                </span>
-                              )}
-                            </div>
-                            {service.description && (
-                              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                                {service.description}
-                              </p>
+                        >
+                          <div className="flex items-start gap-4">
+                            {service.image_url ? (
+                              <img
+                                src={service.image_url}
+                                alt={service.name}
+                                className="w-16 h-16 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                                {service.is_package ? (
+                                  <Package className="w-6 h-6 text-primary" />
+                                ) : (
+                                  <Scissors className="w-6 h-6 text-primary" />
+                                )}
+                              </div>
                             )}
-                            <div className="flex items-center gap-3 mt-2">
-                              <span className="text-lg font-bold text-primary">
-                                {formatPrice(service.price)}
-                              </span>
-                              {service.duration_minutes && (
-                                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {formatDuration(service.duration_minutes)}
-                                </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                  {service.name}
+                                </p>
+                                {service.is_package && (
+                                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
+                                    Combo
+                                  </span>
+                                )}
+                                {isIncluded && (
+                                  <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
+                                    <Gift className="w-3 h-3" />
+                                    Incluso no Plano
+                                  </span>
+                                )}
+                              </div>
+                              {service.description && (
+                                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                  {service.description}
+                                </p>
                               )}
+                              <div className="flex items-center gap-3 mt-2">
+                                <span className={cn(
+                                  "text-lg font-bold",
+                                  isIncluded ? "text-success" : "text-primary"
+                                )}>
+                                  {displayPrice}
+                                </span>
+                                {isIncluded && service.price > 0 && (
+                                  <span className="text-sm text-muted-foreground line-through">
+                                    {formatPrice(service.price)}
+                                  </span>
+                                )}
+                                {service.duration_minutes && (
+                                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {formatDuration(service.duration_minutes)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -760,35 +946,49 @@ const PublicBooking = () => {
                   Outros
                 </h3>
                 <div className="grid gap-3">
-                  {servicesByCategory.uncategorized.map((service) => (
-                    <button
-                      key={service.id}
-                      onClick={() => handleServiceSelect(service)}
-                      className="w-full bg-card hover:bg-accent rounded-xl border border-border p-4 text-left transition-all hover:shadow-md group"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <Scissors className="w-6 h-6 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {service.name}
-                          </p>
-                          <div className="flex items-center gap-3 mt-2">
-                            <span className="text-lg font-bold text-primary">
-                              {formatPrice(service.price)}
-                            </span>
-                            {service.duration_minutes && (
-                              <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {formatDuration(service.duration_minutes)}
+                  {servicesByCategory.uncategorized.map((service) => {
+                    const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                    return (
+                      <button
+                        key={service.id}
+                        onClick={() => handleServiceSelect(service)}
+                        className={cn(
+                          "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
+                          isIncluded ? "border-success/50 bg-success/5" : "border-border"
+                        )}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Scissors className="w-6 h-6 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                {service.name}
+                              </p>
+                              {isIncluded && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
+                                  <Gift className="w-3 h-3" />
+                                  Incluso
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-2">
+                              <span className={cn("text-lg font-bold", isIncluded ? "text-success" : "text-primary")}>
+                                {displayPrice}
                               </span>
-                            )}
+                              {service.duration_minutes && (
+                                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {formatDuration(service.duration_minutes)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1012,7 +1212,34 @@ const PublicBooking = () => {
             )}
           </main>
         </TabsContent>
+
+        {/* Minha Área Tab */}
+        {loggedInClient && (
+          <TabsContent value="minha-area" className="mt-0">
+            <main className="max-w-2xl mx-auto px-4 py-6">
+              {barbershop && (
+                <ClientPortal
+                  client={loggedInClient}
+                  barbershopId={barbershop.id}
+                  barbershopName={barbershop.name}
+                  onLogout={handleClientLogout}
+                  onNavigateToBooking={handleNavigateToBooking}
+                />
+              )}
+            </main>
+          </TabsContent>
+        )}
       </Tabs>
+
+      {/* Client Login Modal */}
+      {barbershop && (
+        <ClientLoginModal
+          open={loginModalOpen}
+          onOpenChange={setLoginModalOpen}
+          barbershopId={barbershop.id}
+          onClientFound={handleClientLogin}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border mt-auto">
