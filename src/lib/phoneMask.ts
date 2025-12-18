@@ -25,3 +25,10 @@ export const formatPhoneMask = (value: string): string => {
 export const unformatPhone = (value: string): string => {
   return value.replace(/\D/g, "");
 };
+
+/**
+ * Normalizes phone number to digits only (alias for database storage/comparison)
+ */
+export const normalizePhone = (value: string): string => {
+  return value.replace(/\D/g, "");
+};

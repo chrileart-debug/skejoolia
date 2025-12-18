@@ -739,7 +739,7 @@ const PublicBooking = () => {
         const { data, error } = await supabase.rpc("handle_public_booking", {
           p_barbershop_id: barbershop.id,
           p_nome: effectiveName,
-          p_telefone: formatPhoneMask(effectivePhone),
+          p_telefone: effectivePhone, // Already normalized, store as digits only
           p_service_id: selectedService.id,
           p_start_time: startDateTime,
           p_user_id: selectedProfessional.user_id,
