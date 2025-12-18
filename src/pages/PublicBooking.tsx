@@ -177,6 +177,8 @@ const PublicBooking = () => {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [clientLookupLoading, setClientLookupLoading] = useState(false);
+  const [foundExistingClient, setFoundExistingClient] = useState<ClientData | null>(null);
 
   // Fetch barbershop and initial data
   useEffect(() => {
@@ -343,8 +345,45 @@ const PublicBooking = () => {
       setClientName(loggedInClient.nome || "");
       setClientPhone(loggedInClient.telefone ? formatPhoneMask(loggedInClient.telefone) : "");
       setClientEmail(loggedInClient.email || "");
+      setFoundExistingClient(loggedInClient);
     }
   }, [loggedInClient]);
+
+  // Real-time phone lookup
+  const handlePhoneLookup = async (phone: string) => {
+    if (!barbershop) return;
+    
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      setFoundExistingClient(null);
+      return;
+    }
+
+    setClientLookupLoading(true);
+    try {
+      // Format phone for lookup
+      const formattedPhone = formatPhoneMask(cleanPhone);
+      
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("barbershop_id", barbershop.id)
+        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
+        .single();
+
+      if (data && !error) {
+        setFoundExistingClient(data);
+        setClientName(data.nome || "");
+        setClientEmail(data.email || "");
+      } else {
+        setFoundExistingClient(null);
+      }
+    } catch (error) {
+      setFoundExistingClient(null);
+    } finally {
+      setClientLookupLoading(false);
+    }
+  };
 
   // Fetch appointments when date changes
   useEffect(() => {
@@ -1110,6 +1149,19 @@ const PublicBooking = () => {
               <p className="text-muted-foreground">Preencha suas informações para confirmar</p>
             </div>
 
+            {/* Welcome Back Message */}
+            {foundExistingClient && (
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Bem-vindo de volta, {foundExistingClient.nome}!</p>
+                  <p className="text-sm text-muted-foreground">Encontramos seu cadastro.</p>
+                </div>
+              </div>
+            )}
+
             {/* Summary */}
             <div className="bg-muted/50 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-3">
@@ -1133,8 +1185,38 @@ const PublicBooking = () => {
               </div>
             </div>
 
-            {/* Form */}
+            {/* Form - Phone First */}
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  WhatsApp *
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="phone"
+                    placeholder="(00) 00000-0000"
+                    value={clientPhone}
+                    onChange={(e) => {
+                      const formatted = formatPhoneMask(e.target.value);
+                      setClientPhone(formatted);
+                    }}
+                    onBlur={(e) => handlePhoneLookup(e.target.value)}
+                    className="h-12"
+                    disabled={!!loggedInClient}
+                    readOnly={!!loggedInClient}
+                  />
+                  {clientLookupLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                {loggedInClient && (
+                  <p className="text-xs text-muted-foreground">Você está identificado(a)</p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="name" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
@@ -1146,20 +1228,8 @@ const PublicBooking = () => {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   className="h-12"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  WhatsApp *
-                </Label>
-                <Input
-                  id="phone"
-                  placeholder="(00) 00000-0000"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(formatPhoneMask(e.target.value))}
-                  className="h-12"
+                  disabled={!!loggedInClient}
+                  readOnly={!!loggedInClient}
                 />
               </div>
 
@@ -1175,6 +1245,8 @@ const PublicBooking = () => {
                   value={clientEmail}
                   onChange={(e) => setClientEmail(e.target.value)}
                   className="h-12"
+                  disabled={!!loggedInClient}
+                  readOnly={!!loggedInClient}
                 />
               </div>
             </div>
