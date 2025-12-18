@@ -574,12 +574,6 @@ export const ClientPortal = ({
         </div>
       )}
 
-      {/* Book Now CTA */}
-      <Button onClick={onNavigateToBooking} className="w-full gap-2" size="lg">
-        <Sparkles className="w-4 h-4" />
-        {subscription ? "Agendar com meus créditos" : "Fazer um agendamento"}
-      </Button>
-
       {/* Cancel Confirmation Dialog */}
       <AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
         <AlertDialogContent>

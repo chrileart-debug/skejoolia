@@ -804,6 +804,14 @@ const PublicBooking = () => {
   };
 
   const handleNavigateToBooking = () => {
+    // Reset wizard to beginning for logged-in users (step 1 = service selection)
+    setCurrentStep(1);
+    setSelectedService(null);
+    setSelectedProfessional(null);
+    setSelectedDate(getTodayInBrasilia());
+    setSelectedTime(null);
+    setIsRescheduling(false);
+    setRescheduleAppointmentId(null);
     setActiveTab("agendar");
   };
 
