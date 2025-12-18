@@ -1217,11 +1217,45 @@ export type Database = {
     }
     Functions: {
       activate_team_member_status: { Args: never; Returns: undefined }
+      cancel_public_appointment: {
+        Args: {
+          p_appointment_id: string
+          p_barbershop_id: string
+          p_phone: string
+        }
+        Returns: boolean
+      }
       check_user_limit: {
         Args: { p_resource: string; p_user_id: string }
         Returns: Json
       }
       expire_trials: { Args: never; Returns: number }
+      find_client_by_phone: {
+        Args: { p_barbershop_id: string; p_phone: string }
+        Returns: {
+          client_id: string
+          email: string
+          faturamento_total: number
+          last_visit: string
+          nome: string
+          telefone: string
+          total_cortes: number
+        }[]
+      }
+      get_active_appointment_for_client_phone: {
+        Args: { p_barbershop_id: string; p_client_id: string; p_phone: string }
+        Returns: {
+          end_time: string
+          id_agendamento: string
+          nome_cliente: string
+          professional_name: string
+          service_id: string
+          service_name: string
+          start_time: string
+          status: string
+          user_id: string
+        }[]
+      }
       get_available_integracoes_whatsapp: {
         Args: { p_current_agent_id?: string; p_user_id: string }
         Returns: {
@@ -1277,6 +1311,17 @@ export type Database = {
       owner_can_view_user_settings: {
         Args: { _target_user_id: string }
         Returns: boolean
+      }
+      reschedule_public_appointment: {
+        Args: {
+          p_appointment_id: string
+          p_barbershop_id: string
+          p_phone: string
+          p_service_id: string
+          p_start_time: string
+          p_user_id: string
+        }
+        Returns: string
       }
       user_belongs_to_barbershop: {
         Args: { _barbershop_id: string; _user_id: string }
