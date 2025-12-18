@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,23 @@ export const PublicClubCheckoutModal = ({
     setSubmitting(true);
 
     try {
+      // First, upsert the client in clientes table
+      const cleanPhone = phone.replace(/\D/g, "");
+      const { data: clientData, error: clientError } = await supabase
+        .from("clientes")
+        .upsert(
+          {
+            barbershop_id: barbershopId,
+            nome: name.trim(),
+            email: email.trim(),
+            telefone: cleanPhone,
+            user_id: (await supabase.from("barbershops").select("owner_id").eq("id", barbershopId).single()).data?.owner_id,
+          },
+          { onConflict: "barbershop_id,telefone" }
+        )
+        .select("client_id")
+        .single();
+
       // Send to n8n webhook for subscription processing
       const response = await fetch("https://webhook.lernow.com/webhook/skejool-club-subscription", {
         method: "POST",
@@ -104,7 +122,8 @@ export const PublicClubCheckoutModal = ({
           plan_interval: plan.interval,
           customer_name: name.trim(),
           customer_email: email.trim(),
-          customer_phone: phone.replace(/\D/g, ""),
+          customer_phone: cleanPhone,
+          client_id: clientData?.client_id || null,
         }),
       });
 
