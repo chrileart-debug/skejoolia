@@ -52,7 +52,6 @@ interface ClubPlanModalProps {
   onSaved: () => void;
   plan: BarberPlan | null;
   barbershopId: string;
-  isSubscriptionActive: boolean;
 }
 
 export function ClubPlanModal({
@@ -61,7 +60,6 @@ export function ClubPlanModal({
   onSaved,
   plan,
   barbershopId,
-  isSubscriptionActive,
 }: ClubPlanModalProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -183,7 +181,8 @@ export function ClubPlanModal({
         price: parseFloat(price),
         interval,
         is_active: true,
-        is_published: isSubscriptionActive, // Only publish if subscription is active
+        // New plans always start as draft - only manual DB update can publish
+        ...(plan ? {} : { is_published: false }),
       };
 
       let planId: string;
