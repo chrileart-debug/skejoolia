@@ -52,12 +52,16 @@ export const ClientLoginModal = ({
     setLoading(true);
 
     try {
+      // Generate formatted version to match both stored formats
+      const formattedPhone = formatPhoneMask(cleanPhone);
+      
+      // Query matching either cleaned or formatted phone number
       const { data, error } = await supabase
         .from("clientes")
         .select("*")
         .eq("barbershop_id", barbershopId)
-        .eq("telefone", cleanPhone)
-        .single();
+        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
+        .maybeSingle();
 
       if (error || !data) {
         toast.error("Cliente não encontrado. Faça um agendamento para se cadastrar!");
