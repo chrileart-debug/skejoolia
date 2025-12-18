@@ -14,6 +14,7 @@ import {
   Receipt,
   Crown,
   UsersRound,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const allNavItems: NavItem[] = [
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
   { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
+  { title: "Meu Clube", icon: Sparkles, href: "/club", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
   { title: "Configurações", icon: Settings, href: "/settings", ownerOnly: true },

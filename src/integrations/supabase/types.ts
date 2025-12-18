@@ -189,6 +189,92 @@ export type Database = {
           },
         ]
       }
+      barber_plan_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          plan_id: string
+          quantity_limit: number | null
+          service_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          plan_id: string
+          quantity_limit?: number | null
+          service_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          plan_id?: string
+          quantity_limit?: number | null
+          service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "barber_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "barber_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "barber_plan_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      barber_plans: {
+        Row: {
+          asaas_plan_id: string | null
+          barbershop_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          interval: string | null
+          is_active: boolean | null
+          name: string
+          price: number
+          updated_at: string | null
+        }
+        Insert: {
+          asaas_plan_id?: string | null
+          barbershop_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          interval?: string | null
+          is_active?: boolean | null
+          name: string
+          price: number
+          updated_at?: string | null
+        }
+        Update: {
+          asaas_plan_id?: string | null
+          barbershop_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          interval?: string | null
+          is_active?: boolean | null
+          name?: string
+          price?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "barber_plans_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       barbershop_reminders: {
         Row: {
           barbershop_id: string
@@ -336,6 +422,110 @@ export type Database = {
             columns: ["barbershop_id"]
             isOneToOne: false
             referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_club_subscriptions: {
+        Row: {
+          asaas_subscription_id: string | null
+          barbershop_id: string
+          client_id: string
+          created_at: string | null
+          id: string
+          next_due_date: string | null
+          plan_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          asaas_subscription_id?: string | null
+          barbershop_id: string
+          client_id: string
+          created_at?: string | null
+          id?: string
+          next_due_date?: string | null
+          plan_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          asaas_subscription_id?: string | null
+          barbershop_id?: string
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          next_due_date?: string | null
+          plan_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_club_subscriptions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_club_subscriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "client_club_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "barber_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_subscription_usage: {
+        Row: {
+          appointment_id: string | null
+          id: string
+          service_id: string
+          subscription_id: string
+          used_at: string | null
+        }
+        Insert: {
+          appointment_id?: string | null
+          id?: string
+          service_id: string
+          subscription_id: string
+          used_at?: string | null
+        }
+        Update: {
+          appointment_id?: string | null
+          id?: string
+          service_id?: string
+          subscription_id?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_subscription_usage_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id_agendamento"]
+          },
+          {
+            foreignKeyName: "client_subscription_usage_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_subscription_usage_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "client_club_subscriptions"
             referencedColumns: ["id"]
           },
         ]
