@@ -36,6 +36,7 @@ interface Service {
 interface PublicClubSectionProps {
   barbershopId: string;
   barbershopName: string;
+  loggedInClientId?: string | null;
 }
 
 const formatPrice = (price: number): string => {
@@ -56,7 +57,7 @@ const getIntervalLabel = (interval: string | null): string => {
   }
 };
 
-export const PublicClubSection = ({ barbershopId, barbershopName }: PublicClubSectionProps) => {
+export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClientId }: PublicClubSectionProps) => {
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<BarberPlan[]>([]);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -241,6 +242,7 @@ export const PublicClubSection = ({ barbershopId, barbershopName }: PublicClubSe
           plan={selectedPlan}
           barbershopId={barbershopId}
           barbershopName={barbershopName}
+          loggedInClientId={loggedInClientId}
         />
       )}
     </div>
