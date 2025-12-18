@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -8,6 +9,7 @@ import {
   Check,
   Clock,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { PublicClubCheckoutModal } from "./PublicClubCheckoutModal";
 
@@ -33,10 +35,17 @@ interface Service {
   name: string;
 }
 
+interface ClientData {
+  client_id: string;
+  nome: string | null;
+  telefone: string | null;
+  email: string | null;
+}
+
 interface PublicClubSectionProps {
   barbershopId: string;
   barbershopName: string;
-  loggedInClientId?: string | null;
+  loggedInClient?: ClientData | null;
 }
 
 const formatPrice = (price: number): string => {
@@ -57,13 +66,14 @@ const getIntervalLabel = (interval: string | null): string => {
   }
 };
 
-export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClientId }: PublicClubSectionProps) => {
+export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient }: PublicClubSectionProps) => {
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<BarberPlan[]>([]);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<BarberPlan | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [directCheckoutLoading, setDirectCheckoutLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -107,7 +117,73 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
     return planItems.filter((item) => item.plan_id === planId);
   };
 
+  // Direct webhook call for identified clients
+  const handleDirectCheckout = async (plan: BarberPlan) => {
+    if (!loggedInClient) return;
+
+    console.log("🚀 Direct checkout for identified client:", loggedInClient.client_id);
+    setDirectCheckoutLoading(plan.id);
+
+    try {
+      const cleanPhone = loggedInClient.telefone?.replace(/\D/g, "") || "";
+      
+      const payload = {
+        action: "subscribe_plan",
+        barbershop_id: barbershopId,
+        plan_id: plan.id,
+        client_id: loggedInClient.client_id,
+        customer_details: {
+          name: loggedInClient.nome || "",
+          email: loggedInClient.email || "",
+          phone: cleanPhone,
+        },
+      };
+
+      console.log("📤 Sending direct payload to n8n:", payload);
+
+      const response = await fetch("https://webhook.lernow.com/webhook/asaas-meu-clube", {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log("📥 n8n Response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Response not ok:", errorText);
+        throw new Error(`Failed to submit subscription: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("📥 n8n Response data:", data);
+
+      if (data.checkout_url) {
+        console.log("🔗 Redirecting to checkout:", data.checkout_url);
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      toast.success("Solicitação enviada com sucesso!");
+    } catch (error) {
+      console.error("❌ Direct checkout error:", error);
+      toast.error("Erro ao conectar com o servidor de pagamentos. Tente novamente.");
+    } finally {
+      setDirectCheckoutLoading(null);
+    }
+  };
+
   const handleSubscribe = (plan: BarberPlan) => {
+    // Path B: Client already identified - skip modal, send directly
+    if (loggedInClient?.client_id && loggedInClient?.nome && loggedInClient?.telefone) {
+      handleDirectCheckout(plan);
+      return;
+    }
+
+    // Path A: Client not identified - show modal
     setSelectedPlan(plan);
     setCheckoutOpen(true);
   };
@@ -209,9 +285,19 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
                   <Button
                     onClick={() => handleSubscribe(plan)}
                     className="w-full gap-2"
+                    disabled={directCheckoutLoading === plan.id}
                   >
-                    <Sparkles className="w-4 h-4" />
-                    Assinar Plano
+                    {directCheckoutLoading === plan.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Preparando seu checkout...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Assinar Plano
+                      </>
+                    )}
                   </Button>
                 ) : (
                   <div className="space-y-2">
@@ -234,7 +320,7 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
         })}
       </div>
 
-      {/* Checkout Modal */}
+      {/* Checkout Modal - only for non-identified clients */}
       {selectedPlan && (
         <PublicClubCheckoutModal
           open={checkoutOpen}
@@ -242,7 +328,7 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
           plan={selectedPlan}
           barbershopId={barbershopId}
           barbershopName={barbershopName}
-          loggedInClientId={loggedInClientId}
+          loggedInClientId={loggedInClient?.client_id}
         />
       )}
     </div>

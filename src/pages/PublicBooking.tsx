@@ -1208,7 +1208,7 @@ const PublicBooking = () => {
               <PublicClubSection
                 barbershopId={barbershop.id}
                 barbershopName={barbershop.name}
-                loggedInClientId={loggedInClient?.client_id}
+                loggedInClient={loggedInClient}
               />
             )}
           </main>
