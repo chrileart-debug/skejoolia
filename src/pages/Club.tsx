@@ -230,15 +230,33 @@ export default function Club() {
   };
 
   const handlePublishPlan = async (plan: BarberPlan) => {
-    // If user doesn't have an active subscription, show the subscribe modal
-    if (!isActive) {
-      setPublishModalOpen(true);
-      return;
-    }
-
-    // User is subscribed, proceed to publish
+    if (!barbershop?.id) return;
+    
     setPublishingPlanId(plan.id);
+    
     try {
+      // Fetch subscription status directly from Supabase to ensure accuracy
+      const { data: subscriptionData, error: subError } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("barbershop_id", barbershop.id)
+        .single();
+
+      if (subError && subError.code !== "PGRST116") {
+        throw subError;
+      }
+
+      // Check if barbershop has active subscription
+      const hasActiveSubscription = subscriptionData?.status === "active";
+
+      if (!hasActiveSubscription) {
+        // Not subscribed - show the upgrade modal
+        setPublishingPlanId(null);
+        setPublishModalOpen(true);
+        return;
+      }
+
+      // User has active subscription, proceed to publish
       const { error } = await supabase
         .from("barber_plans")
         .update({ is_published: true })
