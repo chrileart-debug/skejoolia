@@ -29,7 +29,6 @@ interface ExistingAppointmentModalProps {
   appointment: Appointment | null;
   onReschedule: (appointmentId: string) => void;
   onCancelled: () => void;
-  onProceedNewBooking: () => void;
 }
 
 export const ExistingAppointmentModal = ({
@@ -38,7 +37,6 @@ export const ExistingAppointmentModal = ({
   appointment,
   onReschedule,
   onCancelled,
-  onProceedNewBooking,
 }: ExistingAppointmentModalProps) => {
   const [cancelling, setCancelling] = useState(false);
 
@@ -140,23 +138,6 @@ export const ExistingAppointmentModal = ({
                 Cancelar agendamento
               </>
             )}
-          </Button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">ou</span>
-            </div>
-          </div>
-
-          <Button
-            onClick={onProceedNewBooking}
-            variant="ghost"
-            className="w-full text-muted-foreground"
-          >
-            Fazer novo agendamento mesmo assim
           </Button>
         </div>
       </DialogContent>

@@ -422,11 +422,14 @@ const PublicBooking = () => {
     }
   };
 
+  // Normalize phone - strip all non-numeric characters
+  const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
+
   // Phone lookup with existing appointment check
   const handlePhoneLookup = async () => {
     if (!barbershop) return;
     
-    const cleanPhone = clientPhone.replace(/\D/g, "");
+    const cleanPhone = normalizePhone(clientPhone);
     if (cleanPhone.length < 10) {
       toast.error("Digite um telefone válido");
       return;
@@ -434,24 +437,30 @@ const PublicBooking = () => {
 
     setPhoneLookupLoading(true);
     try {
-      // Search for client with normalized phone comparison
-      const formattedPhone = formatPhoneMask(cleanPhone);
+      // Get last 9 digits for more robust matching (handles country code variations)
+      const last9Digits = cleanPhone.slice(-9);
       
-      const { data: clientData } = await supabase
+      // Fetch all clients for this barbershop and filter in memory with normalized comparison
+      const { data: allClients } = await supabase
         .from("clientes")
         .select("*")
-        .eq("barbershop_id", barbershop.id)
-        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
-        .maybeSingle();
+        .eq("barbershop_id", barbershop.id);
 
-      if (clientData) {
+      // Find client by comparing normalized phone numbers
+      const matchedClient = allClients?.find((client) => {
+        const normalizedDbPhone = normalizePhone(client.telefone || "");
+        // Match by full normalized phone OR by last 9 digits
+        return normalizedDbPhone === cleanPhone || normalizedDbPhone.slice(-9) === last9Digits;
+      });
+
+      if (matchedClient) {
         // Found existing client
-        setFoundClient(clientData);
-        setClientName(clientData.nome || "");
-        setClientEmail(clientData.email || "");
+        setFoundClient(matchedClient);
+        setClientName(matchedClient.nome || "");
+        setClientEmail(matchedClient.email || "");
         
         // Check for existing appointments
-        await checkExistingAppointmentAndProceed(clientData.client_id);
+        await checkExistingAppointmentAndProceed(matchedClient.client_id);
       } else {
         // New client - proceed to service selection
         setFoundClient(null);
@@ -476,12 +485,6 @@ const PublicBooking = () => {
   // Handle appointment cancelled
   const handleAppointmentCancelled = () => {
     setExistingClientAppointment(null);
-    setCurrentStep(1);
-  };
-
-  // Proceed with new booking anyway
-  const handleProceedNewBooking = () => {
-    setShowExistingAppointmentModal(false);
     setCurrentStep(1);
   };
 
@@ -1476,7 +1479,6 @@ const PublicBooking = () => {
         appointment={existingClientAppointment}
         onReschedule={handleReschedule}
         onCancelled={handleAppointmentCancelled}
-        onProceedNewBooking={handleProceedNewBooking}
       />
 
       {/* Footer */}
