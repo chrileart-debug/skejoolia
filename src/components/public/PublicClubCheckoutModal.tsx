@@ -35,6 +35,7 @@ interface PublicClubCheckoutModalProps {
   plan: Plan;
   barbershopId: string;
   barbershopName: string;
+  loggedInClientId?: string | null;
 }
 
 const formatPrice = (price: number): string => {
@@ -61,6 +62,7 @@ export const PublicClubCheckoutModal = ({
   plan,
   barbershopId,
   barbershopName,
+  loggedInClientId,
 }: PublicClubCheckoutModalProps) => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -91,7 +93,13 @@ export const PublicClubCheckoutModal = ({
     try {
       // First, upsert the client in clientes table
       const cleanPhone = phone.replace(/\D/g, "");
-      const { data: clientData, error: clientError } = await supabase
+      const { data: ownerData } = await supabase
+        .from("barbershops")
+        .select("owner_id")
+        .eq("id", barbershopId)
+        .single();
+
+      const { data: clientData } = await supabase
         .from("clientes")
         .upsert(
           {
@@ -99,36 +107,42 @@ export const PublicClubCheckoutModal = ({
             nome: name.trim(),
             email: email.trim(),
             telefone: cleanPhone,
-            user_id: (await supabase.from("barbershops").select("owner_id").eq("id", barbershopId).single()).data?.owner_id,
+            user_id: ownerData?.owner_id,
           },
           { onConflict: "barbershop_id,telefone" }
         )
         .select("client_id")
         .single();
 
-      // Send to n8n webhook for subscription processing
-      const response = await fetch("https://webhook.lernow.com/webhook/skejool-club-subscription", {
+      // Send to webhook with exact payload structure
+      const response = await fetch("https://webhook.lernow.com/webhook/asaas-meu-clube", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          event: "club_subscription",
+          action: "subscribe_plan",
           barbershop_id: barbershopId,
-          barbershop_name: barbershopName,
           plan_id: plan.id,
-          plan_name: plan.name,
-          plan_price: plan.price,
-          plan_interval: plan.interval,
-          customer_name: name.trim(),
-          customer_email: email.trim(),
-          customer_phone: cleanPhone,
-          client_id: clientData?.client_id || null,
+          client_id: loggedInClientId || clientData?.client_id || null,
+          customer_details: {
+            name: name.trim(),
+            email: email.trim(),
+            phone: cleanPhone,
+          },
         }),
       });
 
       if (!response.ok) {
         throw new Error("Failed to submit subscription");
+      }
+
+      const data = await response.json();
+
+      // If webhook returns checkout_url, redirect immediately
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
       }
 
       setSuccess(true);
