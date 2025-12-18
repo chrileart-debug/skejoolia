@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PublicClubSection } from "@/components/public/PublicClubSection";
 import { ClientLoginModal } from "@/components/public/ClientLoginModal";
 import { ClientPortal } from "@/components/public/ClientPortal";
+import { ExistingAppointmentModal } from "@/components/public/ExistingAppointmentModal";
 import {
   ArrowLeft,
   Calendar as CalendarIcon,
@@ -29,6 +30,7 @@ import {
   RefreshCw,
   Crown,
   Gift,
+  Loader2,
 } from "lucide-react";
 
 // Types
@@ -94,6 +96,18 @@ interface SubscriberPlanItem {
   service_id: string;
   quantity_limit: number | null;
   used_count: number;
+}
+
+interface ExistingAppointment {
+  id_agendamento: string;
+  start_time: string;
+  end_time: string | null;
+  status: string | null;
+  nome_cliente: string | null;
+  service_name?: string;
+  professional_name?: string;
+  user_id: string;
+  service_id: string | null;
 }
 
 // Constants
@@ -165,20 +179,24 @@ const PublicBooking = () => {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [subscriberPlanItems, setSubscriberPlanItems] = useState<SubscriberPlanItem[]>([]);
 
+  // Phone-first flow states
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
+  const [foundClient, setFoundClient] = useState<ClientData | null>(null);
+  const [existingClientAppointment, setExistingClientAppointment] = useState<ExistingAppointment | null>(null);
+  const [showExistingAppointmentModal, setShowExistingAppointmentModal] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<string | null>(null);
+
   // Wizard states
   const [activeTab, setActiveTab] = useState<string>("agendar");
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // 0 = phone, 1 = service, 2 = professional, 3 = time, 4 = confirm
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<StaffMember | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayInBrasilia());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-
-  // Client form states
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientLookupLoading, setClientLookupLoading] = useState(false);
-  const [foundExistingClient, setFoundExistingClient] = useState<ClientData | null>(null);
 
   // Fetch barbershop and initial data
   useEffect(() => {
@@ -190,7 +208,6 @@ const PublicBooking = () => {
       }
 
       try {
-        // Fetch barbershop by slug
         const { data: barbershopData, error: barbershopError } = await supabase
           .from("barbershops")
           .select("*")
@@ -206,7 +223,6 @@ const PublicBooking = () => {
 
         setBarbershop(barbershopData);
 
-        // Fetch services, categories, staff in parallel
         const [servicesRes, categoriesRes, staffRes, staffServicesRes, staffSchedulesRes] = await Promise.all([
           supabase
             .from("services")
@@ -240,7 +256,6 @@ const PublicBooking = () => {
         if (staffServicesRes.data) setStaffServices(staffServicesRes.data);
         if (staffSchedulesRes.data) setStaffSchedules(staffSchedulesRes.data);
 
-        // Fetch staff names
         if (staffRes.data && staffRes.data.length > 0) {
           const userIds = staffRes.data.map((r) => r.user_id);
           const { data: settingsData } = await supabase
@@ -279,7 +294,6 @@ const PublicBooking = () => {
       }
 
       try {
-        // Fetch active subscription
         const { data: subData } = await supabase
           .from("client_club_subscriptions")
           .select("id, plan_id")
@@ -293,7 +307,6 @@ const PublicBooking = () => {
           return;
         }
 
-        // Fetch plan items
         const { data: itemsData } = await supabase
           .from("barber_plan_items")
           .select("service_id, quantity_limit")
@@ -304,7 +317,6 @@ const PublicBooking = () => {
           return;
         }
 
-        // Fetch usage for current month
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -315,7 +327,6 @@ const PublicBooking = () => {
           .eq("subscription_id", subData.id)
           .gte("used_at", startOfMonth.toISOString());
 
-        // Build subscriber plan items with usage
         const usageMap: Record<string, number> = {};
         if (usageData) {
           usageData.forEach((u) => {
@@ -339,51 +350,19 @@ const PublicBooking = () => {
     fetchSubscriberData();
   }, [loggedInClient, barbershop]);
 
-  // Pre-fill client data when logged in
+  // Pre-fill client data when logged in from Minha Área
   useEffect(() => {
     if (loggedInClient) {
       setClientName(loggedInClient.nome || "");
       setClientPhone(loggedInClient.telefone ? formatPhoneMask(loggedInClient.telefone) : "");
       setClientEmail(loggedInClient.email || "");
-      setFoundExistingClient(loggedInClient);
+      setFoundClient(loggedInClient);
+      // Skip phone step if already logged in
+      if (currentStep === 0) {
+        checkExistingAppointmentAndProceed(loggedInClient.client_id);
+      }
     }
   }, [loggedInClient]);
-
-  // Real-time phone lookup
-  const handlePhoneLookup = async (phone: string) => {
-    if (!barbershop) return;
-    
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 10) {
-      setFoundExistingClient(null);
-      return;
-    }
-
-    setClientLookupLoading(true);
-    try {
-      // Format phone for lookup
-      const formattedPhone = formatPhoneMask(cleanPhone);
-      
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("barbershop_id", barbershop.id)
-        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
-        .single();
-
-      if (data && !error) {
-        setFoundExistingClient(data);
-        setClientName(data.nome || "");
-        setClientEmail(data.email || "");
-      } else {
-        setFoundExistingClient(null);
-      }
-    } catch (error) {
-      setFoundExistingClient(null);
-    } finally {
-      setClientLookupLoading(false);
-    }
-  };
 
   // Fetch appointments when date changes
   useEffect(() => {
@@ -406,6 +385,106 @@ const PublicBooking = () => {
     fetchAppointments();
   }, [barbershop, selectedDate]);
 
+  // Check for existing appointment and proceed
+  const checkExistingAppointmentAndProceed = async (clientId: string) => {
+    if (!barbershop) return;
+
+    try {
+      const now = new Date().toISOString();
+      
+      const { data: appointments } = await supabase
+        .from("agendamentos")
+        .select("*, services(name)")
+        .eq("barbershop_id", barbershop.id)
+        .eq("client_id", clientId)
+        .in("status", ["pending", "confirmed"])
+        .gte("start_time", now)
+        .order("start_time", { ascending: true })
+        .limit(1);
+
+      if (appointments && appointments.length > 0) {
+        const apt = appointments[0];
+        // Get professional name
+        const professional = staffMembers.find(s => s.user_id === apt.user_id);
+        setExistingClientAppointment({
+          ...apt,
+          service_name: (apt.services as any)?.name,
+          professional_name: professional?.name || null,
+        });
+        setShowExistingAppointmentModal(true);
+      } else {
+        // No existing appointment, proceed to service selection
+        setCurrentStep(1);
+      }
+    } catch (error) {
+      console.error("Error checking existing appointments:", error);
+      setCurrentStep(1);
+    }
+  };
+
+  // Phone lookup with existing appointment check
+  const handlePhoneLookup = async () => {
+    if (!barbershop) return;
+    
+    const cleanPhone = clientPhone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      toast.error("Digite um telefone válido");
+      return;
+    }
+
+    setPhoneLookupLoading(true);
+    try {
+      // Search for client with normalized phone comparison
+      const formattedPhone = formatPhoneMask(cleanPhone);
+      
+      const { data: clientData } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("barbershop_id", barbershop.id)
+        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
+        .maybeSingle();
+
+      if (clientData) {
+        // Found existing client
+        setFoundClient(clientData);
+        setClientName(clientData.nome || "");
+        setClientEmail(clientData.email || "");
+        
+        // Check for existing appointments
+        await checkExistingAppointmentAndProceed(clientData.client_id);
+      } else {
+        // New client - proceed to service selection
+        setFoundClient(null);
+        setCurrentStep(1);
+      }
+    } catch (error) {
+      console.error("Error looking up phone:", error);
+      setCurrentStep(1);
+    } finally {
+      setPhoneLookupLoading(false);
+    }
+  };
+
+  // Handle reschedule
+  const handleReschedule = (appointmentId: string) => {
+    setIsRescheduling(true);
+    setRescheduleAppointmentId(appointmentId);
+    // Skip to service step (keep same service if possible) or just time selection
+    setCurrentStep(1);
+  };
+
+  // Handle appointment cancelled
+  const handleAppointmentCancelled = () => {
+    setExistingClientAppointment(null);
+    setCurrentStep(1);
+  };
+
+  // Proceed with new booking anyway
+  const handleProceedNewBooking = () => {
+    setShowExistingAppointmentModal(false);
+    setCurrentStep(1);
+  };
+
   // Check if service is included in subscriber plan with remaining credits
   const isServiceIncludedInPlan = (serviceId: string): { included: boolean; hasCredits: boolean } => {
     const planItem = subscriberPlanItems.find((item) => item.service_id === serviceId);
@@ -417,7 +496,7 @@ const PublicBooking = () => {
     return { included: true, hasCredits };
   };
 
-  // Get display price for service (R$0,00 if included with credits)
+  // Get display price for service
   const getDisplayPrice = (service: Service): { price: string; isIncluded: boolean } => {
     const { included, hasCredits } = isServiceIncludedInPlan(service.id);
     if (included && hasCredits) {
@@ -464,7 +543,6 @@ const PublicBooking = () => {
     const breakStartMinutes = schedule.break_start ? timeToMinutes(schedule.break_start) : null;
     const breakEndMinutes = schedule.break_end ? timeToMinutes(schedule.break_end) : null;
 
-    // Filter appointments for this professional
     const proAppointments = existingAppointments.filter(
       (apt) => apt.user_id === selectedProfessional.user_id
     );
@@ -473,7 +551,6 @@ const PublicBooking = () => {
       const slotTime = minutesToTime(time);
       const slotEndMinutes = time + duration;
 
-      // Check break overlap
       if (breakStartMinutes !== null && breakEndMinutes !== null) {
         if (time < breakEndMinutes && slotEndMinutes > breakStartMinutes) {
           slots.push({ time: slotTime, available: false });
@@ -481,9 +558,11 @@ const PublicBooking = () => {
         }
       }
 
-      // Check existing appointments overlap
       let hasConflict = false;
       for (const apt of proAppointments) {
+        // Skip the appointment being rescheduled
+        if (isRescheduling && apt.id_agendamento === rescheduleAppointmentId) continue;
+        
         const aptStart = new Date(apt.start_time);
         const aptEnd = apt.end_time ? new Date(apt.end_time) : new Date(aptStart.getTime() + 30 * 60000);
         const aptStartMinutes = aptStart.getHours() * 60 + aptStart.getMinutes();
@@ -495,7 +574,6 @@ const PublicBooking = () => {
         }
       }
 
-      // Check if slot is in the past
       const now = new Date();
       const slotDate = new Date(`${selectedDate}T${slotTime}:00`);
       const isInPast = slotDate < now;
@@ -504,7 +582,7 @@ const PublicBooking = () => {
     }
 
     return slots;
-  }, [selectedProfessional, selectedDate, selectedService, staffSchedules, existingAppointments]);
+  }, [selectedProfessional, selectedDate, selectedService, staffSchedules, existingAppointments, isRescheduling, rescheduleAppointmentId]);
 
   // Group services by category
   const servicesByCategory = useMemo(() => {
@@ -524,13 +602,18 @@ const PublicBooking = () => {
   }, [services]);
 
   // Navigation
-  const goToStep = (step: number) => setCurrentStep(step);
-
   const handleBack = () => {
-    if (currentStep > 1) {
-      if (currentStep === 2) setSelectedService(null);
-      if (currentStep === 3) setSelectedProfessional(null);
-      if (currentStep === 4) setSelectedTime(null);
+    if (currentStep > 0) {
+      if (currentStep === 1) {
+        setSelectedService(null);
+        // Go back to phone if not logged in
+        if (!loggedInClient) {
+          setCurrentStep(0);
+          return;
+        }
+      }
+      if (currentStep === 2) setSelectedProfessional(null);
+      if (currentStep === 3) setSelectedTime(null);
       setCurrentStep(currentStep - 1);
     }
   };
@@ -552,7 +635,12 @@ const PublicBooking = () => {
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    setCurrentStep(4);
+    // If client is known, go directly to confirmation. Otherwise, show form
+    if (foundClient || loggedInClient) {
+      setCurrentStep(4);
+    } else {
+      setCurrentStep(4);
+    }
   };
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -565,14 +653,14 @@ const PublicBooking = () => {
 
   // Submit booking
   const handleSubmit = async () => {
-    if (!clientName.trim()) {
-      toast.error("Digite seu nome");
-      return;
-    }
-
-    if (!clientPhone.trim() || clientPhone.replace(/\D/g, "").length < 10) {
-      toast.error("Digite um telefone válido");
-      return;
+    const effectiveClient = foundClient || loggedInClient;
+    
+    // Validate required fields for new clients
+    if (!effectiveClient) {
+      if (!clientName.trim()) {
+        toast.error("Digite seu nome");
+        return;
+      }
     }
 
     if (!barbershop || !selectedService || !selectedProfessional || !selectedTime) {
@@ -583,34 +671,59 @@ const PublicBooking = () => {
     setSubmitting(true);
 
     try {
-      // Build start_time as ISO timestamp with Brasilia offset
       const startDateTime = `${selectedDate}T${selectedTime}:00-03:00`;
+      const effectiveName = effectiveClient?.nome || clientName.trim();
+      const effectivePhone = clientPhone.replace(/\D/g, "");
 
-      // Call RPC function that handles client upsert + appointment creation atomically
-      const { data, error } = await supabase.rpc("handle_public_booking", {
-        p_barbershop_id: barbershop.id,
-        p_nome: clientName.trim(),
-        p_telefone: clientPhone,
-        p_service_id: selectedService.id,
-        p_start_time: startDateTime,
-        p_user_id: selectedProfessional.user_id,
-        p_email: clientEmail || null,
-      });
+      if (isRescheduling && rescheduleAppointmentId) {
+        // Update existing appointment instead of creating new
+        const duration = selectedService.duration_minutes || 30;
+        const startDate = new Date(`${selectedDate}T${selectedTime}:00`);
+        const endDate = new Date(startDate.getTime() + duration * 60000);
+        const endDateTime = endDate.toISOString();
 
-      if (error) {
-        console.error("RPC error:", error);
-        if (error.message.includes("invalid_phone")) {
-          toast.error("Telefone inválido");
-        } else if (error.message.includes("invalid_name")) {
-          toast.error("Nome é obrigatório");
-        } else {
-          toast.error("Erro ao realizar agendamento. Tente novamente.");
+        const { error } = await supabase
+          .from("agendamentos")
+          .update({
+            start_time: startDateTime,
+            end_time: endDateTime,
+            service_id: selectedService.id,
+            user_id: selectedProfessional.user_id,
+            status: "pending",
+          })
+          .eq("id_agendamento", rescheduleAppointmentId);
+
+        if (error) throw error;
+
+        setSuccess(true);
+        toast.success("Agendamento remarcado com sucesso!");
+      } else {
+        // Create new appointment
+        const { data, error } = await supabase.rpc("handle_public_booking", {
+          p_barbershop_id: barbershop.id,
+          p_nome: effectiveName,
+          p_telefone: formatPhoneMask(effectivePhone),
+          p_service_id: selectedService.id,
+          p_start_time: startDateTime,
+          p_user_id: selectedProfessional.user_id,
+          p_email: clientEmail || null,
+        });
+
+        if (error) {
+          console.error("RPC error:", error);
+          if (error.message.includes("invalid_phone")) {
+            toast.error("Telefone inválido");
+          } else if (error.message.includes("invalid_name")) {
+            toast.error("Nome é obrigatório");
+          } else {
+            toast.error("Erro ao realizar agendamento. Tente novamente.");
+          }
+          return;
         }
-        return;
-      }
 
-      setSuccess(true);
-      toast.success("Agendamento realizado com sucesso!");
+        setSuccess(true);
+        toast.success("Agendamento realizado com sucesso!");
+      }
     } catch (error) {
       console.error("Booking error:", error);
       toast.error("Erro ao realizar agendamento. Tente novamente.");
@@ -621,15 +734,17 @@ const PublicBooking = () => {
 
   const handleNewBooking = () => {
     setSuccess(false);
-    setCurrentStep(1);
+    setCurrentStep(loggedInClient ? 1 : 0);
     setSelectedService(null);
     setSelectedProfessional(null);
     setSelectedTime(null);
-    // Preserve client data if logged in
+    setIsRescheduling(false);
+    setRescheduleAppointmentId(null);
     if (!loggedInClient) {
       setClientName("");
       setClientPhone("");
       setClientEmail("");
+      setFoundClient(null);
     }
   };
 
@@ -644,6 +759,8 @@ const PublicBooking = () => {
     setClientName("");
     setClientPhone("");
     setClientEmail("");
+    setFoundClient(null);
+    setCurrentStep(0);
     setActiveTab("agendar");
   };
 
@@ -690,7 +807,9 @@ const PublicBooking = () => {
             <CheckCircle2 className="w-12 h-12 text-primary" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-foreground">Agendamento Confirmado!</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {isRescheduling ? "Agendamento Remarcado!" : "Agendamento Confirmado!"}
+            </h1>
             <p className="text-muted-foreground">
               Seu horário foi reservado com sucesso.
             </p>
@@ -741,13 +860,25 @@ const PublicBooking = () => {
     );
   }
 
-  // Step indicators
-  const steps = [
-    { num: 1, label: "Serviço", icon: Scissors },
-    { num: 2, label: "Profissional", icon: Users },
-    { num: 3, label: "Horário", icon: Clock },
-    { num: 4, label: "Seus Dados", icon: User },
-  ];
+  // Step indicators for booking flow
+  const getSteps = () => {
+    const baseSteps = [
+      { num: 0, label: "WhatsApp", icon: Phone },
+      { num: 1, label: "Serviço", icon: Scissors },
+      { num: 2, label: "Profissional", icon: Users },
+      { num: 3, label: "Horário", icon: Clock },
+      { num: 4, label: "Confirmar", icon: Check },
+    ];
+    
+    // Skip phone step if logged in
+    if (loggedInClient) {
+      return baseSteps.slice(1);
+    }
+    return baseSteps;
+  };
+
+  const steps = getSteps();
+  const effectiveStep = loggedInClient ? currentStep - 1 : currentStep;
 
   return (
     <div className="min-h-screen bg-background">
@@ -823,454 +954,478 @@ const PublicBooking = () => {
 
         {/* Booking Tab */}
         <TabsContent value="agendar" className="mt-0">
-
-      {/* Progress Steps */}
-      <div className="bg-muted/30 border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {steps.map((step, idx) => (
-              <div key={step.num} className="flex items-center">
-                <div
-                  className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all",
-                    currentStep > step.num
-                      ? "bg-primary text-primary-foreground"
-                      : currentStep === step.num
-                      ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {currentStep > step.num ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    step.num
-                  )}
-                </div>
-                {idx < steps.length - 1 && (
-                  <div
-                    className={cn(
-                      "w-12 sm:w-20 h-1 mx-1 rounded-full transition-all",
-                      currentStep > step.num ? "bg-primary" : "bg-muted"
-                    )}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-2">
-            {steps.map((step) => (
-              <p
-                key={step.num}
-                className={cn(
-                  "text-xs font-medium text-center w-16",
-                  currentStep === step.num ? "text-primary" : "text-muted-foreground"
-                )}
-              >
-                {step.label}
-              </p>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-2xl mx-auto px-4 py-6">
-        {/* Back button */}
-        {currentStep > 1 && (
-          <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar
-          </Button>
-        )}
-
-        {/* Step 1: Services */}
-        {currentStep === 1 && (
-          <div className="animate-fade-in space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Escolha o serviço</h2>
-              <p className="text-muted-foreground">Selecione o que você deseja fazer</p>
-            </div>
-
-            {categories.map((category) => {
-              const categoryServices = servicesByCategory.grouped[category.id];
-              if (!categoryServices?.length) return null;
-
-              return (
-                <div key={category.id} className="space-y-3">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    {category.name}
-                  </h3>
-                  <div className="grid gap-3">
-                    {categoryServices.map((service) => {
-                      const { price: displayPrice, isIncluded } = getDisplayPrice(service);
-                      return (
-                        <button
-                          key={service.id}
-                          onClick={() => handleServiceSelect(service)}
+          {/* Progress Steps */}
+          {currentStep > 0 && (
+            <div className="bg-muted/30 border-b border-border">
+              <div className="max-w-2xl mx-auto px-4 py-4">
+                <div className="flex items-center justify-between">
+                  {steps.slice(loggedInClient ? 0 : 1).map((step, idx) => (
+                    <div key={step.num} className="flex items-center">
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all",
+                          currentStep > step.num
+                            ? "bg-primary text-primary-foreground"
+                            : currentStep === step.num
+                            ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {currentStep > step.num ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          idx + 1
+                        )}
+                      </div>
+                      {idx < steps.slice(loggedInClient ? 0 : 1).length - 1 && (
+                        <div
                           className={cn(
-                            "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
-                            isIncluded ? "border-success/50 bg-success/5" : "border-border"
+                            "w-8 sm:w-16 h-1 mx-1 rounded-full transition-all",
+                            currentStep > step.num ? "bg-primary" : "bg-muted"
                           )}
-                        >
-                          <div className="flex items-start gap-4">
-                            {service.image_url ? (
-                              <img
-                                src={service.image_url}
-                                alt={service.name}
-                                className="w-16 h-16 rounded-lg object-cover"
-                              />
-                            ) : (
-                              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                                {service.is_package ? (
-                                  <Package className="w-6 h-6 text-primary" />
-                                ) : (
-                                  <Scissors className="w-6 h-6 text-primary" />
-                                )}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                                  {service.name}
-                                </p>
-                                {service.is_package && (
-                                  <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
-                                    Combo
-                                  </span>
-                                )}
-                                {isIncluded && (
-                                  <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
-                                    <Gift className="w-3 h-3" />
-                                    Incluso no Plano
-                                  </span>
-                                )}
-                              </div>
-                              {service.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                                  {service.description}
-                                </p>
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <main className="max-w-2xl mx-auto px-4 py-6">
+            {/* Back button */}
+            {currentStep > (loggedInClient ? 1 : 0) && (
+              <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+            )}
+
+            {/* Step 0: Phone Input */}
+            {currentStep === 0 && !loggedInClient && (
+              <div className="animate-fade-in space-y-6">
+                <div className="text-center space-y-2">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <Phone className="w-8 h-8 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground">Qual seu WhatsApp?</h2>
+                  <p className="text-muted-foreground">
+                    Digite seu número para começar
+                  </p>
+                </div>
+
+                <div className="space-y-4 max-w-sm mx-auto">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone-start">WhatsApp</Label>
+                    <Input
+                      id="phone-start"
+                      type="tel"
+                      placeholder="(00) 00000-0000"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(formatPhoneMask(e.target.value))}
+                      className="h-14 text-center text-lg"
+                      autoFocus
+                    />
+                  </div>
+
+                  <Button
+                    onClick={handlePhoneLookup}
+                    disabled={phoneLookupLoading || clientPhone.replace(/\D/g, "").length < 10}
+                    className="w-full h-12"
+                  >
+                    {phoneLookupLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        Continuar
+                        <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Services */}
+            {currentStep === 1 && (
+              <div className="animate-fade-in space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Escolha o serviço</h2>
+                  <p className="text-muted-foreground">
+                    {foundClient ? `Olá, ${foundClient.nome}! ` : ""}Selecione o que você deseja fazer
+                  </p>
+                </div>
+
+                {/* Welcome back message */}
+                {foundClient && (
+                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Bem-vindo de volta!</p>
+                      <p className="text-sm text-muted-foreground">Bom te ver novamente, {foundClient.nome}.</p>
+                    </div>
+                  </div>
+                )}
+
+                {categories.map((category) => {
+                  const categoryServices = servicesByCategory.grouped[category.id];
+                  if (!categoryServices?.length) return null;
+
+                  return (
+                    <div key={category.id} className="space-y-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                        {category.name}
+                      </h3>
+                      <div className="grid gap-3">
+                        {categoryServices.map((service) => {
+                          const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                          return (
+                            <button
+                              key={service.id}
+                              onClick={() => handleServiceSelect(service)}
+                              className={cn(
+                                "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
+                                isIncluded ? "border-success/50 bg-success/5" : "border-border"
                               )}
-                              <div className="flex items-center gap-3 mt-2">
-                                <span className={cn(
-                                  "text-lg font-bold",
-                                  isIncluded ? "text-success" : "text-primary"
-                                )}>
-                                  {displayPrice}
-                                </span>
-                                {isIncluded && service.price > 0 && (
-                                  <span className="text-sm text-muted-foreground line-through">
-                                    {formatPrice(service.price)}
-                                  </span>
+                            >
+                              <div className="flex items-start gap-4">
+                                {service.image_url ? (
+                                  <img
+                                    src={service.image_url}
+                                    alt={service.name}
+                                    className="w-16 h-16 rounded-lg object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                                    {service.is_package ? (
+                                      <Package className="w-6 h-6 text-primary" />
+                                    ) : (
+                                      <Scissors className="w-6 h-6 text-primary" />
+                                    )}
+                                  </div>
                                 )}
-                                {service.duration_minutes && (
-                                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    {formatDuration(service.duration_minutes)}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                      {service.name}
+                                    </p>
+                                    {service.is_package && (
+                                      <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
+                                        Combo
+                                      </span>
+                                    )}
+                                    {isIncluded && (
+                                      <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
+                                        <Gift className="w-3 h-3" />
+                                        Incluso no Plano
+                                      </span>
+                                    )}
+                                  </div>
+                                  {service.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                      {service.description}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center gap-3 mt-2">
+                                    <span className={cn(
+                                      "text-lg font-bold",
+                                      isIncluded ? "text-success" : "text-primary"
+                                    )}>
+                                      {displayPrice}
+                                    </span>
+                                    {service.duration_minutes && (
+                                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {formatDuration(service.duration_minutes)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {servicesByCategory.uncategorized.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                      Outros
+                    </h3>
+                    <div className="grid gap-3">
+                      {servicesByCategory.uncategorized.map((service) => {
+                        const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                        return (
+                          <button
+                            key={service.id}
+                            onClick={() => handleServiceSelect(service)}
+                            className={cn(
+                              "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
+                              isIncluded ? "border-success/50 bg-success/5" : "border-border"
+                            )}
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Scissors className="w-6 h-6 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                    {service.name}
+                                  </p>
+                                  {isIncluded && (
+                                    <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
+                                      <Gift className="w-3 h-3" />
+                                      Incluso
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <span className={cn("text-lg font-bold", isIncluded ? "text-success" : "text-primary")}>
+                                    {displayPrice}
                                   </span>
-                                )}
+                                  {service.duration_minutes && (
+                                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                      <Clock className="w-3 h-3" />
+                                      {formatDuration(service.duration_minutes)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Professionals */}
+            {currentStep === 2 && (
+              <div className="animate-fade-in space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Escolha o profissional</h2>
+                  <p className="text-muted-foreground">Quem você prefere para {selectedService?.name}?</p>
+                </div>
+
+                {professionalsForService.length === 0 ? (
+                  <div className="text-center py-12 bg-muted/50 rounded-xl">
+                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum profissional disponível para este serviço</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {professionalsForService.map((pro) => {
+                      const isWorking = isProfessionalWorking(pro.user_id);
+                      return (
+                        <button
+                          key={pro.user_id}
+                          onClick={() => handleProfessionalSelect(pro)}
+                          disabled={!isWorking}
+                          className={cn(
+                            "w-full bg-card rounded-xl border border-border p-4 text-left transition-all group",
+                            isWorking
+                              ? "hover:bg-accent hover:shadow-md"
+                              : "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                              <User className="w-7 h-7 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <p className={cn(
+                                "font-semibold text-foreground transition-colors",
+                                isWorking && "group-hover:text-primary"
+                              )}>
+                                {pro.name || "Profissional"}
+                              </p>
+                              {!isWorking && (
+                                <p className="text-sm text-destructive">Não trabalha neste dia</p>
+                              )}
+                            </div>
+                            {isWorking && (
+                              <Sparkles className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            )}
                           </div>
                         </button>
                       );
                     })}
                   </div>
-                </div>
-              );
-            })}
-
-            {servicesByCategory.uncategorized.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  Outros
-                </h3>
-                <div className="grid gap-3">
-                  {servicesByCategory.uncategorized.map((service) => {
-                    const { price: displayPrice, isIncluded } = getDisplayPrice(service);
-                    return (
-                      <button
-                        key={service.id}
-                        onClick={() => handleServiceSelect(service)}
-                        className={cn(
-                          "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md group",
-                          isIncluded ? "border-success/50 bg-success/5" : "border-border"
-                        )}
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Scissors className="w-6 h-6 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                                {service.name}
-                              </p>
-                              {isIncluded && (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
-                                  <Gift className="w-3 h-3" />
-                                  Incluso
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-2">
-                              <span className={cn("text-lg font-bold", isIncluded ? "text-success" : "text-primary")}>
-                                {displayPrice}
-                              </span>
-                              {service.duration_minutes && (
-                                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {formatDuration(service.duration_minutes)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Step 2: Professionals */}
-        {currentStep === 2 && (
-          <div className="animate-fade-in space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Escolha o profissional</h2>
-              <p className="text-muted-foreground">Quem você prefere para {selectedService?.name}?</p>
-            </div>
-
-            {professionalsForService.length === 0 ? (
-              <div className="text-center py-12 bg-muted/50 rounded-xl">
-                <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Nenhum profissional disponível para este serviço</p>
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {professionalsForService.map((pro) => {
-                  const isWorking = isProfessionalWorking(pro.user_id);
-                  return (
-                    <button
-                      key={pro.user_id}
-                      onClick={() => handleProfessionalSelect(pro)}
-                      disabled={!isWorking}
-                      className={cn(
-                        "w-full bg-card rounded-xl border border-border p-4 text-left transition-all group",
-                        isWorking
-                          ? "hover:bg-accent hover:shadow-md"
-                          : "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="w-7 h-7 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <p className={cn(
-                            "font-semibold text-foreground transition-colors",
-                            isWorking && "group-hover:text-primary"
-                          )}>
-                            {pro.name || "Profissional"}
-                          </p>
-                          {!isWorking && (
-                            <p className="text-sm text-destructive">Não trabalha neste dia</p>
-                          )}
-                        </div>
-                        {isWorking && (
-                          <Sparkles className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 3: Date & Time */}
-        {currentStep === 3 && (
-          <div className="animate-fade-in space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Escolha o horário</h2>
-              <p className="text-muted-foreground">Selecione a data e horário disponível</p>
-            </div>
-
-            <div className="bg-card rounded-xl border border-border p-4">
-              <Calendar
-                mode="single"
-                selected={new Date(selectedDate + "T12:00:00")}
-                onSelect={handleDateSelect}
-                disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                className="rounded-md mx-auto"
-              />
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3">
-                Horários disponíveis - {formatDateDisplay(selectedDate)}
-              </h3>
-
-              {availableTimeSlots.length === 0 ? (
-                <div className="text-center py-8 bg-muted/50 rounded-xl">
-                  <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Nenhum horário disponível neste dia</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {availableTimeSlots.map((slot) => (
-                    <button
-                      key={slot.time}
-                      onClick={() => slot.available && handleTimeSelect(slot.time)}
-                      disabled={!slot.available}
-                      className={cn(
-                        "py-3 px-4 rounded-lg text-sm font-medium transition-all",
-                        slot.available
-                          ? "bg-card hover:bg-primary hover:text-primary-foreground border border-border"
-                          : "bg-muted text-muted-foreground cursor-not-allowed line-through"
-                      )}
-                    >
-                      {slot.time}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Client Details */}
-        {currentStep === 4 && (
-          <div className="animate-fade-in space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Seus dados</h2>
-              <p className="text-muted-foreground">Preencha suas informações para confirmar</p>
-            </div>
-
-            {/* Welcome Back Message */}
-            {foundExistingClient && (
-              <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                </div>
+            {/* Step 3: Date & Time */}
+            {currentStep === 3 && (
+              <div className="animate-fade-in space-y-6">
                 <div>
-                  <p className="font-semibold text-foreground">Bem-vindo de volta, {foundExistingClient.nome}!</p>
-                  <p className="text-sm text-muted-foreground">Encontramos seu cadastro.</p>
+                  <h2 className="text-xl font-bold text-foreground">Escolha o horário</h2>
+                  <p className="text-muted-foreground">Selecione a data e horário disponível</p>
                 </div>
-              </div>
-            )}
 
-            {/* Summary */}
-            <div className="bg-muted/50 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <Scissors className="w-5 h-5 text-primary" />
-                <div>
-                  <p className="font-medium text-foreground">{selectedService?.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-primary" />
-                <p className="font-medium text-foreground">{selectedProfessional?.name}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <CalendarIcon className="w-5 h-5 text-primary" />
-                <p className="font-medium text-foreground">
-                  {formatDateDisplay(selectedDate)} às {selectedTime}
-                </p>
-              </div>
-            </div>
-
-            {/* Form - Phone First */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  WhatsApp *
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="phone"
-                    placeholder="(00) 00000-0000"
-                    value={clientPhone}
-                    onChange={(e) => {
-                      const formatted = formatPhoneMask(e.target.value);
-                      setClientPhone(formatted);
-                    }}
-                    onBlur={(e) => handlePhoneLookup(e.target.value)}
-                    className="h-12"
-                    disabled={!!loggedInClient}
-                    readOnly={!!loggedInClient}
+                <div className="bg-card rounded-xl border border-border p-4">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(selectedDate + "T12:00:00")}
+                    onSelect={handleDateSelect}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    className="rounded-md mx-auto"
                   />
-                  {clientLookupLoading && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-foreground mb-3">
+                    Horários disponíveis - {formatDateDisplay(selectedDate)}
+                  </h3>
+
+                  {availableTimeSlots.length === 0 ? (
+                    <div className="text-center py-8 bg-muted/50 rounded-xl">
+                      <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">Nenhum horário disponível neste dia</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {availableTimeSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          onClick={() => slot.available && handleTimeSelect(slot.time)}
+                          disabled={!slot.available}
+                          className={cn(
+                            "py-3 px-4 rounded-lg text-sm font-medium transition-all",
+                            slot.available
+                              ? "bg-card hover:bg-primary hover:text-primary-foreground border border-border"
+                              : "bg-muted text-muted-foreground cursor-not-allowed line-through"
+                          )}
+                        >
+                          {slot.time}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
-                {loggedInClient && (
-                  <p className="text-xs text-muted-foreground">Você está identificado(a)</p>
+              </div>
+            )}
+
+            {/* Step 4: Confirmation */}
+            {currentStep === 4 && (
+              <div className="animate-fade-in space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">
+                    {isRescheduling ? "Confirmar Remarcação" : "Confirmar Agendamento"}
+                  </h2>
+                  <p className="text-muted-foreground">
+                    {foundClient || loggedInClient 
+                      ? "Revise os detalhes e confirme" 
+                      : "Preencha seus dados para finalizar"}
+                  </p>
+                </div>
+
+                {/* Welcome Back Message for known clients */}
+                {(foundClient || loggedInClient) && (
+                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {(foundClient?.nome || loggedInClient?.nome)}, tudo pronto!
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Você está identificado(a). Só confirmar abaixo.
+                      </p>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="name" className="flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Nome completo *
-                </Label>
-                <Input
-                  id="name"
-                  placeholder="Digite seu nome"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  className="h-12"
-                  disabled={!!loggedInClient}
-                  readOnly={!!loggedInClient}
-                />
-              </div>
+                {/* Summary */}
+                <div className="bg-muted/50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Scissors className="w-5 h-5 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">{selectedService?.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-primary" />
+                    <p className="font-medium text-foreground">{selectedProfessional?.name}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <CalendarIcon className="w-5 h-5 text-primary" />
+                    <p className="font-medium text-foreground">
+                      {formatDateDisplay(selectedDate)} às {selectedTime}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  E-mail (opcional)
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  className="h-12"
-                  disabled={!!loggedInClient}
-                  readOnly={!!loggedInClient}
-                />
-              </div>
-            </div>
+                {/* Form - Only for NEW clients */}
+                {!foundClient && !loggedInClient && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        Nome completo *
+                      </Label>
+                      <Input
+                        id="name"
+                        placeholder="Digite seu nome"
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                        className="h-12"
+                      />
+                    </div>
 
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full h-12 text-lg"
-            >
-              {submitting ? (
-                <>
-                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                  Agendando...
-                </>
-              ) : (
-                <>
-                  <Check className="w-5 h-5 mr-2" />
-                  Confirmar Agendamento
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-      </main>
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="flex items-center gap-2">
+                        <Mail className="w-4 h-4" />
+                        E-mail (opcional)
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={clientEmail}
+                        onChange={(e) => setClientEmail(e.target.value)}
+                        className="h-12"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="w-full h-12 text-lg"
+                >
+                  {submitting ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                      {isRescheduling ? "Remarcando..." : "Agendando..."}
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5 mr-2" />
+                      {isRescheduling ? "Confirmar Remarcação" : "Confirmar Agendamento"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </main>
         </TabsContent>
 
         {/* Club Tab */}
@@ -1313,6 +1468,16 @@ const PublicBooking = () => {
           onClientFound={handleClientLogin}
         />
       )}
+
+      {/* Existing Appointment Modal */}
+      <ExistingAppointmentModal
+        open={showExistingAppointmentModal}
+        onOpenChange={setShowExistingAppointmentModal}
+        appointment={existingClientAppointment}
+        onReschedule={handleReschedule}
+        onCancelled={handleAppointmentCancelled}
+        onProceedNewBooking={handleProceedNewBooking}
+      />
 
       {/* Footer */}
       <footer className="border-t border-border mt-auto">
