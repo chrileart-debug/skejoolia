@@ -456,7 +456,6 @@ export default function Club() {
         onSaved={handlePlanSaved}
         plan={editingPlan}
         barbershopId={barbershop?.id || ""}
-        isSubscriptionActive={isActive}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
