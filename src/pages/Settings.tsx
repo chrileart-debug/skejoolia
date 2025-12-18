@@ -69,6 +69,8 @@ export default function Settings() {
     cpfCnpj: "",
     cep: "",
     address: "",
+    addressNumber: "",
+    bairro: "",
     city: "",
     state: "",
   });
@@ -128,6 +130,8 @@ export default function Settings() {
           cpfCnpj: barbershop.cpf_cnpj || "",
           cep: barbershop.cep || "",
           address: barbershop.address || "",
+          addressNumber: barbershop.address_number || "",
+          bairro: barbershop.bairro || "",
           city: barbershop.city || "",
           state: barbershop.state || "",
         });
@@ -218,6 +222,8 @@ export default function Settings() {
           cpf_cnpj: businessData.cpfCnpj,
           cep: businessData.cep,
           address: businessData.address,
+          address_number: businessData.addressNumber,
+          bairro: businessData.bairro,
           city: businessData.city,
           state: businessData.state,
         })
@@ -460,14 +466,39 @@ export default function Settings() {
                 />
               </div>
 
-              {/* Address */}
+              {/* Address + Number */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label>Endereço (Logradouro)</Label>
+                  <Input
+                    value={businessData.address}
+                    onChange={(e) =>
+                      setBusinessData({ ...businessData, address: e.target.value })
+                    }
+                    placeholder="Rua, Avenida..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input
+                    value={businessData.addressNumber}
+                    onChange={(e) =>
+                      setBusinessData({ ...businessData, addressNumber: e.target.value })
+                    }
+                    placeholder="123"
+                  />
+                </div>
+              </div>
+
+              {/* Bairro */}
               <div className="space-y-2">
-                <Label>Endereço</Label>
+                <Label>Bairro</Label>
                 <Input
-                  value={businessData.address}
+                  value={businessData.bairro}
                   onChange={(e) =>
-                    setBusinessData({ ...businessData, address: e.target.value })
+                    setBusinessData({ ...businessData, bairro: e.target.value })
                   }
+                  placeholder="Nome do bairro"
                 />
               </div>
 

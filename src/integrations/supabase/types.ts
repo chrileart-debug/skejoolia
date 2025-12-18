@@ -322,12 +322,17 @@ export type Database = {
       barbershops: {
         Row: {
           address: string | null
+          address_number: string | null
+          asaas_api_key: string | null
           asaas_customer_id: string | null
+          asaas_wallet_id: string | null
+          bairro: string | null
           cep: string | null
           city: string | null
           cpf_cnpj: string | null
           created_at: string
           id: string
+          income_value: number | null
           is_active: boolean | null
           logo_url: string | null
           name: string
@@ -344,12 +349,17 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          address_number?: string | null
+          asaas_api_key?: string | null
           asaas_customer_id?: string | null
+          asaas_wallet_id?: string | null
+          bairro?: string | null
           cep?: string | null
           city?: string | null
           cpf_cnpj?: string | null
           created_at?: string
           id?: string
+          income_value?: number | null
           is_active?: boolean | null
           logo_url?: string | null
           name: string
@@ -366,12 +376,17 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          address_number?: string | null
+          asaas_api_key?: string | null
           asaas_customer_id?: string | null
+          asaas_wallet_id?: string | null
+          bairro?: string | null
           cep?: string | null
           city?: string | null
           cpf_cnpj?: string | null
           created_at?: string
           id?: string
+          income_value?: number | null
           is_active?: boolean | null
           logo_url?: string | null
           name?: string
