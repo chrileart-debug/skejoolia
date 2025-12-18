@@ -177,15 +177,23 @@ export const PublicClubCheckoutModal = ({
       const data = await response.json();
       console.log("📥 n8n Response data:", data);
 
-      // If webhook returns checkout_url, redirect immediately
+      // CRITICAL: Redirect immediately to the link from webhook response
+      if (data.link) {
+        console.log("🔗 Redirecting to checkout:", data.link);
+        window.location.href = data.link;
+        return;
+      }
+
+      // Fallback: also check for checkout_url for backwards compatibility
       if (data.checkout_url) {
         console.log("🔗 Redirecting to checkout:", data.checkout_url);
         window.location.href = data.checkout_url;
         return;
       }
 
-      setSuccess(true);
-      toast.success("Solicitação enviada com sucesso!");
+      // If no redirect link received, show error
+      console.error("❌ No redirect link received from webhook");
+      toast.error("Erro: Link de pagamento não recebido. Tente novamente.");
     } catch (error) {
       console.error("❌ Subscription error:", error);
       toast.error("Erro ao conectar com o servidor de pagamentos. Tente novamente.");
