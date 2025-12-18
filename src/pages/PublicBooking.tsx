@@ -385,31 +385,35 @@ const PublicBooking = () => {
     fetchAppointments();
   }, [barbershop, selectedDate]);
 
-  // Check for existing appointment and proceed
+  // Check for existing appointment and proceed (used when client is already logged in)
   const checkExistingAppointmentAndProceed = async (clientId: string) => {
     if (!barbershop) return;
 
+    const cleanPhone = normalizePhone(loggedInClient?.telefone || clientPhone);
+    
     try {
-      const now = new Date().toISOString();
-      
-      const { data: appointments } = await supabase
-        .from("agendamentos")
-        .select("*, services(name)")
-        .eq("barbershop_id", barbershop.id)
-        .eq("client_id", clientId)
-        .in("status", ["pending", "confirmed"])
-        .gte("start_time", now)
-        .order("start_time", { ascending: true })
-        .limit(1);
+      // Use DB function to check for active appointment
+      const { data: aptData } = await supabase.rpc(
+        "get_active_appointment_for_client_phone",
+        {
+          p_barbershop_id: barbershop.id,
+          p_client_id: clientId,
+          p_phone: cleanPhone,
+        }
+      );
 
-      if (appointments && appointments.length > 0) {
-        const apt = appointments[0];
-        // Get professional name
-        const professional = staffMembers.find(s => s.user_id === apt.user_id);
+      if (aptData && aptData.length > 0) {
+        const apt = aptData[0];
         setExistingClientAppointment({
-          ...apt,
-          service_name: (apt.services as any)?.name,
-          professional_name: professional?.name || null,
+          id_agendamento: apt.id_agendamento,
+          start_time: apt.start_time,
+          end_time: apt.end_time,
+          status: apt.status,
+          nome_cliente: apt.nome_cliente,
+          service_id: apt.service_id,
+          user_id: apt.user_id,
+          service_name: apt.service_name,
+          professional_name: apt.professional_name,
         });
         setShowExistingAppointmentModal(true);
       } else {
@@ -425,7 +429,7 @@ const PublicBooking = () => {
   // Normalize phone - strip all non-numeric characters
   const normalizePhone = (phone: string): string => phone.replace(/\D/g, "");
 
-  // Phone lookup with existing appointment check
+  // Phone lookup with existing appointment check using database RPC
   const handlePhoneLookup = async () => {
     if (!barbershop) return;
     
@@ -437,30 +441,58 @@ const PublicBooking = () => {
 
     setPhoneLookupLoading(true);
     try {
-      // Get last 9 digits for more robust matching (handles country code variations)
-      const last9Digits = cleanPhone.slice(-9);
-      
-      // Fetch all clients for this barbershop and filter in memory with normalized comparison
-      const { data: allClients } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("barbershop_id", barbershop.id);
+      // Use robust DB function to find client by phone (handles all formats)
+      const { data: clientData, error: lookupError } = await supabase.rpc(
+        "find_client_by_phone",
+        {
+          p_barbershop_id: barbershop.id,
+          p_phone: cleanPhone,
+        }
+      );
 
-      // Find client by comparing normalized phone numbers
-      const matchedClient = allClients?.find((client) => {
-        const normalizedDbPhone = normalizePhone(client.telefone || "");
-        // Match by full normalized phone OR by last 9 digits
-        return normalizedDbPhone === cleanPhone || normalizedDbPhone.slice(-9) === last9Digits;
-      });
+      if (lookupError) {
+        console.error("Phone lookup error:", lookupError);
+        setFoundClient(null);
+        setCurrentStep(1);
+        return;
+      }
+
+      const matchedClient = clientData && clientData.length > 0 ? clientData[0] : null;
 
       if (matchedClient) {
-        // Found existing client
-        setFoundClient(matchedClient);
+        // Found existing client - store in state
+        setFoundClient(matchedClient as ClientData);
         setClientName(matchedClient.nome || "");
         setClientEmail(matchedClient.email || "");
         
-        // Check for existing appointments
-        await checkExistingAppointmentAndProceed(matchedClient.client_id);
+        // Check for existing active appointment using DB function
+        const { data: aptData } = await supabase.rpc(
+          "get_active_appointment_for_client_phone",
+          {
+            p_barbershop_id: barbershop.id,
+            p_client_id: matchedClient.client_id,
+            p_phone: cleanPhone,
+          }
+        );
+
+        if (aptData && aptData.length > 0) {
+          const apt = aptData[0];
+          setExistingClientAppointment({
+            id_agendamento: apt.id_agendamento,
+            start_time: apt.start_time,
+            end_time: apt.end_time,
+            status: apt.status,
+            nome_cliente: apt.nome_cliente,
+            service_id: apt.service_id,
+            user_id: apt.user_id,
+            service_name: apt.service_name,
+            professional_name: apt.professional_name,
+          });
+          setShowExistingAppointmentModal(true);
+        } else {
+          // No active appointment, proceed to service selection
+          setCurrentStep(1);
+        }
       } else {
         // New client - proceed to service selection
         setFoundClient(null);
@@ -468,6 +500,7 @@ const PublicBooking = () => {
       }
     } catch (error) {
       console.error("Error looking up phone:", error);
+      setFoundClient(null);
       setCurrentStep(1);
     } finally {
       setPhoneLookupLoading(false);
@@ -679,24 +712,25 @@ const PublicBooking = () => {
       const effectivePhone = clientPhone.replace(/\D/g, "");
 
       if (isRescheduling && rescheduleAppointmentId) {
-        // Update existing appointment instead of creating new
-        const duration = selectedService.duration_minutes || 30;
-        const startDate = new Date(`${selectedDate}T${selectedTime}:00`);
-        const endDate = new Date(startDate.getTime() + duration * 60000);
-        const endDateTime = endDate.toISOString();
+        // Use secure reschedule RPC (validates phone ownership)
+        const { error } = await supabase.rpc("reschedule_public_appointment", {
+          p_barbershop_id: barbershop.id,
+          p_appointment_id: rescheduleAppointmentId,
+          p_phone: effectivePhone,
+          p_service_id: selectedService.id,
+          p_user_id: selectedProfessional.user_id,
+          p_start_time: startDateTime,
+        });
 
-        const { error } = await supabase
-          .from("agendamentos")
-          .update({
-            start_time: startDateTime,
-            end_time: endDateTime,
-            service_id: selectedService.id,
-            user_id: selectedProfessional.user_id,
-            status: "pending",
-          })
-          .eq("id_agendamento", rescheduleAppointmentId);
-
-        if (error) throw error;
+        if (error) {
+          console.error("Reschedule error:", error);
+          if (error.message.includes("not_allowed")) {
+            toast.error("Você não tem permissão para remarcar este agendamento.");
+          } else {
+            toast.error("Erro ao remarcar. Tente novamente.");
+          }
+          return;
+        }
 
         setSuccess(true);
         toast.success("Agendamento remarcado com sucesso!");
@@ -718,6 +752,8 @@ const PublicBooking = () => {
             toast.error("Telefone inválido");
           } else if (error.message.includes("invalid_name")) {
             toast.error("Nome é obrigatório");
+          } else if (error.message.includes("existing_active_appointment")) {
+            toast.error("Você já possui um agendamento ativo. Cancele ou remarque antes de criar um novo.");
           } else {
             toast.error("Erro ao realizar agendamento. Tente novamente.");
           }
@@ -1477,6 +1513,8 @@ const PublicBooking = () => {
         open={showExistingAppointmentModal}
         onOpenChange={setShowExistingAppointmentModal}
         appointment={existingClientAppointment}
+        barbershopId={barbershop?.id || ""}
+        clientPhone={clientPhone}
         onReschedule={handleReschedule}
         onCancelled={handleAppointmentCancelled}
       />

@@ -27,6 +27,8 @@ interface ExistingAppointmentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appointment: Appointment | null;
+  barbershopId: string;
+  clientPhone: string;
   onReschedule: (appointmentId: string) => void;
   onCancelled: () => void;
 }
@@ -35,6 +37,8 @@ export const ExistingAppointmentModal = ({
   open,
   onOpenChange,
   appointment,
+  barbershopId,
+  clientPhone,
   onReschedule,
   onCancelled,
 }: ExistingAppointmentModalProps) => {
@@ -49,12 +53,21 @@ export const ExistingAppointmentModal = ({
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      const { error } = await supabase
-        .from("agendamentos")
-        .update({ status: "cancelled" })
-        .eq("id_agendamento", appointment.id_agendamento);
+      // Use secure cancel RPC that validates phone ownership
+      const cleanPhone = clientPhone.replace(/\D/g, "");
+      
+      const { data: success, error } = await supabase.rpc("cancel_public_appointment", {
+        p_barbershop_id: barbershopId,
+        p_appointment_id: appointment.id_agendamento,
+        p_phone: cleanPhone,
+      });
 
       if (error) throw error;
+      
+      if (!success) {
+        toast.error("Não foi possível cancelar este agendamento.");
+        return;
+      }
 
       toast.success("Agendamento cancelado com sucesso");
       onCancelled();

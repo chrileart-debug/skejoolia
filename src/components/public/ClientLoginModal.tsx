@@ -52,25 +52,27 @@ export const ClientLoginModal = ({
     setLoading(true);
 
     try {
-      // Generate formatted version to match both stored formats
-      const formattedPhone = formatPhoneMask(cleanPhone);
-      
-      // Query matching either cleaned or formatted phone number
-      const { data, error } = await supabase
-        .from("clientes")
-        .select("*")
-        .eq("barbershop_id", barbershopId)
-        .or(`telefone.eq.${cleanPhone},telefone.eq.${formattedPhone}`)
-        .maybeSingle();
+      // Use robust DB function to find client by phone (handles all formats)
+      const { data, error } = await supabase.rpc("find_client_by_phone", {
+        p_barbershop_id: barbershopId,
+        p_phone: cleanPhone,
+      });
 
-      if (error || !data) {
+      if (error) {
+        console.error("Phone lookup error:", error);
+        toast.error("Erro ao buscar cliente. Tente novamente.");
+        return;
+      }
+
+      if (!data || data.length === 0) {
         toast.error("Cliente não encontrado. Faça um agendamento para se cadastrar!");
         return;
       }
 
-      onClientFound(data as ClientData);
+      const clientData = data[0] as ClientData;
+      onClientFound(clientData);
       onOpenChange(false);
-      toast.success(`Bem-vindo de volta, ${data.nome || "Cliente"}!`);
+      toast.success(`Bem-vindo de volta, ${clientData.nome || "Cliente"}!`);
     } catch (error) {
       console.error("Error looking up client:", error);
       toast.error("Erro ao buscar cliente. Tente novamente.");
