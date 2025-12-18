@@ -459,10 +459,32 @@ export default function Settings() {
                 <Label>CEP</Label>
                 <Input
                   value={businessData.cep}
-                  onChange={(e) =>
-                    setBusinessData({ ...businessData, cep: e.target.value })
-                  }
+                  onChange={async (e) => {
+                    const cep = e.target.value.replace(/\D/g, "");
+                    const formattedCep = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5, 8)}` : cep;
+                    setBusinessData({ ...businessData, cep: formattedCep });
+                    
+                    if (cep.length === 8) {
+                      try {
+                        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                        const data = await response.json();
+                        if (!data.erro) {
+                          setBusinessData(prev => ({
+                            ...prev,
+                            cep: formattedCep,
+                            address: data.logradouro || prev.address,
+                            bairro: data.bairro || prev.bairro,
+                            city: data.localidade || prev.city,
+                            state: data.uf || prev.state,
+                          }));
+                        }
+                      } catch (error) {
+                        console.error("Erro ao buscar CEP:", error);
+                      }
+                    }
+                  }}
                   placeholder="00000-000"
+                  maxLength={9}
                 />
               </div>
 
