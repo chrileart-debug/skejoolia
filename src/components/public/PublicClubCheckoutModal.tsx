@@ -72,6 +72,7 @@ export const PublicClubCheckoutModal = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("🚀 handleSubmit triggered");
 
     if (!name.trim()) {
       toast.error("Digite seu nome");
@@ -88,18 +89,39 @@ export const PublicClubCheckoutModal = ({
       return;
     }
 
+    // Validate required variables
+    if (!barbershopId) {
+      console.error("❌ Missing barbershopId");
+      toast.error("Erro: ID da barbearia não encontrado");
+      return;
+    }
+
+    if (!plan?.id) {
+      console.error("❌ Missing plan.id");
+      toast.error("Erro: ID do plano não encontrado");
+      return;
+    }
+
     setSubmitting(true);
+    console.log("✅ Validation passed, starting submission...");
 
     try {
       // First, upsert the client in clientes table
       const cleanPhone = phone.replace(/\D/g, "");
-      const { data: ownerData } = await supabase
+      console.log("📞 Clean phone:", cleanPhone);
+
+      const { data: ownerData, error: ownerError } = await supabase
         .from("barbershops")
         .select("owner_id")
         .eq("id", barbershopId)
         .single();
 
-      const { data: clientData } = await supabase
+      if (ownerError) {
+        console.error("❌ Error fetching owner:", ownerError);
+      }
+      console.log("👤 Owner data:", ownerData);
+
+      const { data: clientData, error: clientError } = await supabase
         .from("clientes")
         .upsert(
           {
@@ -114,33 +136,50 @@ export const PublicClubCheckoutModal = ({
         .select("client_id")
         .single();
 
+      if (clientError) {
+        console.error("❌ Error upserting client:", clientError);
+      }
+      console.log("👤 Client data:", clientData);
+
+      // Build payload
+      const payload = {
+        action: "subscribe_plan",
+        barbershop_id: barbershopId,
+        plan_id: plan.id,
+        client_id: loggedInClientId || clientData?.client_id || null,
+        customer_details: {
+          name: name.trim(),
+          email: email.trim(),
+          phone: cleanPhone,
+        },
+      };
+
+      console.log("📤 Sending payload to n8n:", payload);
+
       // Send to webhook with exact payload structure
       const response = await fetch("https://webhook.lernow.com/webhook/asaas-meu-clube", {
         method: "POST",
+        mode: "cors",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          action: "subscribe_plan",
-          barbershop_id: barbershopId,
-          plan_id: plan.id,
-          client_id: loggedInClientId || clientData?.client_id || null,
-          customer_details: {
-            name: name.trim(),
-            email: email.trim(),
-            phone: cleanPhone,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
+      console.log("📥 n8n Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to submit subscription");
+        const errorText = await response.text();
+        console.error("❌ Response not ok:", errorText);
+        throw new Error(`Failed to submit subscription: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log("📥 n8n Response data:", data);
 
       // If webhook returns checkout_url, redirect immediately
       if (data.checkout_url) {
+        console.log("🔗 Redirecting to checkout:", data.checkout_url);
         window.location.href = data.checkout_url;
         return;
       }
@@ -148,8 +187,8 @@ export const PublicClubCheckoutModal = ({
       setSuccess(true);
       toast.success("Solicitação enviada com sucesso!");
     } catch (error) {
-      console.error("Subscription error:", error);
-      toast.error("Erro ao processar assinatura. Tente novamente.");
+      console.error("❌ Subscription error:", error);
+      toast.error("Erro ao conectar com o servidor de pagamentos. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
