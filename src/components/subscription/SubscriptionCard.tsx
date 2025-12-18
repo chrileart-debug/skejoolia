@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { Crown, Clock, CreditCard, AlertCircle, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -10,11 +11,12 @@ import { createCheckoutSession } from "@/lib/webhook";
 export function SubscriptionCard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { subscription, plan, isTrialing, daysRemaining, loading } = useSubscription();
   const [subscribing, setSubscribing] = useState(false);
 
   const handleSubscribe = async () => {
-    if (!user || !subscription || !plan) {
+    if (!user || !subscription || !plan || !barbershop) {
       navigate("/billing");
       return;
     }
@@ -27,6 +29,7 @@ export function SubscriptionCard() {
         plan_slug: subscription.plan_slug,
         price: plan.price,
         subscription_id: subscription.id,
+        barbershop_id: barbershop.id,
       });
 
       if (error) {

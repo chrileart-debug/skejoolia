@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useOutletContext } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createCheckoutSession, webhookRequest, WEBHOOK_ENDPOINTS } from "@/lib/webhook";
@@ -78,6 +79,7 @@ interface Payment {
 export default function Billing() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { subscription, plan, isTrialing, isActive, daysRemaining, loading } = useSubscription();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -113,7 +115,7 @@ export default function Billing() {
   };
 
   const handleSubscribe = async () => {
-    if (!user || !subscription || !plan) return;
+    if (!user || !subscription || !plan || !barbershop) return;
     
     setSubscribing(true);
     try {
@@ -123,6 +125,7 @@ export default function Billing() {
         plan_slug: subscription.plan_slug,
         price: plan.price,
         subscription_id: subscription.id,
+        barbershop_id: barbershop.id,
       });
 
       if (error) {

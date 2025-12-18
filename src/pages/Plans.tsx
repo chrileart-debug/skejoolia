@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Crown, Zap, ArrowRight, Loader2 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { createCheckoutSession } from "@/lib/webhook";
 
 const Plans = () => {
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const { subscription, plan, isTrialing, daysRemaining, loading } = useSubscription();
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
@@ -52,12 +54,22 @@ const Plans = () => {
       return;
     }
 
+    if (!barbershop) {
+      toast({
+        title: "Erro",
+        description: "Dados da barbearia não disponíveis. Tente recarregar a página.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payload = {
       action: "upgrade",
       user_id: user.id,
       plan_slug: "corporativo",
       price: 49.9,
       subscription_id: subscription.id,
+      barbershop_id: barbershop.id,
     };
 
     console.log("Payload para webhook:", payload);
