@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PublicClubSection } from "@/components/public/PublicClubSection";
 import {
   ArrowLeft,
   Calendar as CalendarIcon,
@@ -24,6 +26,7 @@ import {
   Sparkles,
   CheckCircle2,
   RefreshCw,
+  Crown,
 } from "lucide-react";
 
 // Types
@@ -140,6 +143,7 @@ const PublicBooking = () => {
   const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
 
   // Wizard states
+  const [activeTab, setActiveTab] = useState<string>("agendar");
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<StaffMember | null>(null);
@@ -583,11 +587,37 @@ const PublicBooking = () => {
             )}
             <div>
               <h1 className="text-lg font-bold text-foreground">{barbershop?.name}</h1>
-              <p className="text-sm text-muted-foreground">Agende seu horário</p>
+              <p className="text-sm text-muted-foreground">Bem-vindo(a)!</p>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="border-b border-border bg-muted/30">
+          <div className="max-w-2xl mx-auto px-4">
+            <TabsList className="h-12 w-full justify-start bg-transparent p-0 gap-4">
+              <TabsTrigger
+                value="agendar"
+                className="h-12 px-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none bg-transparent"
+              >
+                <CalendarIcon className="w-4 h-4 mr-2" />
+                Agendar
+              </TabsTrigger>
+              <TabsTrigger
+                value="clube"
+                className="h-12 px-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none bg-transparent"
+              >
+                <Crown className="w-4 h-4 mr-2" />
+                Clubes de Assinatura
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
+
+        {/* Booking Tab */}
+        <TabsContent value="agendar" className="mt-0">
 
       {/* Progress Steps */}
       <div className="bg-muted/30 border-b border-border">
@@ -969,6 +999,20 @@ const PublicBooking = () => {
           </div>
         )}
       </main>
+        </TabsContent>
+
+        {/* Club Tab */}
+        <TabsContent value="clube" className="mt-0">
+          <main className="max-w-2xl mx-auto px-4 py-6">
+            {barbershop && (
+              <PublicClubSection
+                barbershopId={barbershop.id}
+                barbershopName={barbershop.name}
+              />
+            )}
+          </main>
+        </TabsContent>
+      </Tabs>
 
       {/* Footer */}
       <footer className="border-t border-border mt-auto">
