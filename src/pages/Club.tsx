@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
+import { PublishPlanModal } from "@/components/club/PublishPlanModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +75,8 @@ export default function Club() {
   const [editingPlan, setEditingPlan] = useState<BarberPlan | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<BarberPlan | null>(null);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishingPlanId, setPublishingPlanId] = useState<string | null>(null);
   
   // Check if there are any draft plans
   const hasDraftPlans = plans.some(plan => !plan.is_published);
@@ -224,6 +227,33 @@ export default function Club() {
   const handlePlanSaved = () => {
     fetchPlans();
     handleModalClose();
+  };
+
+  const handlePublishPlan = async (plan: BarberPlan) => {
+    // If user doesn't have an active subscription, show the subscribe modal
+    if (!isActive) {
+      setPublishModalOpen(true);
+      return;
+    }
+
+    // User is subscribed, proceed to publish
+    setPublishingPlanId(plan.id);
+    try {
+      const { error } = await supabase
+        .from("barber_plans")
+        .update({ is_published: true })
+        .eq("id", plan.id);
+
+      if (error) throw error;
+
+      toast.success("Plano publicado com sucesso! Agora seus clientes podem assinar.");
+      fetchPlans();
+    } catch (error) {
+      console.error("Error publishing plan:", error);
+      toast.error("Erro ao publicar plano");
+    } finally {
+      setPublishingPlanId(null);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -389,9 +419,31 @@ export default function Club() {
                       </div>
                     )}
 
-                    <Badge variant={plan.is_active ? "default" : "secondary"}>
-                      {plan.is_active ? "Ativo" : "Inativo"}
-                    </Badge>
+                    {/* Status Badge or Publish Button */}
+                    <div className="flex items-center gap-2">
+                      {!plan.is_published ? (
+                        <Button
+                          size="sm"
+                          onClick={() => handlePublishPlan(plan)}
+                          disabled={publishingPlanId === plan.id}
+                          className="gap-1.5"
+                        >
+                          {publishingPlanId === plan.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Rocket className="w-3.5 h-3.5" />
+                          )}
+                          Publicar Plano
+                        </Button>
+                      ) : (
+                        <Badge variant="default" className="bg-success text-success-foreground">
+                          Publicado
+                        </Badge>
+                      )}
+                      <Badge variant={plan.is_active ? "secondary" : "outline"}>
+                        {plan.is_active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -449,6 +501,11 @@ export default function Club() {
       </Tabs>
 
       <FAB icon={<Plus className="h-6 w-6" />} onClick={handleCreatePlan} className="md:hidden" />
+
+      <PublishPlanModal 
+        open={publishModalOpen} 
+        onClose={() => setPublishModalOpen(false)} 
+      />
 
       <ClubPlanModal
         open={modalOpen}

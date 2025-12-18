@@ -227,7 +227,7 @@ export function ClubPlanModal({
 
       if (itemsError) throw itemsError;
 
-      toast.success(plan ? "Plano atualizado!" : "Plano criado!");
+      toast.success(plan ? "Plano atualizado!" : "Plano salvo como rascunho! Assine o Pro para publicar e vender.");
       onSaved();
     } catch (error) {
       console.error("Error saving plan:", error);
