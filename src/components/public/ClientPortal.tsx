@@ -283,16 +283,28 @@ export const ClientPortal = ({
   }, [client.client_id, barbershopId]);
 
   const handleCancelAppointment = async () => {
-    if (!appointmentToCancel) return;
+    if (!appointmentToCancel || !client.telefone) return;
 
     setCancellingAppointment(appointmentToCancel.id_agendamento);
     try {
-      const { error } = await supabase
-        .from("agendamentos")
-        .update({ status: "cancelled" })
-        .eq("id_agendamento", appointmentToCancel.id_agendamento);
+      // Use secure RPC that validates phone ownership
+      const cleanPhone = client.telefone.replace(/\D/g, "");
+      
+      const { data: success, error } = await supabase.rpc(
+        "cancel_public_appointment",
+        {
+          p_barbershop_id: barbershopId,
+          p_appointment_id: appointmentToCancel.id_agendamento,
+          p_phone: cleanPhone,
+        }
+      );
 
       if (error) throw error;
+      
+      if (!success) {
+        toast.error("Não foi possível cancelar este agendamento.");
+        return;
+      }
 
       setAppointments(prev => prev.filter(a => a.id_agendamento !== appointmentToCancel.id_agendamento));
       toast.success("Agendamento cancelado com sucesso");
