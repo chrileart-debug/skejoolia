@@ -26,6 +26,7 @@ import {
   Link,
   Copy,
   Check,
+  Loader2,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -47,6 +48,7 @@ export default function Settings() {
   const { isOwner } = useBarbershop();
   const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
+  const [isCepLoading, setIsCepLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
   const [slugCopied, setSlugCopied] = useState(false);
   const [slugError, setSlugError] = useState("");
@@ -457,35 +459,44 @@ export default function Settings() {
               {/* CEP */}
               <div className="space-y-2">
                 <Label>CEP</Label>
-                <Input
-                  value={businessData.cep}
-                  onChange={async (e) => {
-                    const cep = e.target.value.replace(/\D/g, "");
-                    const formattedCep = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5, 8)}` : cep;
-                    setBusinessData({ ...businessData, cep: formattedCep });
-                    
-                    if (cep.length === 8) {
-                      try {
-                        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                        const data = await response.json();
-                        if (!data.erro) {
-                          setBusinessData(prev => ({
-                            ...prev,
-                            cep: formattedCep,
-                            address: data.logradouro || prev.address,
-                            bairro: data.bairro || prev.bairro,
-                            city: data.localidade || prev.city,
-                            state: data.uf || prev.state,
-                          }));
+                <div className="relative">
+                  <Input
+                    value={businessData.cep}
+                    onChange={async (e) => {
+                      const cep = e.target.value.replace(/\D/g, "");
+                      const formattedCep = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5, 8)}` : cep;
+                      setBusinessData({ ...businessData, cep: formattedCep });
+                      
+                      if (cep.length === 8) {
+                        setIsCepLoading(true);
+                        try {
+                          const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                          const data = await response.json();
+                          if (!data.erro) {
+                            setBusinessData(prev => ({
+                              ...prev,
+                              cep: formattedCep,
+                              address: data.logradouro || prev.address,
+                              bairro: data.bairro || prev.bairro,
+                              city: data.localidade || prev.city,
+                              state: data.uf || prev.state,
+                            }));
+                          }
+                        } catch (error) {
+                          console.error("Erro ao buscar CEP:", error);
+                        } finally {
+                          setIsCepLoading(false);
                         }
-                      } catch (error) {
-                        console.error("Erro ao buscar CEP:", error);
                       }
-                    }
-                  }}
-                  placeholder="00000-000"
-                  maxLength={9}
-                />
+                    }}
+                    placeholder="00000-000"
+                    maxLength={9}
+                    className="pr-10"
+                  />
+                  {isCepLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
               </div>
 
               {/* Address + Number */}
