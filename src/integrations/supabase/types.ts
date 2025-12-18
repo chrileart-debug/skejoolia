@@ -237,6 +237,7 @@ export type Database = {
           id: string
           interval: string | null
           is_active: boolean | null
+          is_published: boolean | null
           name: string
           price: number
           updated_at: string | null
@@ -249,6 +250,7 @@ export type Database = {
           id?: string
           interval?: string | null
           is_active?: boolean | null
+          is_published?: boolean | null
           name: string
           price: number
           updated_at?: string | null
@@ -261,6 +263,7 @@ export type Database = {
           id?: string
           interval?: string | null
           is_active?: boolean | null
+          is_published?: boolean | null
           name?: string
           price?: number
           updated_at?: string | null
