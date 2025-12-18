@@ -1,15 +1,19 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2 } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
 import {
   AlertDialog,
@@ -29,6 +33,7 @@ interface BarberPlan {
   price: number;
   interval: string;
   is_active: boolean;
+  is_published: boolean;
   created_at: string;
   items?: BarberPlanItem[];
 }
@@ -60,6 +65,8 @@ interface Subscriber {
 export default function Club() {
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
+  const { isActive } = useSubscription();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<BarberPlan[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +74,9 @@ export default function Club() {
   const [editingPlan, setEditingPlan] = useState<BarberPlan | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<BarberPlan | null>(null);
+  
+  // Check if there are any draft plans
+  const hasDraftPlans = plans.some(plan => !plan.is_published);
 
   useEffect(() => {
     if (barbershop?.id) {
@@ -260,6 +270,25 @@ export default function Club() {
         </Button>
       </div>
 
+      {/* Draft Plans CTA Banner */}
+      {hasDraftPlans && !isActive && (
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-500">Planos em Rascunho</AlertTitle>
+          <AlertDescription className="text-muted-foreground">
+            Seus planos do clube estão em modo rascunho. Assine o Skejool Pro para ativá-los e começar a vender para seus clientes.
+            <Button 
+              variant="link" 
+              className="text-amber-500 hover:text-amber-400 p-0 h-auto ml-1"
+              onClick={() => navigate("/plans")}
+            >
+              <Sparkles className="h-3 w-3 mr-1" />
+              Fazer upgrade
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs defaultValue="plans" className="w-full">
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="plans" className="flex items-center gap-2">
@@ -288,7 +317,16 @@ export default function Club() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {plans.map((plan) => (
-                <Card key={plan.id} className="relative overflow-hidden">
+                <Card key={plan.id} className={cn(
+                  "relative overflow-hidden",
+                  !plan.is_published && "border-amber-500/30"
+                )}>
+                  {/* Draft Badge */}
+                  {!plan.is_published && (
+                    <div className="absolute top-0 left-0 px-2 py-1 bg-amber-500/20 border-b border-r border-amber-500/30 rounded-br-lg">
+                      <span className="text-xs font-medium text-amber-500">Rascunho</span>
+                    </div>
+                  )}
                   <div className="absolute top-0 right-0 p-2 flex gap-1">
                     <Button
                       variant="ghost"
@@ -418,6 +456,7 @@ export default function Club() {
         onSaved={handlePlanSaved}
         plan={editingPlan}
         barbershopId={barbershop?.id || ""}
+        isSubscriptionActive={isActive}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
