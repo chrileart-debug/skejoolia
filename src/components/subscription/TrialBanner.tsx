@@ -3,18 +3,20 @@ import { Clock, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { toast } from "sonner";
 import { createCheckoutSession } from "@/lib/webhook";
 
 export function TrialBanner() {
   const { isTrialing, daysRemaining, plan, subscription } = useSubscription();
   const { user } = useAuth();
+  const { barbershop } = useBarbershop();
   const [subscribing, setSubscribing] = useState(false);
 
   if (!isTrialing || daysRemaining <= 0) return null;
 
   const handleSubscribe = async () => {
-    if (!user || !subscription || !plan) {
+    if (!user || !subscription || !plan || !barbershop) {
       toast.error("Dados de assinatura não encontrados");
       return;
     }
@@ -27,6 +29,7 @@ export function TrialBanner() {
         plan_slug: subscription.plan_slug,
         price: plan.price,
         subscription_id: subscription.id,
+        barbershop_id: barbershop.id,
       });
 
       if (error) {

@@ -95,6 +95,7 @@ export function SubscriptionManager() {
         plan_slug: subscription.plan_slug,
         price: plan.price,
         subscription_id: subscription.id,
+        barbershop_id: barbershop!.id,
       });
 
       if (error) {
