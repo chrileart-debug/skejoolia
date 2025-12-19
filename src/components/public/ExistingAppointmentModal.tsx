@@ -134,24 +134,27 @@ export const ExistingAppointmentModal = ({
             Remarcar horário
           </Button>
           
-          <Button
-            onClick={handleCancel}
-            variant="destructive"
-            className="w-full"
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Cancelando...
-              </>
-            ) : (
-              <>
-                <XCircle className="w-4 h-4 mr-2" />
-                Cancelar agendamento
-              </>
-            )}
-          </Button>
+          {/* Only show cancel button for pending appointments */}
+          {appointment.status !== "confirmado" && appointment.status !== "concluído" && (
+            <Button
+              onClick={handleCancel}
+              variant="destructive"
+              className="w-full"
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Cancelar agendamento
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
