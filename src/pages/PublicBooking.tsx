@@ -974,7 +974,9 @@ const PublicBooking = () => {
               <div>
                 <p className="font-medium text-foreground">{selectedService?.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
+                  {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits 
+                    ? formatPrice(0) 
+                    : formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
                 </p>
               </div>
             </div>
@@ -1612,7 +1614,9 @@ const PublicBooking = () => {
                     <div>
                       <p className="font-medium text-foreground">{selectedService?.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
+                        {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits 
+                          ? formatPrice(0) 
+                          : formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
                       </p>
                     </div>
                   </div>
