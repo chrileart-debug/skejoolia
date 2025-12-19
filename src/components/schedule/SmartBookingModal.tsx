@@ -47,6 +47,13 @@ interface Cliente {
   telefone: string | null;
 }
 
+interface ServiceCredit {
+  serviceId: string;
+  quantityLimit: number;
+  currentUsage: number;
+  remaining: number;
+}
+
 interface SmartBookingModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -131,6 +138,10 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
     quantityLimit: number;
   } | null>(null);
 
+  // Client subscription credits state
+  const [clientServiceCredits, setClientServiceCredits] = useState<ServiceCredit[]>([]);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+
   // Fetch clients
   useEffect(() => {
     const fetchClients = async () => {
@@ -178,8 +189,87 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
       setNewClientPhone("");
       setLimitAlertOpen(false);
       setPendingAppointmentData(null);
+      setClientServiceCredits([]);
     }
   }, [open, initialDate]);
+
+  // Fetch client subscription credits when client is selected
+  useEffect(() => {
+    const fetchClientCredits = async () => {
+      if (!selectedClient || selectedClient.client_id === "new" || !barbershop?.id) {
+        setClientServiceCredits([]);
+        return;
+      }
+
+      setLoadingCredits(true);
+      try {
+        // Get active subscription for this client
+        const { data: subscription } = await supabase
+          .from("client_club_subscriptions")
+          .select("id, plan_id, status")
+          .eq("client_id", selectedClient.client_id)
+          .eq("barbershop_id", barbershop.id)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (!subscription) {
+          setClientServiceCredits([]);
+          setLoadingCredits(false);
+          return;
+        }
+
+        // Get plan items (services included in the plan)
+        const { data: planItems } = await supabase
+          .from("barber_plan_items")
+          .select("service_id, quantity_limit")
+          .eq("plan_id", subscription.plan_id);
+
+        if (!planItems || planItems.length === 0) {
+          setClientServiceCredits([]);
+          setLoadingCredits(false);
+          return;
+        }
+
+        // Get current month usage for each service
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const credits: ServiceCredit[] = [];
+        
+        for (const item of planItems) {
+          const { count } = await supabase
+            .from("client_subscription_usage")
+            .select("*", { count: "exact", head: true })
+            .eq("subscription_id", subscription.id)
+            .eq("service_id", item.service_id)
+            .gte("used_at", firstDayOfMonth.toISOString())
+            .lte("used_at", lastDayOfMonth.toISOString());
+
+          const currentUsage = count || 0;
+          const quantityLimit = item.quantity_limit || 0;
+          // If limit is 0, it means unlimited
+          const remaining = quantityLimit === 0 ? -1 : Math.max(0, quantityLimit - currentUsage);
+
+          credits.push({
+            serviceId: item.service_id,
+            quantityLimit,
+            currentUsage,
+            remaining,
+          });
+        }
+
+        setClientServiceCredits(credits);
+      } catch (error) {
+        console.error("Error fetching client credits:", error);
+        setClientServiceCredits([]);
+      } finally {
+        setLoadingCredits(false);
+      }
+    };
+
+    fetchClientCredits();
+  }, [selectedClient, barbershop?.id]);
 
   const filteredProfessionals = selectedService
     ? getProfessionalsForService(selectedService.id)
@@ -511,9 +601,10 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
                 {currentStep === 2 && (
                   <Step2Service
                     services={services}
-                    loading={loading}
+                    loading={loading || loadingCredits}
                     onServiceSelect={handleServiceSelect}
                     selectedService={selectedService}
+                    clientServiceCredits={clientServiceCredits}
                   />
                 )}
 
@@ -817,12 +908,18 @@ function Step2Service({
   loading,
   onServiceSelect,
   selectedService,
+  clientServiceCredits,
 }: {
   services: ServiceWithDetails[];
   loading: boolean;
   onServiceSelect: (service: ServiceWithDetails) => void;
   selectedService: ServiceWithDetails | null;
+  clientServiceCredits: ServiceCredit[];
 }) {
+  const getServiceCredit = (serviceId: string): ServiceCredit | undefined => {
+    return clientServiceCredits.find(c => c.serviceId === serviceId);
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -843,41 +940,87 @@ function Step2Service({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {services.map((service) => (
-        <button
-          key={service.id}
-          onClick={() => onServiceSelect(service)}
-          className={cn(
-            "flex flex-col p-4 rounded-xl border transition-all text-left group",
-            selectedService?.id === service.id
-              ? "border-primary bg-primary/5"
-              : "border-border bg-card hover:bg-muted/50 hover:border-primary/50"
-          )}
-        >
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              {service.is_package ? (
-                <Package className="w-5 h-5 text-primary" />
-              ) : (
-                <Scissors className="w-5 h-5 text-primary" />
-              )}
+      {services.map((service) => {
+        const credit = getServiceCredit(service.id);
+        const hasActivePlan = !!credit;
+
+        return (
+          <button
+            key={service.id}
+            onClick={() => onServiceSelect(service)}
+            className={cn(
+              "flex flex-col p-4 rounded-xl border transition-all text-left group relative",
+              selectedService?.id === service.id
+                ? "border-primary bg-primary/5"
+                : hasActivePlan
+                  ? "border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 hover:border-emerald-500 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/30"
+                  : "border-border bg-card hover:bg-muted/50 hover:border-primary/50"
+            )}
+          >
+            {/* Plan Badge */}
+            {hasActivePlan && (
+              <div className="absolute -top-2 -right-2">
+                <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white text-[10px] px-1.5 py-0.5">
+                  Plano Ativo
+                </Badge>
+              </div>
+            )}
+            
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                hasActivePlan ? "bg-emerald-500/10" : "bg-primary/10"
+              )}>
+                {service.is_package ? (
+                  <Package className={cn("w-5 h-5", hasActivePlan ? "text-emerald-600" : "text-primary")} />
+                ) : (
+                  <Scissors className={cn("w-5 h-5", hasActivePlan ? "text-emerald-600" : "text-primary")} />
+                )}
+              </div>
+              <span className={cn(
+                "text-lg font-semibold",
+                hasActivePlan ? "text-emerald-600" : "text-primary"
+              )}>
+                {formatPrice(service.price)}
+              </span>
             </div>
-            <span className="text-lg font-semibold text-primary">
-              {formatPrice(service.price)}
-            </span>
-          </div>
-          <p className="font-medium mb-1">{service.name}</p>
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {formatDuration(service.duration_minutes)}
-          </p>
-          {service.is_package && (
-            <Badge variant="secondary" className="mt-2 w-fit text-xs">
-              Pacote
-            </Badge>
-          )}
-        </button>
-      ))}
+            <p className="font-medium mb-1">{service.name}</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {formatDuration(service.duration_minutes)}
+            </p>
+            
+            {/* Credits remaining info */}
+            {hasActivePlan && credit && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "text-xs font-medium",
+                    credit.remaining === -1 
+                      ? "border-emerald-500 text-emerald-600" 
+                      : credit.remaining > 0 
+                        ? "border-emerald-500 text-emerald-600"
+                        : "border-amber-500 text-amber-600"
+                  )}
+                >
+                  {credit.remaining === -1 
+                    ? "✓ Ilimitado" 
+                    : credit.remaining > 0 
+                      ? `${credit.remaining} restante${credit.remaining > 1 ? 's' : ''}`
+                      : "Limite atingido"}
+                </Badge>
+              </div>
+            )}
+            
+            {service.is_package && !hasActivePlan && (
+              <Badge variant="secondary" className="mt-2 w-fit text-xs">
+                Pacote
+              </Badge>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
