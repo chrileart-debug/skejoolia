@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, UserPlus, Pencil, Trash2 } from "lucide-react";
+import { 
+  Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, 
+  UserPlus, Pencil, Trash2, Crown, Mail, CreditCard, MapPin, 
+  Clock, FileText 
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -12,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -47,17 +52,43 @@ interface Cliente {
   client_id: string;
   nome: string | null;
   telefone: string | null;
+  email: string | null;
+  cpf_cnpj: string | null;
+  birth_date: string | null;
+  notes: string | null;
+  endereco: string | null;
+  numero: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+  last_visit: string | null;
   id_agente: string | null;
   total_cortes: number;
   faturamento_total: number;
   agente_ativo: boolean;
   agente_nome?: string | null;
   has_active_appointment?: boolean;
+  // Subscription fields
+  has_subscription?: boolean;
+  subscription_id?: string | null;
+  plan_id?: string | null;
+  plan_name?: string | null;
+  plan_price?: number | null;
+  subscription_status?: string | null;
 }
 
 interface Agente {
   id_agente: string;
   nome: string;
+}
+
+interface ServiceCredit {
+  serviceId: string;
+  serviceName: string;
+  quantityLimit: number;
+  currentUsage: number;
+  remaining: number;
 }
 
 export default function Clients() {
@@ -77,24 +108,49 @@ export default function Clients() {
   const [saving, setSaving] = useState(false);
   const [editingClient, setEditingClient] = useState<Cliente | null>(null);
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
+  
+  // New states for client details modal
+  const [viewingClient, setViewingClient] = useState<Cliente | null>(null);
+  const [clientCredits, setClientCredits] = useState<ServiceCredit[]>([]);
+  const [loadingCredits, setLoadingCredits] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && barbershop) {
       loadClients();
       loadAgents();
     }
-  }, [user]);
+  }, [user, barbershop]);
+
+  // Load credits when viewing a client with subscription
+  useEffect(() => {
+    if (viewingClient?.has_subscription && viewingClient.subscription_id) {
+      loadClientCredits(viewingClient.subscription_id, viewingClient.plan_id!);
+    } else {
+      setClientCredits([]);
+    }
+  }, [viewingClient]);
 
   async function loadClients() {
-    if (!user) return;
+    if (!user || !barbershop) return;
     setLoading(true);
 
     try {
-      // Fetch clients
+      // Fetch clients with subscription data
       const { data: clientsData, error: clientsError } = await supabase
         .from("clientes")
-        .select("*")
-        .eq("user_id", user.id)
+        .select(`
+          *,
+          client_club_subscriptions!client_club_subscriptions_client_id_fkey (
+            id,
+            status,
+            plan_id,
+            barber_plans (
+              name,
+              price
+            )
+          )
+        `)
+        .eq("barbershop_id", barbershop.id)
         .order("created_at", { ascending: false });
 
       if (clientsError) throw clientsError;
@@ -103,7 +159,7 @@ export default function Clients() {
       const { data: agentsData } = await supabase
         .from("agentes")
         .select("id_agente, nome")
-        .eq("user_id", user.id);
+        .eq("barbershop_id", barbershop.id);
 
       const agentsMap = new Map(
         agentsData?.map((a) => [a.id_agente, a.nome]) || []
@@ -114,7 +170,7 @@ export default function Clients() {
       const { data: appointmentsData } = await supabase
         .from("agendamentos")
         .select("client_id")
-        .eq("user_id", user.id)
+        .eq("barbershop_id", barbershop.id)
         .gte("start_time", now)
         .in("status", ["pending", "confirmed"]);
 
@@ -122,12 +178,23 @@ export default function Clients() {
         appointmentsData?.map((a) => a.client_id) || []
       );
 
-      // Map clients with agent names and appointment status
-      const enrichedClients: Cliente[] = (clientsData || []).map((client) => ({
-        ...client,
-        agente_nome: client.id_agente ? agentsMap.get(client.id_agente) : null,
-        has_active_appointment: activeAppointmentClientIds.has(client.client_id),
-      }));
+      // Map clients with agent names, appointment status, and subscription data
+      const enrichedClients: Cliente[] = (clientsData || []).map((client) => {
+        const subscriptions = client.client_club_subscriptions as any[];
+        const activeSubscription = subscriptions?.find((s) => s.status === "active");
+        
+        return {
+          ...client,
+          agente_nome: client.id_agente ? agentsMap.get(client.id_agente) : null,
+          has_active_appointment: activeAppointmentClientIds.has(client.client_id),
+          has_subscription: !!activeSubscription,
+          subscription_id: activeSubscription?.id || null,
+          plan_id: activeSubscription?.plan_id || null,
+          plan_name: activeSubscription?.barber_plans?.name || null,
+          plan_price: activeSubscription?.barber_plans?.price || null,
+          subscription_status: activeSubscription?.status || null,
+        };
+      });
 
       setClients(enrichedClients);
     } catch (error) {
@@ -138,18 +205,73 @@ export default function Clients() {
   }
 
   async function loadAgents() {
-    if (!user) return;
+    if (!user || !barbershop) return;
 
     const { data, error } = await supabase
       .from("agentes")
       .select("id_agente, nome")
-      .eq("user_id", user.id)
+      .eq("barbershop_id", barbershop.id)
       .order("nome", { ascending: true });
 
     if (error) {
       console.error("Error loading agents:", error);
     } else {
       setAgents(data || []);
+    }
+  }
+
+  async function loadClientCredits(subscriptionId: string, planId: string) {
+    setLoadingCredits(true);
+
+    try {
+      // Fetch plan items with service names
+      const { data: planItems } = await supabase
+        .from("barber_plan_items")
+        .select("service_id, quantity_limit, services(name)")
+        .eq("plan_id", planId);
+
+      if (!planItems || planItems.length === 0) {
+        setClientCredits([]);
+        setLoadingCredits(false);
+        return;
+      }
+
+      // Get current month usage
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: usage } = await supabase
+        .from("client_subscription_usage")
+        .select("service_id")
+        .eq("subscription_id", subscriptionId)
+        .gte("used_at", startOfMonth.toISOString());
+
+      // Count usage per service
+      const usageCount = new Map<string, number>();
+      usage?.forEach((u) => {
+        usageCount.set(u.service_id, (usageCount.get(u.service_id) || 0) + 1);
+      });
+
+      // Calculate credits
+      const credits: ServiceCredit[] = planItems.map((item) => {
+        const limit = item.quantity_limit || 0;
+        const used = usageCount.get(item.service_id) || 0;
+        return {
+          serviceId: item.service_id,
+          serviceName: (item.services as any)?.name || "Serviço",
+          quantityLimit: limit,
+          currentUsage: used,
+          remaining: limit === 0 ? Infinity : Math.max(0, limit - used),
+        };
+      });
+
+      setClientCredits(credits);
+    } catch (error) {
+      console.error("Error loading client credits:", error);
+      setClientCredits([]);
+    } finally {
+      setLoadingCredits(false);
     }
   }
 
@@ -163,6 +285,11 @@ export default function Clients() {
       )
     );
 
+    // Also update viewing client if open
+    if (viewingClient?.client_id === clientId) {
+      setViewingClient({ ...viewingClient, agente_ativo: newValue });
+    }
+
     const { error } = await supabase
       .from("clientes")
       .update({ agente_ativo: newValue })
@@ -175,6 +302,9 @@ export default function Clients() {
           c.client_id === clientId ? { ...c, agente_ativo: currentValue } : c
         )
       );
+      if (viewingClient?.client_id === clientId) {
+        setViewingClient({ ...viewingClient, agente_ativo: currentValue });
+      }
       toast.error("Erro ao atualizar status do agente");
       console.error("Error toggling agente_ativo:", error);
     } else {
@@ -195,7 +325,12 @@ export default function Clients() {
       telefone: client.telefone || "",
       id_agente: client.id_agente || "",
     });
+    setViewingClient(null);
     setIsDialogOpen(true);
+  };
+
+  const handleViewClient = (client: Cliente) => {
+    setViewingClient(client);
   };
 
   const handleSubmit = async () => {
@@ -290,7 +425,8 @@ export default function Clients() {
     return (
       client.nome?.toLowerCase().includes(searchLower) ||
       client.telefone?.includes(searchTerm) ||
-      client.agente_nome?.toLowerCase().includes(searchLower)
+      client.agente_nome?.toLowerCase().includes(searchLower) ||
+      client.plan_name?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -303,7 +439,6 @@ export default function Clients() {
 
   const formatPhone = (phone: string | null) => {
     if (!phone) return "—";
-    // Format Brazilian phone: 55 11 99999-9999
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.length === 13) {
       return `+${cleaned.slice(0, 2)} (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`;
@@ -312,6 +447,45 @@ export default function Clients() {
       return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
     }
     return phone;
+  };
+
+  const formatCpfCnpj = (value: string | null) => {
+    if (!value) return "—";
+    const cleaned = value.replace(/\D/g, "");
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+    }
+    if (cleaned.length === 14) {
+      return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8, 12)}-${cleaned.slice(12)}`;
+    }
+    return value;
+  };
+
+  const formatDate = (date: string | null) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleDateString("pt-BR");
+  };
+
+  const formatDateTime = (date: string | null) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getFullAddress = (client: Cliente) => {
+    const parts = [];
+    if (client.endereco) parts.push(client.endereco);
+    if (client.numero) parts.push(client.numero);
+    if (client.bairro) parts.push(client.bairro);
+    if (client.cidade) parts.push(client.cidade);
+    if (client.estado) parts.push(client.estado);
+    if (client.cep) parts.push(`CEP: ${client.cep}`);
+    return parts.length > 0 ? parts.join(", ") : null;
   };
 
   return (
@@ -327,7 +501,7 @@ export default function Clients() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome, telefone ou agente..."
+            placeholder="Buscar por nome, telefone, agente ou plano..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -352,14 +526,14 @@ export default function Clients() {
           <Card className="bg-card/50">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-500/10">
-                  <Calendar className="w-4 h-4 text-green-500" />
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Crown className="w-4 h-4 text-amber-500" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">
-                    {clients.filter((c) => c.has_active_appointment).length}
+                    {clients.filter((c) => c.has_subscription).length}
                   </p>
-                  <p className="text-xs text-muted-foreground">Com agenda</p>
+                  <p className="text-xs text-muted-foreground">Assinantes</p>
                 </div>
               </div>
             </CardContent>
@@ -430,25 +604,38 @@ export default function Clients() {
             {filteredClients.map((client) => (
               <Card
                 key={client.client_id}
-                className="hover:bg-accent/50 transition-colors"
+                className="hover:bg-accent/50 transition-colors cursor-pointer"
+                onClick={() => handleViewClient(client)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    {/* Avatar */}
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-primary font-semibold">
-                        {client.nome
-                          ? client.nome.charAt(0).toUpperCase()
-                          : "C"}
-                      </span>
+                    {/* Avatar with subscription badge */}
+                    <div className="relative shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-primary font-semibold">
+                          {client.nome
+                            ? client.nome.charAt(0).toUpperCase()
+                            : "C"}
+                        </span>
+                      </div>
+                      {client.has_subscription && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
+                          <Crown className="w-3 h-3 text-white" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-foreground truncate">
                           {client.nome || "Cliente sem nome"}
                         </h3>
+                        {client.has_subscription && (
+                          <Badge className="text-xs bg-amber-500/20 text-amber-600 hover:bg-amber-500/30 shrink-0">
+                            {client.plan_name}
+                          </Badge>
+                        )}
                         {client.has_active_appointment && (
                           <Badge variant="default" className="text-xs bg-green-500/20 text-green-600 hover:bg-green-500/30 shrink-0">
                             Ativo
@@ -462,14 +649,6 @@ export default function Clients() {
                         <span className="truncate">{formatPhone(client.telefone)}</span>
                       </div>
 
-                      {/* Agent */}
-                      {client.agente_nome && (
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
-                          <Bot className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{client.agente_nome}</span>
-                        </div>
-                      )}
-
                       {/* Stats */}
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span>{client.total_cortes || 0} cortes</span>
@@ -479,24 +658,16 @@ export default function Clients() {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
-                        onClick={() => handleEdit(client)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteClientId(client.client_id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    {/* Agent Switch */}
+                    <div 
+                      className="flex items-center gap-2 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Bot className="w-4 h-4 text-muted-foreground" />
+                      <Switch
+                        checked={client.agente_ativo}
+                        onCheckedChange={() => toggleAgenteAtivo(client.client_id, client.agente_ativo)}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -507,6 +678,175 @@ export default function Clients() {
       </main>
 
       <FAB onClick={handleCreate} />
+
+      {/* Client Details Modal */}
+      <Dialog open={!!viewingClient} onOpenChange={(open) => !open && setViewingClient(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-4">
+              {/* Large Avatar */}
+              <div className="relative shrink-0">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-2xl text-primary font-bold">
+                    {viewingClient?.nome?.charAt(0).toUpperCase() || "C"}
+                  </span>
+                </div>
+                {viewingClient?.has_subscription && (
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
+                    <Crown className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <DialogTitle className="text-xl truncate">{viewingClient?.nome || "Cliente"}</DialogTitle>
+                <p className="text-sm text-muted-foreground">{formatPhone(viewingClient?.telefone)}</p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* Contact Info */}
+            <div className="grid grid-cols-2 gap-3">
+              {viewingClient?.email && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="truncate">{viewingClient.email}</span>
+                </div>
+              )}
+              {viewingClient?.cpf_cnpj && (
+                <div className="flex items-center gap-2 text-sm">
+                  <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>{formatCpfCnpj(viewingClient.cpf_cnpj)}</span>
+                </div>
+              )}
+              {viewingClient?.birth_date && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>{formatDate(viewingClient.birth_date)}</span>
+                </div>
+              )}
+              {viewingClient?.last_visit && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>{formatDateTime(viewingClient.last_visit)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Address */}
+            {viewingClient && getFullAddress(viewingClient) && (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-start gap-2 text-sm">
+                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <span>{getFullAddress(viewingClient)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Subscription Plan & Credits */}
+            {viewingClient?.has_subscription && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-amber-500" />
+                    <span className="font-semibold">{viewingClient.plan_name}</span>
+                  </div>
+                  <Badge className="bg-emerald-500/20 text-emerald-600">Ativo</Badge>
+                </div>
+                
+                {/* Service Credits */}
+                {loadingCredits ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ) : clientCredits.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground font-medium">Créditos do mês</p>
+                    {clientCredits.map((credit) => (
+                      <div key={credit.serviceId} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{credit.serviceName}</span>
+                          <span className="font-medium">
+                            {credit.quantityLimit === 0 
+                              ? "∞" 
+                              : `${credit.remaining}/${credit.quantityLimit}`}
+                          </span>
+                        </div>
+                        <Progress 
+                          value={credit.quantityLimit === 0 ? 100 : (credit.remaining / credit.quantityLimit) * 100} 
+                          className="h-2"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum serviço no plano</p>
+                )}
+              </div>
+            )}
+
+            {/* Agent Toggle */}
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">Atendimento por agente</span>
+              </div>
+              <Switch
+                checked={viewingClient?.agente_ativo || false}
+                onCheckedChange={() => {
+                  if (viewingClient) {
+                    toggleAgenteAtivo(viewingClient.client_id, viewingClient.agente_ativo);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <p className="text-2xl font-bold">{viewingClient?.total_cortes || 0}</p>
+                <p className="text-xs text-muted-foreground">Cortes</p>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <p className="text-lg font-bold text-emerald-600">
+                  {formatCurrency(viewingClient?.faturamento_total || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground">Faturamento</p>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {viewingClient?.notes && (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground">{viewingClient.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => handleEdit(viewingClient!)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Editar
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  setViewingClient(null);
+                  setDeleteClientId(viewingClient!.client_id);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Client Dialog (Create/Edit) */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => {
