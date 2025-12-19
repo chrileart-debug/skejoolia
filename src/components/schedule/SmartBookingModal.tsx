@@ -3,6 +3,16 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +30,12 @@ import {
   AlertCircle,
   Package,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { useSmartBooking, ServiceWithDetails, StaffMember, TimeSlot } from "@/hooks/useSmartBooking";
+import { useSubscriptionUsage } from "@/hooks/useSubscriptionUsage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -85,6 +97,7 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
     isTimeSlotAvailable,
     fetchAppointmentsForDate
   } = useSmartBooking();
+  const { checkSubscriptionUsage, recordUsage } = useSubscriptionUsage();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [animating, setAnimating] = useState(false);
@@ -107,6 +120,16 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
   const [newClientPhone, setNewClientPhone] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Subscription limit alert state
+  const [limitAlertOpen, setLimitAlertOpen] = useState(false);
+  const [pendingAppointmentData, setPendingAppointmentData] = useState<{
+    appointmentId: string;
+    subscriptionId: string;
+    serviceId: string;
+    currentUsage: number;
+    quantityLimit: number;
+  } | null>(null);
 
   // Fetch clients
   useEffect(() => {
@@ -153,6 +176,8 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
       setClientSearchTerm("");
       setNewClientName("");
       setNewClientPhone("");
+      setLimitAlertOpen(false);
+      setPendingAppointmentData(null);
     }
   }, [open, initialDate]);
 
@@ -281,7 +306,8 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
       const endTimeStr = calculateEndTime(selectedTime, selectedService.duration_minutes);
       const endTime = `${selectedDate}T${endTimeStr}:00-03:00`;
 
-      const { error } = await supabase
+      // Step A: Create the appointment
+      const { data: appointmentData, error } = await supabase
         .from("agendamentos")
         .insert({
           user_id: selectedProfessional.user_id,
@@ -293,11 +319,47 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
           end_time: endTime,
           status: "pending",
           client_id: clientId,
-        });
+        })
+        .select("id_agendamento")
+        .single();
 
       if (error) throw error;
 
-      toast.success("Agendamento criado com sucesso!");
+      const appointmentId = appointmentData.id_agendamento;
+
+      // Step B, C, D: Check subscription usage (only if client has an ID)
+      if (clientId) {
+        const usageCheck = await checkSubscriptionUsage(
+          clientId,
+          barbershop.id,
+          selectedService.id
+        );
+
+        if (usageCheck.hasActiveSubscription && usageCheck.isServiceInPlan) {
+          if (usageCheck.isWithinLimit) {
+            // Scenario 1: Within limit - auto-record usage
+            await recordUsage(usageCheck.subscriptionId!, selectedService.id, appointmentId);
+            toast.success("Agendamento criado com sucesso! Uso do plano registrado.");
+          } else {
+            // Scenario 2: Limit reached - show alert
+            setPendingAppointmentData({
+              appointmentId,
+              subscriptionId: usageCheck.subscriptionId!,
+              serviceId: selectedService.id,
+              currentUsage: usageCheck.currentUsage,
+              quantityLimit: usageCheck.quantityLimit,
+            });
+            setLimitAlertOpen(true);
+            setSubmitting(false);
+            return; // Don't close modal yet
+          }
+        } else {
+          toast.success("Agendamento criado com sucesso!");
+        }
+      } else {
+        toast.success("Agendamento criado com sucesso!");
+      }
+
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
@@ -306,6 +368,38 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Handle charging separately (do not record usage)
+  const handleChargeSeparately = () => {
+    setLimitAlertOpen(false);
+    setPendingAppointmentData(null);
+    toast.success("Agendamento criado! Será cobrado separadamente.");
+    onOpenChange(false);
+    onSuccess();
+  };
+
+  // Handle manual override (record usage anyway)
+  const handleManualOverride = async () => {
+    if (!pendingAppointmentData) return;
+
+    const success = await recordUsage(
+      pendingAppointmentData.subscriptionId,
+      pendingAppointmentData.serviceId,
+      pendingAppointmentData.appointmentId
+    );
+
+    setLimitAlertOpen(false);
+    setPendingAppointmentData(null);
+
+    if (success) {
+      toast.success("Agendamento criado! Uso registrado além do limite.");
+    } else {
+      toast.warning("Agendamento criado, mas houve erro ao registrar uso.");
+    }
+
+    onOpenChange(false);
+    onSuccess();
   };
 
   const stepTitles = [
@@ -318,6 +412,7 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
   const canConfirm = selectedClient && selectedService && selectedProfessional && selectedTime;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header with Step Indicator */}
@@ -478,6 +573,38 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Subscription Limit Alert */}
+    <AlertDialog open={limitAlertOpen} onOpenChange={setLimitAlertOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+            <AlertTriangle className="w-5 h-5" />
+            Limite do Plano Atingido
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <p>
+              O cliente atingiu o limite de uso do plano para este serviço.
+            </p>
+            {pendingAppointmentData && (
+              <p className="font-medium text-foreground">
+                Uso atual: {pendingAppointmentData.currentUsage}/{pendingAppointmentData.quantityLimit}
+              </p>
+            )}
+            <p>Como deseja proceder?</p>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <AlertDialogCancel onClick={handleChargeSeparately}>
+            Cobrar Separadamente
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleManualOverride} className="bg-amber-600 hover:bg-amber-700">
+            Registrar Mesmo Assim
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }
 

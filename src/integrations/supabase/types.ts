@@ -444,6 +444,70 @@ export type Database = {
           },
         ]
       }
+      client_checkout_sessions: {
+        Row: {
+          barbershop_id: string | null
+          checkout_url: string
+          client_id: string | null
+          created_at: string | null
+          external_reference: string | null
+          id: string
+          plan_id: string | null
+          plan_name: string
+          plan_price: number
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          barbershop_id?: string | null
+          checkout_url: string
+          client_id?: string | null
+          created_at?: string | null
+          external_reference?: string | null
+          id?: string
+          plan_id?: string | null
+          plan_name: string
+          plan_price: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          barbershop_id?: string | null
+          checkout_url?: string
+          client_id?: string | null
+          created_at?: string | null
+          external_reference?: string | null
+          id?: string
+          plan_id?: string | null
+          plan_name?: string
+          plan_price?: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_checkout_sessions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_checkout_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "client_checkout_sessions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "barber_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_club_subscriptions: {
         Row: {
           asaas_subscription_id: string | null
@@ -551,17 +615,26 @@ export type Database = {
       clientes: {
         Row: {
           agente_ativo: boolean
+          asaas_customer_id: string | null
           avatar_url: string | null
+          bairro: string | null
           barbershop_id: string
           birth_date: string | null
+          cep: string | null
+          cidade: string | null
           client_id: string
+          complemento: string | null
+          cpf_cnpj: string | null
           created_at: string
           email: string | null
+          endereco: string | null
+          estado: string | null
           faturamento_total: number | null
           id_agente: string | null
           last_visit: string | null
           nome: string | null
           notes: string | null
+          numero: string | null
           telefone: string | null
           total_cortes: number | null
           updated_at: string
@@ -569,17 +642,26 @@ export type Database = {
         }
         Insert: {
           agente_ativo?: boolean
+          asaas_customer_id?: string | null
           avatar_url?: string | null
+          bairro?: string | null
           barbershop_id: string
           birth_date?: string | null
+          cep?: string | null
+          cidade?: string | null
           client_id?: string
+          complemento?: string | null
+          cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
+          endereco?: string | null
+          estado?: string | null
           faturamento_total?: number | null
           id_agente?: string | null
           last_visit?: string | null
           nome?: string | null
           notes?: string | null
+          numero?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
@@ -587,17 +669,26 @@ export type Database = {
         }
         Update: {
           agente_ativo?: boolean
+          asaas_customer_id?: string | null
           avatar_url?: string | null
+          bairro?: string | null
           barbershop_id?: string
           birth_date?: string | null
+          cep?: string | null
+          cidade?: string | null
           client_id?: string
+          complemento?: string | null
+          cpf_cnpj?: string | null
           created_at?: string
           email?: string | null
+          endereco?: string | null
+          estado?: string | null
           faturamento_total?: number | null
           id_agente?: string | null
           last_visit?: string | null
           nome?: string | null
           notes?: string | null
+          numero?: string | null
           telefone?: string | null
           total_cortes?: number | null
           updated_at?: string
