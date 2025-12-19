@@ -98,6 +98,16 @@ interface SubscriberPlanItem {
   used_count: number;
 }
 
+interface SubscriptionData {
+  planName: string;
+  planDescription: string | null;
+  planPrice: number;
+  planInterval: string | null;
+}
+
+// LocalStorage key for persistent session
+const STORAGE_KEY_PREFIX = "skejool_client_";
+
 interface ExistingAppointment {
   id_agendamento: string;
   start_time: string;
@@ -190,6 +200,10 @@ const PublicBooking = () => {
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<string | null>(null);
 
+  // Subscription data for identified client
+  const [clientSubscription, setClientSubscription] = useState<SubscriptionData | null>(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
+
   // Wizard states
   const [activeTab, setActiveTab] = useState<string>("agendar");
   const [currentStep, setCurrentStep] = useState(0); // 0 = phone, 1 = service, 2 = professional, 3 = time, 4 = confirm
@@ -197,6 +211,26 @@ const PublicBooking = () => {
   const [selectedProfessional, setSelectedProfessional] = useState<StaffMember | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayInBrasilia());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  // Load client from localStorage on mount (persistent session)
+  useEffect(() => {
+    if (!slug) return;
+    const storageKey = `${STORAGE_KEY_PREFIX}${slug}`;
+    const savedClient = localStorage.getItem(storageKey);
+    if (savedClient) {
+      try {
+        const parsedClient = JSON.parse(savedClient) as ClientData;
+        setFoundClient(parsedClient);
+        setClientName(parsedClient.nome || "");
+        setClientPhone(parsedClient.telefone ? formatPhoneMask(parsedClient.telefone) : "");
+        setClientEmail(parsedClient.email || "");
+        // Skip to step 1 if we have a saved client
+        setCurrentStep(1);
+      } catch (e) {
+        localStorage.removeItem(storageKey);
+      }
+    }
+  }, [slug]);
 
   // Fetch barbershop and initial data
   useEffect(() => {
@@ -285,26 +319,48 @@ const PublicBooking = () => {
     fetchBarbershopData();
   }, [slug]);
 
-  // Fetch subscriber plan items when client logs in
+  // Fetch subscriber plan items when client is identified (foundClient OR loggedInClient)
   useEffect(() => {
+    const effectiveClient = foundClient || loggedInClient;
+    
     const fetchSubscriberData = async () => {
-      if (!loggedInClient || !barbershop) {
+      if (!effectiveClient || !barbershop) {
         setSubscriberPlanItems([]);
+        setClientSubscription(null);
         return;
       }
 
+      setLoadingSubscription(true);
       try {
         const { data: subData } = await supabase
           .from("client_club_subscriptions")
           .select("id, plan_id")
-          .eq("client_id", loggedInClient.client_id)
+          .eq("client_id", effectiveClient.client_id)
           .eq("barbershop_id", barbershop.id)
           .eq("status", "active")
           .single();
 
         if (!subData) {
           setSubscriberPlanItems([]);
+          setClientSubscription(null);
+          setLoadingSubscription(false);
           return;
+        }
+
+        // Fetch plan details
+        const { data: planData } = await supabase
+          .from("barber_plans")
+          .select("name, description, price, interval")
+          .eq("id", subData.plan_id)
+          .single();
+
+        if (planData) {
+          setClientSubscription({
+            planName: planData.name,
+            planDescription: planData.description,
+            planPrice: planData.price,
+            planInterval: planData.interval,
+          });
         }
 
         const { data: itemsData } = await supabase
@@ -314,6 +370,7 @@ const PublicBooking = () => {
 
         if (!itemsData) {
           setSubscriberPlanItems([]);
+          setLoadingSubscription(false);
           return;
         }
 
@@ -344,11 +401,14 @@ const PublicBooking = () => {
       } catch (error) {
         console.error("Error fetching subscriber data:", error);
         setSubscriberPlanItems([]);
+        setClientSubscription(null);
+      } finally {
+        setLoadingSubscription(false);
       }
     };
 
     fetchSubscriberData();
-  }, [loggedInClient, barbershop]);
+  }, [foundClient, loggedInClient, barbershop]);
 
   // Pre-fill client data when logged in from Minha Área
   useEffect(() => {
@@ -460,10 +520,17 @@ const PublicBooking = () => {
       const matchedClient = clientData && clientData.length > 0 ? clientData[0] : null;
 
       if (matchedClient) {
-        // Found existing client - store in state
-        setFoundClient(matchedClient as ClientData);
+        // Found existing client - store in state and localStorage
+        const clientObj = matchedClient as ClientData;
+        setFoundClient(clientObj);
         setClientName(matchedClient.nome || "");
         setClientEmail(matchedClient.email || "");
+        
+        // Save to localStorage for persistent session
+        if (slug) {
+          const storageKey = `${STORAGE_KEY_PREFIX}${slug}`;
+          localStorage.setItem(storageKey, JSON.stringify(clientObj));
+        }
         
         // Check for existing active appointment using DB function
         const { data: aptData } = await supabase.rpc(
@@ -491,6 +558,7 @@ const PublicBooking = () => {
           setShowExistingAppointmentModal(true);
         } else {
           // No active appointment, proceed to service selection
+          toast.success(`Bem-vindo de volta, ${matchedClient.nome || "Cliente"}!`);
           setCurrentStep(1);
         }
       } else {
@@ -539,6 +607,21 @@ const PublicBooking = () => {
       return { price: "R$ 0,00", isIncluded: true };
     }
     return { price: formatPrice(service.price), isIncluded: false };
+  };
+
+  // Get remaining credits for a service
+  const getRemainingCredits = (serviceId: string): { remaining: number; limit: number; isUnlimited: boolean } | null => {
+    const planItem = subscriberPlanItems.find((item) => item.service_id === serviceId);
+    if (!planItem) return null;
+    
+    const isUnlimited = planItem.quantity_limit === 0 || planItem.quantity_limit === null;
+    const remaining = isUnlimited ? -1 : Math.max(0, (planItem.quantity_limit || 0) - planItem.used_count);
+    
+    return { 
+      remaining, 
+      limit: planItem.quantity_limit || 0, 
+      isUnlimited 
+    };
   };
 
   // Get professionals for selected service
@@ -795,12 +878,33 @@ const PublicBooking = () => {
   const handleClientLogout = () => {
     setLoggedInClient(null);
     setSubscriberPlanItems([]);
+    setClientSubscription(null);
     setClientName("");
     setClientPhone("");
     setClientEmail("");
     setFoundClient(null);
     setCurrentStep(0);
     setActiveTab("agendar");
+    // Clear persistent session
+    if (slug) {
+      const storageKey = `${STORAGE_KEY_PREFIX}${slug}`;
+      localStorage.removeItem(storageKey);
+    }
+  };
+
+  // Clear persistent session (for "Not me" flow)
+  const handleClearSession = () => {
+    setFoundClient(null);
+    setSubscriberPlanItems([]);
+    setClientSubscription(null);
+    setClientName("");
+    setClientPhone("");
+    setClientEmail("");
+    setCurrentStep(0);
+    if (slug) {
+      const storageKey = `${STORAGE_KEY_PREFIX}${slug}`;
+      localStorage.removeItem(storageKey);
+    }
   };
 
   const handleNavigateToBooking = () => {
@@ -1107,16 +1211,89 @@ const PublicBooking = () => {
                   </p>
                 </div>
 
-                {/* Welcome back message */}
+                {/* Enhanced Welcome Card with Plan & Credits */}
                 {foundClient && (
-                  <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Sparkles className="w-5 h-5 text-primary" />
+                  <div className="space-y-4">
+                    {/* Welcome Message */}
+                    <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-xl border border-primary/20 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                            <Sparkles className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-foreground text-lg">Bem-vindo de volta, {foundClient.nome}!</p>
+                            <p className="text-sm text-muted-foreground">Bom te ver novamente.</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={handleClearSession}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors underline"
+                        >
+                          Não sou eu
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-foreground">Bem-vindo de volta!</p>
-                      <p className="text-sm text-muted-foreground">Bom te ver novamente, {foundClient.nome}.</p>
-                    </div>
+
+                    {/* Plan Summary Card (only if has active subscription) */}
+                    {clientSubscription && subscriberPlanItems.length > 0 && (
+                      <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent rounded-xl border border-amber-500/30 overflow-hidden">
+                        <div className="bg-gradient-to-r from-amber-500/20 to-amber-500/10 px-4 py-3 border-b border-amber-500/20">
+                          <div className="flex items-center gap-2">
+                            <Crown className="w-5 h-5 text-amber-600" />
+                            <span className="font-bold text-amber-700">{clientSubscription.planName}</span>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <Gift className="w-4 h-4 text-amber-600" />
+                            Seus Créditos
+                          </p>
+                          <div className="space-y-2">
+                            {subscriberPlanItems.map((item) => {
+                              const service = services.find(s => s.id === item.service_id);
+                              if (!service) return null;
+                              
+                              const isUnlimited = item.quantity_limit === 0 || item.quantity_limit === null;
+                              const remaining = isUnlimited ? -1 : Math.max(0, (item.quantity_limit || 0) - item.used_count);
+                              const progressPercent = isUnlimited ? 100 : item.quantity_limit ? ((item.quantity_limit - remaining) / item.quantity_limit) * 100 : 0;
+                              
+                              return (
+                                <div key={item.service_id} className="bg-background/50 rounded-lg p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-foreground">{service.name}</span>
+                                    <span className={cn(
+                                      "text-sm font-bold",
+                                      isUnlimited ? "text-amber-600" : remaining > 0 ? "text-emerald-600" : "text-amber-600"
+                                    )}>
+                                      {isUnlimited ? "Ilimitado" : `${remaining} restante${remaining !== 1 ? 's' : ''}`}
+                                    </span>
+                                  </div>
+                                  {!isUnlimited && (
+                                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                                      <div 
+                                        className={cn(
+                                          "h-full transition-all rounded-full",
+                                          remaining > 0 ? "bg-emerald-500" : "bg-amber-500"
+                                        )}
+                                        style={{ width: `${Math.min(100, progressPercent)}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {loadingSubscription && (
+                      <div className="bg-muted/30 rounded-xl p-4 flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Verificando seu plano...</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1132,6 +1309,7 @@ const PublicBooking = () => {
                       <div className="grid gap-3">
                         {categoryServices.map((service) => {
                           const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                          const credits = getRemainingCredits(service.id);
                           return (
                             <button
                               key={service.id}
@@ -1192,6 +1370,21 @@ const PublicBooking = () => {
                                         {formatDuration(service.duration_minutes)}
                                       </span>
                                     )}
+                                    {/* Show remaining credits */}
+                                    {credits && (
+                                      <span className={cn(
+                                        "text-sm font-semibold px-2 py-0.5 rounded-full",
+                                        credits.isUnlimited 
+                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
+                                          : credits.remaining > 0 
+                                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                      )}>
+                                        {credits.isUnlimited 
+                                          ? "∞ Ilimitado" 
+                                          : `${credits.remaining} restante${credits.remaining !== 1 ? 's' : ''}`}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1211,6 +1404,7 @@ const PublicBooking = () => {
                     <div className="grid gap-3">
                       {servicesByCategory.uncategorized.map((service) => {
                         const { price: displayPrice, isIncluded } = getDisplayPrice(service);
+                        const credits = getRemainingCredits(service.id);
                         return (
                           <button
                             key={service.id}
@@ -1244,6 +1438,21 @@ const PublicBooking = () => {
                                     <span className="text-sm text-muted-foreground flex items-center gap-1">
                                       <Clock className="w-3 h-3" />
                                       {formatDuration(service.duration_minutes)}
+                                    </span>
+                                  )}
+                                  {/* Show remaining credits */}
+                                  {credits && (
+                                    <span className={cn(
+                                      "text-sm font-semibold px-2 py-0.5 rounded-full",
+                                      credits.isUnlimited 
+                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
+                                        : credits.remaining > 0 
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                    )}>
+                                      {credits.isUnlimited 
+                                        ? "∞ Ilimitado" 
+                                        : `${credits.remaining} restante${credits.remaining !== 1 ? 's' : ''}`}
                                     </span>
                                   )}
                                 </div>
