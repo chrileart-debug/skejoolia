@@ -971,8 +971,15 @@ const PublicBooking = () => {
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <Scissors className="w-5 h-5 text-primary" />
               </div>
-              <div>
-                <p className="font-medium text-foreground">{selectedService?.name}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-foreground">{selectedService?.name}</p>
+                  {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits && (
+                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-600 text-xs font-medium rounded-full">
+                      Incluso no Plano
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits 
                     ? formatPrice(0) 
@@ -1611,8 +1618,15 @@ const PublicBooking = () => {
                 <div className="bg-muted/50 rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <Scissors className="w-5 h-5 text-primary" />
-                    <div>
-                      <p className="font-medium text-foreground">{selectedService?.name}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">{selectedService?.name}</p>
+                        {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits && (
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-600 text-xs font-medium rounded-full">
+                            Incluso no Plano
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {selectedService && isServiceIncludedInPlan(selectedService.id).hasCredits 
                           ? formatPrice(0) 
