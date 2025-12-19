@@ -466,23 +466,26 @@ export const ClientPortal = ({
                         Remarcar
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => {
-                        setAppointmentToCancel(apt);
-                        setConfirmCancelOpen(true);
-                      }}
-                      disabled={cancellingAppointment === apt.id_agendamento}
-                    >
-                      {cancellingAppointment === apt.id_agendamento ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      Cancelar
-                    </Button>
+                    {/* Only show cancel button for pending appointments */}
+                    {apt.status === "pending" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          setAppointmentToCancel(apt);
+                          setConfirmCancelOpen(true);
+                        }}
+                        disabled={cancellingAppointment === apt.id_agendamento}
+                      >
+                        {cancellingAppointment === apt.id_agendamento ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <XCircle className="w-4 h-4" />
+                        )}
+                        Cancelar
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
