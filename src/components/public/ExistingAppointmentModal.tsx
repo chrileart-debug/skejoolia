@@ -135,7 +135,7 @@ export const ExistingAppointmentModal = ({
           </Button>
           
           {/* Only show cancel button for pending appointments */}
-          {appointment.status !== "confirmado" && appointment.status !== "concluído" && (
+          {appointment.status === "pending" && (
             <Button
               onClick={handleCancel}
               variant="destructive"
