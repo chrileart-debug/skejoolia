@@ -327,6 +327,14 @@ export type Database = {
           asaas_customer_id: string | null
           asaas_wallet_id: string | null
           bairro: string | null
+          bank_account_digit: string | null
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_code: string | null
+          bank_operation_type: string | null
+          bank_owner_birth_date: string | null
+          bank_pix_key: string | null
+          bank_pix_key_type: string | null
           cep: string | null
           city: string | null
           cpf_cnpj: string | null
@@ -354,6 +362,14 @@ export type Database = {
           asaas_customer_id?: string | null
           asaas_wallet_id?: string | null
           bairro?: string | null
+          bank_account_digit?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_code?: string | null
+          bank_operation_type?: string | null
+          bank_owner_birth_date?: string | null
+          bank_pix_key?: string | null
+          bank_pix_key_type?: string | null
           cep?: string | null
           city?: string | null
           cpf_cnpj?: string | null
@@ -381,6 +397,14 @@ export type Database = {
           asaas_customer_id?: string | null
           asaas_wallet_id?: string | null
           bairro?: string | null
+          bank_account_digit?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_code?: string | null
+          bank_operation_type?: string | null
+          bank_owner_birth_date?: string | null
+          bank_pix_key?: string | null
+          bank_pix_key_type?: string | null
           cep?: string | null
           city?: string | null
           cpf_cnpj?: string | null
