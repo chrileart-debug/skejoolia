@@ -405,18 +405,22 @@ export default function Settings() {
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
         {isOwner && barbershopId ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="w-4 h-4" />
-                Perfil & Empresa
+                <span className="hidden sm:inline">Perfil</span>
+              </TabsTrigger>
+              <TabsTrigger value="company" className="flex items-center gap-2">
+                <Building2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Empresa</span>
               </TabsTrigger>
               <TabsTrigger value="banking" className="flex items-center gap-2">
                 <Landmark className="w-4 h-4" />
-                Dados Bancários
+                <span className="hidden sm:inline">Bancário</span>
               </TabsTrigger>
             </TabsList>
 
-            {/* Tab 1: Perfil & Empresa */}
+            {/* Tab 1: Perfil */}
             <TabsContent value="profile" className="space-y-6 mt-6">
               {/* Profile Section */}
               <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
@@ -525,8 +529,74 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* PWA Download Section - Only on mobile/tablet */}
+              {isMobile && (
+                <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-primary" />
+                    Aplicativo
+                  </h3>
+
+                  {isInstalled ? (
+                    <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
+                      <CheckCircle className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">Aplicativo instalado</p>
+                        <p className="text-sm text-muted-foreground">
+                          Você já tem o Skejool instalado no seu dispositivo
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
+                      </p>
+                      <Button
+                        onClick={() => {
+                          if (isInstallable) {
+                            promptInstall();
+                          } else {
+                            navigate("/instalar");
+                          }
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Baixar Aplicativo
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions for Profile tab */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <Button
+                  size="lg"
+                  className="w-full sm:flex-1"
+                  onClick={handleSave}
+                  disabled={isLoading}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isLoading ? "Salvando..." : "Salvar Perfil"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sair da conta
+                </Button>
+              </div>
+            </TabsContent>
+
+            {/* Tab 2: Empresa */}
+            <TabsContent value="company" className="space-y-6 mt-6">
               {/* Company Section */}
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
+              <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
                 <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-primary" />
                   Dados da Empresa
@@ -629,7 +699,7 @@ export default function Settings() {
               <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
                 <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-primary" />
-                  Endereço Completo
+                  Endereço da Empresa
                 </h3>
 
                 <div className="space-y-4">
@@ -747,68 +817,16 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* PWA Download Section - Only on mobile/tablet */}
-              {isMobile && (
-                <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Smartphone className="w-5 h-5 text-primary" />
-                    Aplicativo
-                  </h3>
-
-                  {isInstalled ? (
-                    <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
-                      <CheckCircle className="w-5 h-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Aplicativo instalado</p>
-                        <p className="text-sm text-muted-foreground">
-                          Você já tem o Skejool instalado no seu dispositivo
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
-                      </p>
-                      <Button
-                        onClick={() => {
-                          if (isInstallable) {
-                            promptInstall();
-                          } else {
-                            navigate("/instalar");
-                          }
-                        }}
-                        className="w-full sm:w-auto"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Baixar Aplicativo
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Actions for Profile tab */}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <Button
-                  size="lg"
-                  className="w-full sm:flex-1"
-                  onClick={handleSave}
-                  disabled={isLoading}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {isLoading ? "Salvando..." : "Salvar alterações"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="w-full sm:flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sair da conta
-                </Button>
-              </div>
+              {/* Actions for Company tab */}
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={handleSave}
+                disabled={isLoading}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isLoading ? "Salvando..." : "Salvar Dados da Empresa"}
+              </Button>
             </TabsContent>
 
             {/* Tab 2: Dados Bancários */}
