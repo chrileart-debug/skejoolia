@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2 } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
 import { PublishPlanModal } from "@/components/club/PublishPlanModal";
+import { ManualSubscriptionModal } from "@/components/club/ManualSubscriptionModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,6 +78,9 @@ export default function Club() {
   const [planToDelete, setPlanToDelete] = useState<BarberPlan | null>(null);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishingPlanId, setPublishingPlanId] = useState<string | null>(null);
+  
+  // Manual subscription modal state
+  const [manualSubscriptionModalOpen, setManualSubscriptionModalOpen] = useState(false);
   
   // Check if there are any draft plans
   const hasDraftPlans = plans.some(plan => !plan.is_published);
@@ -470,6 +474,20 @@ export default function Club() {
         </TabsContent>
 
         <TabsContent value="subscribers" className="mt-6">
+          {/* Header with Add Manual Subscriber button */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Assinantes</h2>
+            <Button 
+              onClick={() => setManualSubscriptionModalOpen(true)}
+              variant="outline"
+              className="gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Novo Assinante Manual</span>
+              <span className="sm:hidden">Adicionar</span>
+            </Button>
+          </div>
+
           {subscribers.length === 0 ? (
             <EmptyState
               icon={<Users className="h-10 w-10 text-muted-foreground" />}
@@ -482,13 +500,28 @@ export default function Club() {
                 <Card key={sub.id}>
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Users className="h-5 w-5 text-primary" />
+                      {/* Avatar with crown for active subscribers */}
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="text-primary font-semibold">
+                            {sub.client?.nome?.charAt(0).toUpperCase() || "C"}
+                          </span>
+                        </div>
+                        {sub.status === "active" && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
+                            <Crown className="w-3 h-3 text-white" />
+                          </div>
+                        )}
                       </div>
                       <div>
-                        <p className="font-medium">
-                          {sub.client?.nome || "Cliente"}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {sub.client?.nome || "Cliente"}
+                          </p>
+                          {sub.status === "active" && (
+                            <Crown className="w-4 h-4 text-amber-500" />
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {sub.client?.telefone || "Sem telefone"}
                         </p>
@@ -553,6 +586,18 @@ export default function Club() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Manual Subscription Modal */}
+      <ManualSubscriptionModal
+        open={manualSubscriptionModalOpen}
+        onClose={() => setManualSubscriptionModalOpen(false)}
+        onSuccess={() => {
+          fetchSubscribers();
+        }}
+        barbershopId={barbershop?.id || ""}
+        userId={user?.id || ""}
+        showClientSearch={true}
+      />
     </div>
   );
 }

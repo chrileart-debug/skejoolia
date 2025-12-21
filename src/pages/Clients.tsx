@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { 
   Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, 
   UserPlus, Pencil, Trash2, Crown, Mail, CreditCard, MapPin, 
-  Clock, FileText 
+  Clock, FileText, Sparkles
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
+import { ManualSubscriptionModal } from "@/components/club/ManualSubscriptionModal";
 import { toast } from "sonner";
 
 interface OutletContextType {
@@ -113,6 +114,10 @@ export default function Clients() {
   const [viewingClient, setViewingClient] = useState<Cliente | null>(null);
   const [clientCredits, setClientCredits] = useState<ServiceCredit[]>([]);
   const [loadingCredits, setLoadingCredits] = useState(false);
+  
+  // Manual subscription modal state
+  const [vipModalOpen, setVipModalOpen] = useState(false);
+  const [vipClient, setVipClient] = useState<Cliente | null>(null);
 
   useEffect(() => {
     if (user && barbershop) {
@@ -828,6 +833,19 @@ export default function Clients() {
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
+              {/* Tornar VIP Button - Only show if client doesn't have subscription */}
+              {!viewingClient?.has_subscription && (
+                <Button 
+                  className="flex-1 gap-2 bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={() => {
+                    setVipClient(viewingClient);
+                    setVipModalOpen(true);
+                  }}
+                >
+                  <Crown className="w-4 h-4" />
+                  Tornar VIP
+                </Button>
+              )}
               <Button variant="outline" className="flex-1" onClick={() => handleEdit(viewingClient!)}>
                 <Pencil className="w-4 h-4 mr-2" />
                 Editar
@@ -939,6 +957,26 @@ export default function Clients() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Manual Subscription (VIP) Modal */}
+      <ManualSubscriptionModal
+        open={vipModalOpen}
+        onClose={() => {
+          setVipModalOpen(false);
+          setVipClient(null);
+        }}
+        onSuccess={() => {
+          loadClients();
+          setViewingClient(null);
+        }}
+        barbershopId={barbershop?.id || ""}
+        userId={user?.id || ""}
+        client={vipClient ? {
+          client_id: vipClient.client_id,
+          nome: vipClient.nome,
+          telefone: vipClient.telefone,
+        } : null}
+      />
     </div>
   );
 }
