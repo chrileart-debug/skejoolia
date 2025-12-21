@@ -30,6 +30,10 @@ import {
   Loader2,
   Landmark,
   Calendar,
+  Store,
+  CreditCard,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -40,6 +44,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LogoUploader } from "@/components/settings/LogoUploader";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -57,6 +62,7 @@ export default function Settings() {
   const [slugCopied, setSlugCopied] = useState(false);
   const [slugError, setSlugError] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
+  const [hasAsaasApiKey, setHasAsaasApiKey] = useState(false);
   
   // Profile photo upload
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
@@ -67,10 +73,9 @@ export default function Settings() {
     name: "",
     phone: "",
     email: "",
-    birthDate: "",
   });
-  
-  // Business data (from barbershops) - only for owners
+
+  // Business data - birthDate moved here for fiscal identity
   const [businessData, setBusinessData] = useState({
     company: "",
     slug: "",
@@ -79,6 +84,7 @@ export default function Settings() {
     niche: "",
     subNiche: "",
     cpfCnpj: "",
+    birthDate: "",
     cep: "",
     address: "",
     addressNumber: "",
@@ -126,7 +132,6 @@ export default function Settings() {
         name: userSettings.nome || "",
         phone: userSettings.numero || "",
         email: userSettings.email || user.email || "",
-        birthDate: "",
       });
     } else {
       setProfileData(prev => ({ ...prev, email: user.email || "" }));
@@ -157,6 +162,7 @@ export default function Settings() {
           niche: barbershop.nicho || "",
           subNiche: barbershop.subnicho || "",
           cpfCnpj: barbershop.cpf_cnpj || "",
+          birthDate: (barbershop as any).bank_owner_birth_date || "",
           cep: barbershop.cep || "",
           address: barbershop.address || "",
           addressNumber: barbershop.address_number || "",
@@ -165,11 +171,8 @@ export default function Settings() {
           state: barbershop.state || "",
         });
 
-        // Load birth date from new column
-        setProfileData(prev => ({
-          ...prev,
-          birthDate: (barbershop as any).bank_owner_birth_date || "",
-        }));
+        // Check if asaas_api_key exists
+        setHasAsaasApiKey(!!(barbershop as any).asaas_api_key);
 
         // Load banking data
         setBankingData({
@@ -254,18 +257,9 @@ export default function Settings() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSaveProfile = async () => {
     if (!user) return;
     setIsLoading(true);
-    setSlugError("");
-
-    // Validate birth date if CPF
-    if (businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && !profileData.birthDate) {
-      toast.error("Data de nascimento é obrigatória para CPF");
-      setIsLoading(false);
-      setActiveTab("profile");
-      return;
-    }
 
     // Save user profile to user_settings
     const { error: userError } = await supabase
@@ -283,53 +277,66 @@ export default function Settings() {
       return;
     }
 
-    // Save business data to barbershops - only for owners
-    if (barbershopId && isOwner) {
-      // Check slug uniqueness if slug is provided
-      if (businessData.slug) {
-        const { data: existingSlug } = await supabase
-          .from("barbershops")
-          .select("id")
-          .eq("slug", businessData.slug)
-          .neq("id", barbershopId)
-          .maybeSingle();
+    toast.success("Perfil salvo com sucesso");
+    setIsLoading(false);
+  };
 
-        if (existingSlug) {
-          setSlugError("Este link já está em uso. Escolha outro.");
-          toast.error("Este link já está em uso");
-          setIsLoading(false);
-          return;
-        }
-      }
+  const handleSaveCompany = async () => {
+    if (!user || !barbershopId || !isOwner) return;
+    setIsLoading(true);
+    setSlugError("");
 
-      const { error: businessError } = await supabase
+    // Validate birth date if CPF
+    if (businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && !businessData.birthDate) {
+      toast.error("Data de nascimento é obrigatória para CPF");
+      setIsLoading(false);
+      return;
+    }
+
+    // Check slug uniqueness if slug is provided
+    if (businessData.slug) {
+      const { data: existingSlug } = await supabase
         .from("barbershops")
-        .update({
-          name: businessData.company,
-          slug: businessData.slug || null,
-          phone: businessData.publicPhone || null,
-          logo_url: businessData.logoUrl || null,
-          nicho: businessData.niche,
-          subnicho: businessData.subNiche,
-          cpf_cnpj: businessData.cpfCnpj,
-          cep: businessData.cep,
-          address: businessData.address,
-          address_number: businessData.addressNumber,
-          bairro: businessData.bairro,
-          city: businessData.city,
-          state: businessData.state,
-          bank_owner_birth_date: profileData.birthDate || null,
-        })
-        .eq("id", barbershopId);
+        .select("id")
+        .eq("slug", businessData.slug)
+        .neq("id", barbershopId)
+        .maybeSingle();
 
-      if (businessError) {
-        toast.error("Erro ao salvar dados da empresa");
+      if (existingSlug) {
+        setSlugError("Este link já está em uso. Escolha outro.");
+        toast.error("Este link já está em uso");
         setIsLoading(false);
         return;
       }
     }
 
-    toast.success("Configurações salvas com sucesso");
+    const { error: businessError } = await supabase
+      .from("barbershops")
+      .update({
+        name: businessData.company,
+        slug: businessData.slug || null,
+        phone: businessData.publicPhone || null,
+        logo_url: businessData.logoUrl || null,
+        nicho: businessData.niche,
+        subnicho: businessData.subNiche,
+        cpf_cnpj: businessData.cpfCnpj,
+        cep: businessData.cep,
+        address: businessData.address,
+        address_number: businessData.addressNumber,
+        bairro: businessData.bairro,
+        city: businessData.city,
+        state: businessData.state,
+        bank_owner_birth_date: businessData.birthDate || null,
+      })
+      .eq("id", barbershopId);
+
+    if (businessError) {
+      toast.error("Erro ao salvar dados da empresa");
+      setIsLoading(false);
+      return;
+    }
+
+    toast.success("Dados da empresa salvos com sucesso");
     setIsLoading(false);
   };
 
@@ -420,16 +427,19 @@ export default function Settings() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Tab 1: Perfil */}
+            {/* Tab 1: Perfil - User data only */}
             <TabsContent value="profile" className="space-y-6 mt-6">
-              {/* Profile Section */}
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <User className="w-5 h-5 text-primary" />
-                  Identidade Pessoal
-                </h3>
-
-                <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5 text-primary" />
+                    Dados Pessoais
+                  </CardTitle>
+                  <CardDescription>
+                    Informações do seu perfil de usuário
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {/* Profile Photo - Square 1:1 */}
                   <div className="flex items-center gap-4">
                     <label className="relative cursor-pointer group">
@@ -505,69 +515,51 @@ export default function Settings() {
                       className="bg-muted cursor-not-allowed"
                     />
                   </div>
-
-                  {/* Birth Date - Conditional */}
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      Data de Nascimento
-                      {businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && (
-                        <span className="text-xs text-destructive">*obrigatório</span>
-                      )}
-                    </Label>
-                    <Input
-                      type="date"
-                      value={profileData.birthDate}
-                      onChange={(e) =>
-                        setProfileData({ ...profileData, birthDate: e.target.value })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Obrigatório se o documento for CPF
-                    </p>
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* PWA Download Section - Only on mobile/tablet */}
               {isMobile && (
-                <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Smartphone className="w-5 h-5 text-primary" />
-                    Aplicativo
-                  </h3>
-
-                  {isInstalled ? (
-                    <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
-                      <CheckCircle className="w-5 h-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Aplicativo instalado</p>
-                        <p className="text-sm text-muted-foreground">
-                          Você já tem o Skejool instalado no seu dispositivo
-                        </p>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Smartphone className="w-5 h-5 text-primary" />
+                      Aplicativo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isInstalled ? (
+                      <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
+                        <CheckCircle className="w-5 h-5 text-primary" />
+                        <div>
+                          <p className="font-medium text-foreground">Aplicativo instalado</p>
+                          <p className="text-sm text-muted-foreground">
+                            Você já tem o Skejool instalado no seu dispositivo
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
-                      </p>
-                      <Button
-                        onClick={() => {
-                          if (isInstallable) {
-                            promptInstall();
-                          } else {
-                            navigate("/instalar");
-                          }
-                        }}
-                        className="w-full sm:w-auto"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Baixar Aplicativo
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
+                        </p>
+                        <Button
+                          onClick={() => {
+                            if (isInstallable) {
+                              promptInstall();
+                            } else {
+                              navigate("/instalar");
+                            }
+                          }}
+                          className="w-full sm:w-auto"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Baixar Aplicativo
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Actions for Profile tab */}
@@ -575,7 +567,7 @@ export default function Settings() {
                 <Button
                   size="lg"
                   className="w-full sm:flex-1"
-                  onClick={handleSave}
+                  onClick={handleSaveProfile}
                   disabled={isLoading}
                 >
                   <Save className="w-4 h-4 mr-2" />
@@ -593,16 +585,20 @@ export default function Settings() {
               </div>
             </TabsContent>
 
-            {/* Tab 2: Empresa */}
+            {/* Tab 2: Empresa - Organized in visual groups */}
             <TabsContent value="company" className="space-y-6 mt-6">
-              {/* Company Section */}
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-primary" />
-                  Dados da Empresa
-                </h3>
-
-                <div className="space-y-6">
+              {/* Grupo 1: Identidade da Marca */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Store className="w-5 h-5 text-primary" />
+                    Identidade da Marca
+                  </CardTitle>
+                  <CardDescription>
+                    Nome, logo e nicho do seu negócio
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {/* Logo Upload - Square 1:1 */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     <LogoUploader
@@ -611,7 +607,7 @@ export default function Settings() {
                       barbershopName={businessData.company || "B"}
                       onLogoChange={(url) => setBusinessData({ ...businessData, logoUrl: url })}
                     />
-                    <div className="flex-1 space-y-2">
+                    <div className="flex-1 space-y-2 w-full">
                       {/* Company Name */}
                       <Label>Nome da Empresa</Label>
                       <Input
@@ -629,43 +625,6 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  {/* Public Link (Slug) */}
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Link className="w-4 h-4 text-muted-foreground" />
-                      Link de Agendamento (Slug)
-                    </Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex items-center rounded-md border border-input bg-background">
-                        <span className="px-3 py-2 text-sm text-muted-foreground bg-muted rounded-l-md border-r whitespace-nowrap">
-                          {window.location.origin}/a/
-                        </span>
-                        <Input
-                          value={businessData.slug}
-                          onChange={(e) => handleSlugChange(e.target.value)}
-                          placeholder="minha-barbearia"
-                          className="border-0 rounded-l-none focus-visible:ring-0"
-                        />
-                      </div>
-                      {businessData.slug && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={copyPublicLink}
-                        >
-                          {slugCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      )}
-                    </div>
-                    {slugError && (
-                      <p className="text-sm text-destructive">{slugError}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Use apenas letras minúsculas, números e hífens
-                    </p>
-                  </div>
-
                   {/* Niche */}
                   <div className="space-y-2">
                     <Label>Nicho</Label>
@@ -677,32 +636,21 @@ export default function Settings() {
                       placeholder="Ex: Barbearia, Salão de Beleza..."
                     />
                   </div>
+                </CardContent>
+              </Card>
 
-                  {/* CPF/CNPJ */}
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-muted-foreground" />
-                      CPF/CNPJ
-                    </Label>
-                    <Input
-                      value={businessData.cpfCnpj}
-                      onChange={(e) =>
-                        setBusinessData({ ...businessData, cpfCnpj: e.target.value })
-                      }
-                      placeholder="000.000.000-00 ou 00.000.000/0001-00"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Address Section */}
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  Endereço da Empresa
-                </h3>
-
-                <div className="space-y-4">
+              {/* Grupo 2: Endereço Completo */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    Endereço Completo
+                  </CardTitle>
+                  <CardDescription>
+                    Localização da sua empresa
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   {/* CEP */}
                   <div className="space-y-2">
                     <Label>CEP</Label>
@@ -814,14 +762,119 @@ export default function Settings() {
                       </Select>
                     </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+
+              {/* Grupo 3: Identidade Fiscal */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    Identidade Fiscal
+                  </CardTitle>
+                  <CardDescription>
+                    Documentos fiscais e data de nascimento
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* CPF/CNPJ */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      CPF/CNPJ
+                    </Label>
+                    <Input
+                      value={businessData.cpfCnpj}
+                      onChange={(e) =>
+                        setBusinessData({ ...businessData, cpfCnpj: e.target.value })
+                      }
+                      placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                    />
+                  </div>
+
+                  {/* Birth Date */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      Data de Nascimento
+                      {businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && (
+                        <span className="text-xs text-destructive">*obrigatório</span>
+                      )}
+                    </Label>
+                    <Input
+                      type="date"
+                      value={businessData.birthDate}
+                      onChange={(e) =>
+                        setBusinessData({ ...businessData, birthDate: e.target.value })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Obrigatório se o documento for CPF
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Grupo 4: Link de Agendamento */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Link className="w-5 h-5 text-primary" />
+                    Link de Agendamento
+                  </CardTitle>
+                  <CardDescription>
+                    URL pública para seus clientes agendarem
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Slug (identificador único)</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 flex items-center rounded-md border border-input bg-background">
+                        <span className="px-3 py-2 text-sm text-muted-foreground bg-muted rounded-l-md border-r whitespace-nowrap">
+                          {window.location.origin}/a/
+                        </span>
+                        <Input
+                          value={businessData.slug}
+                          onChange={(e) => handleSlugChange(e.target.value)}
+                          placeholder="minha-barbearia"
+                          className="border-0 rounded-l-none focus-visible:ring-0"
+                        />
+                      </div>
+                      {businessData.slug && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={copyPublicLink}
+                        >
+                          {slugCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </Button>
+                      )}
+                    </div>
+                    {slugError && (
+                      <p className="text-sm text-destructive">{slugError}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Use apenas letras minúsculas, números e hífens
+                    </p>
+                  </div>
+
+                  {businessData.slug && (
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                      <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm text-muted-foreground truncate">
+                        {window.location.origin}/a/{businessData.slug}
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Actions for Company tab */}
               <Button
                 size="lg"
                 className="w-full"
-                onClick={handleSave}
+                onClick={handleSaveCompany}
                 disabled={isLoading}
               >
                 <Save className="w-4 h-4 mr-2" />
@@ -829,173 +882,227 @@ export default function Settings() {
               </Button>
             </TabsContent>
 
-            {/* Tab 2: Dados Bancários */}
+            {/* Tab 3: Dados Bancários - Conditional based on asaas_api_key */}
             <TabsContent value="banking" className="space-y-6 mt-6">
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Landmark className="w-5 h-5 text-primary" />
-                  Dados para Recebimento (Asaas)
-                </h3>
-
-                <div className="space-y-6">
-                  {/* Operation Type Toggle */}
-                  <div className="space-y-2">
-                    <Label>Tipo de Operação</Label>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant={bankingData.operationType === "PIX" ? "default" : "outline"}
-                        className="flex-1"
-                        onClick={() => setBankingData({ ...bankingData, operationType: "PIX" })}
-                      >
-                        PIX
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={bankingData.operationType === "TED" ? "default" : "outline"}
-                        className="flex-1"
-                        onClick={() => setBankingData({ ...bankingData, operationType: "TED" })}
-                      >
-                        TED
-                      </Button>
+              {!hasAsaasApiKey ? (
+                // Empty state when asaas_api_key is null
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <AlertCircle className="w-8 h-8 text-muted-foreground" />
                     </div>
-                  </div>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      Configuração Pendente
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+                      Para habilitar os dados bancários e recebimentos, preencha primeiro os dados da sua empresa na aba "Empresa".
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("company")}
+                    >
+                      <Building2 className="w-4 h-4 mr-2" />
+                      Ir para Empresa
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                // Banking form when asaas_api_key exists
+                <>
+                  {/* Account Status Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-primary" />
+                        Status da Conta
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
+                        <CheckCircle className="w-5 h-5 text-primary" />
+                        <div>
+                          <p className="font-medium text-foreground">Conta Asaas Conectada</p>
+                          <p className="text-sm text-muted-foreground">
+                            Sua conta está configurada para receber pagamentos
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                  {/* Conditional Fields for PIX */}
-                  {bankingData.operationType === "PIX" && (
-                    <>
+                  {/* Banking Form */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Landmark className="w-5 h-5 text-primary" />
+                        Dados para Recebimento
+                      </CardTitle>
+                      <CardDescription>
+                        Configure como deseja receber seus pagamentos
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Operation Type Toggle */}
                       <div className="space-y-2">
-                        <Label>Tipo de Chave PIX</Label>
-                        <Select
-                          value={bankingData.pixKeyType}
-                          onValueChange={(value) =>
-                            setBankingData({ ...bankingData, pixKeyType: value as any })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o tipo de chave" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {pixKeyTypes.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                {type.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Chave PIX</Label>
-                        <Input
-                          value={bankingData.pixKey}
-                          onChange={(e) =>
-                            setBankingData({ ...bankingData, pixKey: e.target.value })
-                          }
-                          placeholder={
-                            bankingData.pixKeyType === "CPF" ? "000.000.000-00" :
-                            bankingData.pixKeyType === "CNPJ" ? "00.000.000/0001-00" :
-                            bankingData.pixKeyType === "EMAIL" ? "email@exemplo.com" :
-                            bankingData.pixKeyType === "PHONE" ? "(11) 99999-9999" :
-                            "Cole sua chave aleatória"
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Conditional Fields for TED */}
-                  {bankingData.operationType === "TED" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Código do Banco</Label>
-                        <Input
-                          value={bankingData.bankCode}
-                          onChange={(e) =>
-                            setBankingData({ ...bankingData, bankCode: e.target.value })
-                          }
-                          placeholder="Ex: 001, 341, 104..."
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Agência</Label>
-                          <Input
-                            value={bankingData.bankBranch}
-                            onChange={(e) =>
-                              setBankingData({ ...bankingData, bankBranch: e.target.value })
-                            }
-                            placeholder="0000"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Dígito da Agência</Label>
-                          <Input
-                            value=""
-                            disabled
-                            placeholder="Opcional"
-                            className="bg-muted"
-                          />
+                        <Label>Tipo de Operação</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={bankingData.operationType === "PIX" ? "default" : "outline"}
+                            className="flex-1"
+                            onClick={() => setBankingData({ ...bankingData, operationType: "PIX" })}
+                          >
+                            PIX
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={bankingData.operationType === "TED" ? "default" : "outline"}
+                            className="flex-1"
+                            onClick={() => setBankingData({ ...bankingData, operationType: "TED" })}
+                          >
+                            TED
+                          </Button>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="col-span-2 space-y-2">
-                          <Label>Número da Conta</Label>
-                          <Input
-                            value={bankingData.bankAccountNumber}
-                            onChange={(e) =>
-                              setBankingData({ ...bankingData, bankAccountNumber: e.target.value })
-                            }
-                            placeholder="00000000"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Dígito</Label>
-                          <Input
-                            value={bankingData.bankAccountDigit}
-                            onChange={(e) =>
-                              setBankingData({ ...bankingData, bankAccountDigit: e.target.value })
-                            }
-                            placeholder="0"
-                            maxLength={2}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                      {/* Conditional Fields for PIX */}
+                      {bankingData.operationType === "PIX" && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Tipo de Chave PIX</Label>
+                            <Select
+                              value={bankingData.pixKeyType}
+                              onValueChange={(value) =>
+                                setBankingData({ ...bankingData, pixKeyType: value as any })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo de chave" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {pixKeyTypes.map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    {type.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-              {/* Save Banking Button */}
-              <Button
-                size="lg"
-                className="w-full"
-                onClick={handleSaveBanking}
-                disabled={isLoading}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {isLoading ? "Salvando..." : "Salvar Configurações Bancárias"}
-              </Button>
+                          <div className="space-y-2">
+                            <Label>Chave PIX</Label>
+                            <Input
+                              value={bankingData.pixKey}
+                              onChange={(e) =>
+                                setBankingData({ ...bankingData, pixKey: e.target.value })
+                              }
+                              placeholder={
+                                bankingData.pixKeyType === "CPF" ? "000.000.000-00" :
+                                bankingData.pixKeyType === "CNPJ" ? "00.000.000/0001-00" :
+                                bankingData.pixKeyType === "EMAIL" ? "email@exemplo.com" :
+                                bankingData.pixKeyType === "PHONE" ? "(11) 99999-9999" :
+                                "Cole sua chave aleatória"
+                              }
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* Conditional Fields for TED */}
+                      {bankingData.operationType === "TED" && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Código do Banco</Label>
+                            <Input
+                              value={bankingData.bankCode}
+                              onChange={(e) =>
+                                setBankingData({ ...bankingData, bankCode: e.target.value })
+                              }
+                              placeholder="Ex: 001, 341, 104..."
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Agência</Label>
+                              <Input
+                                value={bankingData.bankBranch}
+                                onChange={(e) =>
+                                  setBankingData({ ...bankingData, bankBranch: e.target.value })
+                                }
+                                placeholder="0000"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Dígito da Agência</Label>
+                              <Input
+                                value=""
+                                disabled
+                                placeholder="Opcional"
+                                className="bg-muted"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="col-span-2 space-y-2">
+                              <Label>Número da Conta</Label>
+                              <Input
+                                value={bankingData.bankAccountNumber}
+                                onChange={(e) =>
+                                  setBankingData({ ...bankingData, bankAccountNumber: e.target.value })
+                                }
+                                placeholder="00000000"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Dígito</Label>
+                              <Input
+                                value={bankingData.bankAccountDigit}
+                                onChange={(e) =>
+                                  setBankingData({ ...bankingData, bankAccountDigit: e.target.value })
+                                }
+                                placeholder="0"
+                                maxLength={2}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Save Banking Button */}
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={handleSaveBanking}
+                    disabled={isLoading}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? "Salvando..." : "Salvar Configurações Bancárias"}
+                  </Button>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         ) : (
           /* Non-owner view - Simple profile only */
           <>
-            <div className="bg-card rounded-2xl shadow-card p-6 animate-fade-in">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
-                  {profileData.name.charAt(0)}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center text-2xl font-bold text-primary-foreground">
+                    {profileData.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {profileData.name}
+                    </h2>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">
-                    {profileData.name}
-                  </h2>
-                </div>
-              </div>
-
-              <div className="space-y-4">
+              </CardHeader>
+              <CardContent className="space-y-4">
                 {/* Name */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
@@ -1037,48 +1144,51 @@ export default function Settings() {
                     className="bg-muted cursor-not-allowed"
                   />
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* PWA Download Section - Only on mobile/tablet */}
             {isMobile && (
-              <div className="bg-card rounded-2xl shadow-card p-6 animate-slide-up">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-primary" />
-                  Aplicativo
-                </h3>
-
-                {isInstalled ? (
-                  <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
-                    <CheckCircle className="w-5 h-5 text-primary" />
-                    <div>
-                      <p className="font-medium text-foreground">Aplicativo instalado</p>
-                      <p className="text-sm text-muted-foreground">
-                        Você já tem o Skejool instalado no seu dispositivo
-                      </p>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-primary" />
+                    Aplicativo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isInstalled ? (
+                    <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-xl">
+                      <CheckCircle className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">Aplicativo instalado</p>
+                        <p className="text-sm text-muted-foreground">
+                          Você já tem o Skejool instalado no seu dispositivo
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
-                    </p>
-                    <Button
-                      onClick={() => {
-                        if (isInstallable) {
-                          promptInstall();
-                        } else {
-                          navigate("/instalar");
-                        }
-                      }}
-                      className="w-full sm:w-auto"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Baixar Aplicativo
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
+                      </p>
+                      <Button
+                        onClick={() => {
+                          if (isInstallable) {
+                            promptInstall();
+                          } else {
+                            navigate("/instalar");
+                          }
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Baixar Aplicativo
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {/* Actions */}
@@ -1086,7 +1196,7 @@ export default function Settings() {
               <Button
                 size="lg"
                 className="w-full sm:flex-1"
-                onClick={handleSave}
+                onClick={handleSaveProfile}
                 disabled={isLoading}
               >
                 <Save className="w-4 h-4 mr-2" />

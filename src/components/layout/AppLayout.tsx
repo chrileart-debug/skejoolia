@@ -85,7 +85,11 @@ export function AppLayout() {
       )}>
         <TrialBanner />
         <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto overflow-x-hidden">
-          <Outlet context={{ onMenuClick: handleMobileMenuToggle, barbershop }} />
+          <Outlet context={{ 
+            onMenuClick: handleMobileMenuToggle, 
+            barbershop,
+            barbershopSlug: barbershop?.slug || null 
+          }} />
         </main>
       </div>
 

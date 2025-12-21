@@ -1,15 +1,18 @@
-import { Menu, Moon, Sun } from "lucide-react";
+import { Menu, Moon, Sun, Link, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   onMenuClick?: () => void;
+  showCopyLink?: boolean;
+  barbershopSlug?: string | null;
 }
 
 function getInitials(name: string | null | undefined): string {
@@ -22,11 +25,12 @@ function getInitials(name: string | null | undefined): string {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
-export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
+export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopSlug }: HeaderProps) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const [userName, setUserName] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function loadUserName() {
@@ -52,6 +56,16 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
+  const copyBookingLink = () => {
+    if (!barbershopSlug) return;
+    
+    const link = `${window.location.origin}/a/${barbershopSlug}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    toast.success("Link de agendamento copiado!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const initials = getInitials(userName);
 
   return (
@@ -75,6 +89,23 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Copy Booking Link Button */}
+          {showCopyLink && barbershopSlug && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyBookingLink}
+              className="hidden sm:flex items-center gap-2"
+            >
+              {copied ? (
+                <Check className="w-4 h-4 text-primary" />
+              ) : (
+                <Link className="w-4 h-4" />
+              )}
+              <span className="hidden md:inline">Copiar Link</span>
+            </Button>
+          )}
+          
           <Button
             variant="ghost"
             size="icon"
