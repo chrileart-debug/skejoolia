@@ -57,12 +57,14 @@ export default function Settings() {
   const { isOwner } = useBarbershop();
   const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
   const [slugCopied, setSlugCopied] = useState(false);
   const [slugError, setSlugError] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
   const [hasAsaasApiKey, setHasAsaasApiKey] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   // Profile photo upload
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
@@ -92,6 +94,62 @@ export default function Settings() {
     city: "",
     state: "",
   });
+
+  // Validation for mandatory company fields
+  const mandatoryCompanyFields = [
+    { key: "company", label: "Nome da Empresa" },
+    { key: "cpfCnpj", label: "CPF/CNPJ" },
+    { key: "birthDate", label: "Data de Nascimento" },
+    { key: "publicPhone", label: "Telefone" },
+    { key: "cep", label: "CEP" },
+    { key: "address", label: "Logradouro" },
+    { key: "addressNumber", label: "Número" },
+    { key: "bairro", label: "Bairro" },
+    { key: "city", label: "Cidade" },
+    { key: "state", label: "Estado" },
+  ];
+
+  const validateCompanyData = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    for (const field of mandatoryCompanyFields) {
+      const value = businessData[field.key as keyof typeof businessData];
+      if (!value || value.trim() === "") {
+        errors[field.key] = `${field.label} é obrigatório`;
+      }
+    }
+
+    // Additional CEP validation
+    const cleanCep = businessData.cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) {
+      errors.cep = "CEP deve ter 8 dígitos";
+    }
+
+    // CPF/CNPJ length validation
+    const cleanDoc = businessData.cpfCnpj.replace(/\D/g, "");
+    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
+      errors.cpfCnpj = "CPF deve ter 11 dígitos ou CNPJ 14 dígitos";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const isCompanyFormValid = (): boolean => {
+    for (const field of mandatoryCompanyFields) {
+      const value = businessData[field.key as keyof typeof businessData];
+      if (!value || value.trim() === "") {
+        return false;
+      }
+    }
+    const cleanCep = businessData.cep.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return false;
+    
+    const cleanDoc = businessData.cpfCnpj.replace(/\D/g, "");
+    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) return false;
+
+    return true;
+  };
 
   // Banking data for Asaas Transfer
   const [bankingData, setBankingData] = useState({
@@ -283,15 +341,15 @@ export default function Settings() {
 
   const handleSaveCompany = async () => {
     if (!user || !barbershopId || !isOwner) return;
-    setIsLoading(true);
-    setSlugError("");
-
-    // Validate birth date if CPF
-    if (businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && !businessData.birthDate) {
-      toast.error("Data de nascimento é obrigatória para CPF");
-      setIsLoading(false);
+    
+    // Validate all mandatory fields
+    if (!validateCompanyData()) {
+      toast.error("Preencha todos os campos obrigatórios");
       return;
     }
+
+    setIsLoading(true);
+    setSlugError("");
 
     // Check slug uniqueness if slug is provided
     if (businessData.slug) {
@@ -310,6 +368,7 @@ export default function Settings() {
       }
     }
 
+    // Save business data to database
     const { error: businessError } = await supabase
       .from("barbershops")
       .update({
@@ -336,7 +395,57 @@ export default function Settings() {
       return;
     }
 
-    toast.success("Dados da empresa salvos com sucesso");
+    // If asaas_api_key is NULL, trigger webhook to create sub-account
+    if (!hasAsaasApiKey) {
+      setIsSubmittingWebhook(true);
+      
+      try {
+        const webhookPayload = {
+          barbershop_id: barbershopId,
+          nome: businessData.company,
+          email: profileData.email,
+          cpf_cnpj: businessData.cpfCnpj.replace(/\D/g, ""),
+          telefone: businessData.publicPhone.replace(/\D/g, ""),
+          data_nascimento: businessData.birthDate,
+          endereco: {
+            cep: businessData.cep.replace(/\D/g, ""),
+            logradouro: businessData.address,
+            numero: businessData.addressNumber,
+            bairro: businessData.bairro,
+            cidade: businessData.city,
+            estado: businessData.state,
+          },
+        };
+
+        const response = await fetch("https://webhook.lernow.com/webhook/subconta-skjool", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(webhookPayload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Webhook request failed");
+        }
+
+        toast.success("Dados enviados! Sua conta bancária está sendo ativada.");
+        
+        // Refresh data to check for asaas_api_key update
+        setTimeout(() => {
+          loadData();
+        }, 2000);
+        
+      } catch (error) {
+        console.error("Webhook error:", error);
+        toast.error("Erro ao enviar dados para ativação. Tente novamente.");
+      } finally {
+        setIsSubmittingWebhook(false);
+      }
+    } else {
+      toast.success("Dados da empresa salvos com sucesso");
+    }
+
     setIsLoading(false);
   };
 
@@ -609,11 +718,15 @@ export default function Settings() {
                     />
                     <div className="flex-1 space-y-2 w-full">
                       {/* Company Name */}
-                      <Label>Nome da Empresa</Label>
+                      <Label className="flex items-center gap-1">
+                        Nome da Empresa
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         value={businessData.company}
                         onChange={(e) => {
                           setBusinessData({ ...businessData, company: e.target.value });
+                          setValidationErrors(prev => ({ ...prev, company: "" }));
                           // Auto-suggest slug if empty
                           if (!businessData.slug) {
                             const suggestedSlug = generateSlug(e.target.value);
@@ -621,8 +734,33 @@ export default function Settings() {
                           }
                         }}
                         placeholder="Nome da sua barbearia"
+                        className={validationErrors.company ? "border-destructive" : ""}
                       />
+                      {validationErrors.company && (
+                        <p className="text-xs text-destructive">{validationErrors.company}</p>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Phone - Mandatory */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
+                      Telefone
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      value={businessData.publicPhone}
+                      onChange={(e) => {
+                        setBusinessData({ ...businessData, publicPhone: formatPhoneMask(e.target.value) });
+                        setValidationErrors(prev => ({ ...prev, publicPhone: "" }));
+                      }}
+                      placeholder="(11) 99999-9999"
+                      className={validationErrors.publicPhone ? "border-destructive" : ""}
+                    />
+                    {validationErrors.publicPhone && (
+                      <p className="text-xs text-destructive">{validationErrors.publicPhone}</p>
+                    )}
                   </div>
 
                   {/* Niche */}
@@ -653,7 +791,10 @@ export default function Settings() {
                 <CardContent className="space-y-4">
                   {/* CEP */}
                   <div className="space-y-2">
-                    <Label>CEP</Label>
+                    <Label className="flex items-center gap-1">
+                      CEP
+                      <span className="text-destructive">*</span>
+                    </Label>
                     <div className="relative">
                       <Input
                         value={businessData.cep}
@@ -661,6 +802,7 @@ export default function Settings() {
                           const cep = e.target.value.replace(/\D/g, "");
                           const formattedCep = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5, 8)}` : cep;
                           setBusinessData({ ...businessData, cep: formattedCep });
+                          setValidationErrors(prev => ({ ...prev, cep: "" }));
                           
                           if (cep.length === 8) {
                             setIsCepLoading(true);
@@ -676,9 +818,19 @@ export default function Settings() {
                                   city: data.localidade || prev.city,
                                   state: data.uf || prev.state,
                                 }));
+                                setValidationErrors(prev => ({
+                                  ...prev,
+                                  address: "",
+                                  bairro: "",
+                                  city: "",
+                                  state: "",
+                                }));
+                              } else {
+                                toast.error("CEP não encontrado");
                               }
                             } catch (error) {
                               console.error("Erro ao buscar CEP:", error);
+                              toast.error("Erro ao buscar CEP");
                             } finally {
                               setIsCepLoading(false);
                             }
@@ -686,70 +838,109 @@ export default function Settings() {
                         }}
                         placeholder="00000-000"
                         maxLength={9}
-                        className="pr-10"
+                        className={`pr-10 ${validationErrors.cep ? "border-destructive" : ""}`}
                       />
                       {isCepLoading && (
                         <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                       )}
                     </div>
+                    {validationErrors.cep && (
+                      <p className="text-xs text-destructive">{validationErrors.cep}</p>
+                    )}
                   </div>
 
                   {/* Address + Number */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2 space-y-2">
-                      <Label>Endereço (Logradouro)</Label>
+                      <Label className="flex items-center gap-1">
+                        Endereço (Logradouro)
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         value={businessData.address}
-                        onChange={(e) =>
-                          setBusinessData({ ...businessData, address: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setBusinessData({ ...businessData, address: e.target.value });
+                          setValidationErrors(prev => ({ ...prev, address: "" }));
+                        }}
                         placeholder="Rua, Avenida..."
+                        className={validationErrors.address ? "border-destructive" : ""}
                       />
+                      {validationErrors.address && (
+                        <p className="text-xs text-destructive">{validationErrors.address}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Número</Label>
+                      <Label className="flex items-center gap-1">
+                        Número
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         value={businessData.addressNumber}
-                        onChange={(e) =>
-                          setBusinessData({ ...businessData, addressNumber: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setBusinessData({ ...businessData, addressNumber: e.target.value });
+                          setValidationErrors(prev => ({ ...prev, addressNumber: "" }));
+                        }}
                         placeholder="123"
+                        className={validationErrors.addressNumber ? "border-destructive" : ""}
                       />
+                      {validationErrors.addressNumber && (
+                        <p className="text-xs text-destructive">{validationErrors.addressNumber}</p>
+                      )}
                     </div>
                   </div>
 
                   {/* Bairro */}
                   <div className="space-y-2">
-                    <Label>Bairro</Label>
+                    <Label className="flex items-center gap-1">
+                      Bairro
+                      <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       value={businessData.bairro}
-                      onChange={(e) =>
-                        setBusinessData({ ...businessData, bairro: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setBusinessData({ ...businessData, bairro: e.target.value });
+                        setValidationErrors(prev => ({ ...prev, bairro: "" }));
+                      }}
                       placeholder="Nome do bairro"
+                      className={validationErrors.bairro ? "border-destructive" : ""}
                     />
+                    {validationErrors.bairro && (
+                      <p className="text-xs text-destructive">{validationErrors.bairro}</p>
+                    )}
                   </div>
 
                   {/* City / State */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Cidade</Label>
+                      <Label className="flex items-center gap-1">
+                        Cidade
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         value={businessData.city}
-                        onChange={(e) =>
-                          setBusinessData({ ...businessData, city: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setBusinessData({ ...businessData, city: e.target.value });
+                          setValidationErrors(prev => ({ ...prev, city: "" }));
+                        }}
+                        className={validationErrors.city ? "border-destructive" : ""}
                       />
+                      {validationErrors.city && (
+                        <p className="text-xs text-destructive">{validationErrors.city}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Estado</Label>
+                      <Label className="flex items-center gap-1">
+                        Estado
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={businessData.state}
-                        onValueChange={(value) =>
-                          setBusinessData({ ...businessData, state: value })
-                        }
+                        onValueChange={(value) => {
+                          setBusinessData({ ...businessData, state: value });
+                          setValidationErrors(prev => ({ ...prev, state: "" }));
+                        }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={validationErrors.state ? "border-destructive" : ""}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -760,6 +951,9 @@ export default function Settings() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {validationErrors.state && (
+                        <p className="text-xs text-destructive">{validationErrors.state}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -779,36 +973,45 @@ export default function Settings() {
                 <CardContent className="space-y-4">
                   {/* CPF/CNPJ */}
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
+                    <Label className="flex items-center gap-1">
                       CPF/CNPJ
+                      <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       value={businessData.cpfCnpj}
-                      onChange={(e) =>
-                        setBusinessData({ ...businessData, cpfCnpj: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setBusinessData({ ...businessData, cpfCnpj: e.target.value });
+                        setValidationErrors(prev => ({ ...prev, cpfCnpj: "" }));
+                      }}
                       placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                      className={validationErrors.cpfCnpj ? "border-destructive" : ""}
                     />
+                    {validationErrors.cpfCnpj && (
+                      <p className="text-xs text-destructive">{validationErrors.cpfCnpj}</p>
+                    )}
                   </div>
 
                   {/* Birth Date */}
                   <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
+                    <Label className="flex items-center gap-1">
                       <Calendar className="w-4 h-4 text-muted-foreground" />
                       Data de Nascimento
-                      {businessData.cpfCnpj && isCpf(businessData.cpfCnpj) && (
-                        <span className="text-xs text-destructive">*obrigatório</span>
-                      )}
+                      <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       type="date"
                       value={businessData.birthDate}
-                      onChange={(e) =>
-                        setBusinessData({ ...businessData, birthDate: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setBusinessData({ ...businessData, birthDate: e.target.value });
+                        setValidationErrors(prev => ({ ...prev, birthDate: "" }));
+                      }}
+                      className={validationErrors.birthDate ? "border-destructive" : ""}
                     />
+                    {validationErrors.birthDate && (
+                      <p className="text-xs text-destructive">{validationErrors.birthDate}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      Obrigatório se o documento for CPF
+                      Data de nascimento do responsável legal
                     </p>
                   </div>
                 </CardContent>
@@ -875,34 +1078,51 @@ export default function Settings() {
                 size="lg"
                 className="w-full"
                 onClick={handleSaveCompany}
-                disabled={isLoading}
+                disabled={isLoading || isSubmittingWebhook || !isCompanyFormValid()}
               >
-                <Save className="w-4 h-4 mr-2" />
-                {isLoading ? "Salvando..." : "Salvar Dados da Empresa"}
+                {(isLoading || isSubmittingWebhook) ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {isSubmittingWebhook ? "Ativando conta bancária..." : "Salvando..."}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    {hasAsaasApiKey ? "Salvar Dados da Empresa" : "Salvar e Ativar Conta Bancária"}
+                  </>
+                )}
               </Button>
+
+              {!isCompanyFormValid() && (
+                <p className="text-sm text-center text-muted-foreground">
+                  Preencha todos os campos obrigatórios marcados com <span className="text-destructive">*</span>
+                </p>
+              )}
             </TabsContent>
 
             {/* Tab 3: Dados Bancários - Conditional based on asaas_api_key */}
             <TabsContent value="banking" className="space-y-6 mt-6">
               {!hasAsaasApiKey ? (
                 // Empty state when asaas_api_key is null
-                <Card>
+                <Card className="relative overflow-hidden">
                   <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                      <AlertCircle className="w-8 h-8 text-muted-foreground" />
+                    <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center mb-4">
+                      <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
                     </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
-                      Configuração Pendente
+                      Conta Bancária Não Ativada
                     </h3>
-                    <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-                      Para habilitar os dados bancários e recebimentos, preencha primeiro os dados da sua empresa na aba "Empresa".
+                    <p className="text-sm text-muted-foreground mb-2 max-w-sm">
+                      Para habilitar os dados bancários e começar a receber pagamentos, você precisa preencher todos os dados obrigatórios na aba "Empresa" e salvar.
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-6 max-w-sm">
+                      Após salvar os dados da empresa, sua conta bancária será ativada automaticamente.
                     </p>
                     <Button
-                      variant="outline"
                       onClick={() => setActiveTab("company")}
                     >
                       <Building2 className="w-4 h-4 mr-2" />
-                      Ir para Empresa
+                      Preencher Dados da Empresa
                     </Button>
                   </CardContent>
                 </Card>
