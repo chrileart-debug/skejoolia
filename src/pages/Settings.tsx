@@ -175,6 +175,22 @@ export default function Settings() {
     }
   }, [user]);
 
+  // Listen for navigation event to switch to banking tab
+  useEffect(() => {
+    const handleNavigateTab = (event: CustomEvent<string>) => {
+      if (event.detail === 'banking') {
+        setActiveTab('banking');
+      } else if (event.detail === 'company') {
+        setActiveTab('company');
+      }
+    };
+
+    window.addEventListener('navigate-settings-tab', handleNavigateTab as EventListener);
+    return () => {
+      window.removeEventListener('navigate-settings-tab', handleNavigateTab as EventListener);
+    };
+  }, []);
+
   const loadData = async () => {
     if (!user) return;
     
