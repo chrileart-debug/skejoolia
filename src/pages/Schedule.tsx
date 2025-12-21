@@ -31,6 +31,9 @@ import {
   Trash2,
   Plus,
   Bell,
+  CheckCircle2,
+  Crown,
+  Loader2,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -64,6 +67,7 @@ interface Service {
   id: string;
   name: string;
   duration_minutes: number | null;
+  price: number | null;
 }
 
 interface StaffMember {
@@ -136,6 +140,17 @@ export default function Schedule() {
     status: "",
   });
 
+  // Finish appointment modal states
+  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
+  const [finishingAppointment, setFinishingAppointment] = useState<Appointment | null>(null);
+  const [isClientVip, setIsClientVip] = useState(false);
+  const [vipSubscriptionId, setVipSubscriptionId] = useState<string | null>(null);
+  const [finishFormData, setFinishFormData] = useState({
+    amount: 0,
+    paymentMethod: "Dinheiro",
+  });
+  const [isProcessingFinish, setIsProcessingFinish] = useState(false);
+
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -175,7 +190,7 @@ export default function Schedule() {
 
     const { data, error } = await supabase
       .from("services")
-      .select("id, name, duration_minutes")
+      .select("id, name, duration_minutes, price")
       .eq("barbershop_id", barbershop.id)
       .eq("is_active", true);
 
@@ -320,6 +335,128 @@ export default function Schedule() {
       setSelectedDayAppointments((prev) =>
         prev.filter((a) => a.id_agendamento !== deleteAppointmentId)
       );
+    }
+  };
+
+  // Finish appointment functions
+  const handleFinishAppointment = async (appointment: Appointment) => {
+    if (!barbershop?.id) {
+      toast.error("Dados da barbearia não encontrados");
+      return;
+    }
+
+    setFinishingAppointment(appointment);
+    setIsProcessingFinish(true);
+    setIsFinishModalOpen(true);
+
+    // Check if client is VIP (has active subscription)
+    if (appointment.client_id) {
+      const { data: subscription } = await supabase
+        .from("client_club_subscriptions")
+        .select("id, status, plan_id")
+        .eq("client_id", appointment.client_id)
+        .eq("barbershop_id", barbershop.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      const isVip = !!subscription;
+      setIsClientVip(isVip);
+      setVipSubscriptionId(subscription?.id || null);
+
+      if (isVip) {
+        setFinishFormData({
+          amount: 0,
+          paymentMethod: "Saldo VIP/Clube",
+        });
+      } else {
+        const service = services.find(s => s.id === appointment.service_id);
+        setFinishFormData({
+          amount: service?.price || 0,
+          paymentMethod: "Dinheiro",
+        });
+      }
+    } else {
+      setIsClientVip(false);
+      setVipSubscriptionId(null);
+      const service = services.find(s => s.id === appointment.service_id);
+      setFinishFormData({
+        amount: service?.price || 0,
+        paymentMethod: "Dinheiro",
+      });
+    }
+
+    setIsProcessingFinish(false);
+  };
+
+  const handleSubmitFinish = async () => {
+    if (!finishingAppointment || !barbershop?.id) return;
+
+    setIsProcessingFinish(true);
+
+    try {
+      // STEP 1: Insert transaction into client_transactions
+      const { data: transaction, error: transactionError } = await supabase
+        .from("client_transactions")
+        .insert({
+          barbershop_id: barbershop.id,
+          client_id: finishingAppointment.client_id,
+          appointment_id: finishingAppointment.id_agendamento,
+          amount: finishFormData.amount,
+          payment_method: finishFormData.paymentMethod,
+          status: "pago",
+        })
+        .select("id")
+        .single();
+
+      if (transactionError) throw transactionError;
+
+      // STEP 2: Update appointment with status = 'completed' and transaction_id
+      const { error: updateError } = await supabase
+        .from("agendamentos")
+        .update({
+          status: "completed",
+          transaction_id: transaction.id,
+        })
+        .eq("id_agendamento", finishingAppointment.id_agendamento);
+
+      if (updateError) throw updateError;
+
+      // If VIP and has service, record usage
+      if (isClientVip && vipSubscriptionId && finishingAppointment.service_id) {
+        await supabase
+          .from("client_subscription_usage")
+          .insert({
+            subscription_id: vipSubscriptionId,
+            service_id: finishingAppointment.service_id,
+            appointment_id: finishingAppointment.id_agendamento,
+          });
+      }
+
+      toast.success("Atendimento concluído com sucesso!");
+
+      // Update local state
+      setAppointments(prev =>
+        prev.map(a => a.id_agendamento === finishingAppointment.id_agendamento
+          ? { ...a, status: "completed" }
+          : a)
+      );
+      setSelectedDayAppointments(prev =>
+        prev.map(a => a.id_agendamento === finishingAppointment.id_agendamento
+          ? { ...a, status: "completed" }
+          : a)
+      );
+
+      // Close modal and reset state
+      setIsFinishModalOpen(false);
+      setFinishingAppointment(null);
+      setIsClientVip(false);
+      setVipSubscriptionId(null);
+
+    } catch (error) {
+      console.error("Erro ao finalizar atendimento:", error);
+      toast.error("Erro ao finalizar atendimento");
+    } finally {
+      setIsProcessingFinish(false);
     }
   };
 
@@ -546,6 +683,17 @@ export default function Schedule() {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {(apt.status === "pending" || apt.status === "confirmed") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30"
+                          onClick={() => handleFinishAppointment(apt)}
+                          title="Concluir atendimento"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -687,6 +835,103 @@ export default function Schedule() {
           barbershopId={barbershop.id}
         />
       )}
+
+      {/* Finish Appointment Modal */}
+      <Dialog open={isFinishModalOpen} onOpenChange={setIsFinishModalOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              Concluir Atendimento
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Client Info */}
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="font-medium">{finishingAppointment?.nome_cliente || "Cliente não informado"}</p>
+              <p className="text-sm text-muted-foreground">
+                {getServiceName(finishingAppointment?.service_id || null)}
+              </p>
+            </div>
+
+            {/* VIP Badge */}
+            {isClientVip && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-amber-500" />
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">
+                    Membro VIP Detectado
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Serviço incluso no plano. Pagamento zerado automaticamente.
+                </p>
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label htmlFor="finish-amount">Valor (R$)</Label>
+              <Input
+                id="finish-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={finishFormData.amount}
+                onChange={(e) => setFinishFormData({
+                  ...finishFormData,
+                  amount: parseFloat(e.target.value) || 0
+                })}
+                disabled={isClientVip}
+                className={isClientVip ? "bg-muted" : ""}
+              />
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+              <Label htmlFor="finish-method">Método de Pagamento</Label>
+              <Select
+                value={finishFormData.paymentMethod}
+                onValueChange={(value) => setFinishFormData({
+                  ...finishFormData,
+                  paymentMethod: value
+                })}
+                disabled={isClientVip}
+              >
+                <SelectTrigger className={isClientVip ? "bg-muted" : ""}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                  <SelectItem value="Pix Manual">Pix Manual</SelectItem>
+                  <SelectItem value="Cartão (Maquininha)">Cartão (Maquininha)</SelectItem>
+                  <SelectItem value="Saldo VIP/Clube">Saldo VIP/Clube</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              onClick={handleSubmitFinish}
+              className="w-full"
+              disabled={isProcessingFinish}
+            >
+              {isProcessingFinish ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Confirmar Conclusão
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
