@@ -20,6 +20,8 @@ import {
   Receipt,
   ChevronRight,
   CalendarDays,
+  Rocket,
+  ArrowRight,
 } from "lucide-react";
 import { startOfDay, endOfDay, subDays, format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -69,6 +71,23 @@ export default function Dashboard() {
   const todayStart = startOfDay(today).toISOString();
   const todayEnd = endOfDay(today).toISOString();
   const weekStart = subDays(startOfDay(today), 6).toISOString();
+
+  // Check if asaas_api_key exists for financial activation card
+  const { data: hasAsaasApiKey = true } = useQuery({
+    queryKey: ["barbershop-asaas-key", barbershop?.id],
+    queryFn: async () => {
+      if (!barbershop?.id) return true;
+      const { data, error } = await supabase
+        .from("barbershops")
+        .select("asaas_api_key")
+        .eq("id", barbershop.id)
+        .single();
+      if (error) return true;
+      return !!(data?.asaas_api_key);
+    },
+    enabled: !!barbershop?.id,
+    refetchInterval: 10000, // Auto-refresh every 10 seconds to detect webhook updates
+  });
 
   // Handle pending OAuth plan update
   useEffect(() => {
@@ -254,6 +273,46 @@ export default function Dashboard() {
 
       <div className="p-4 lg:p-6 space-y-6">
         <InstallBanner />
+
+        {/* Financial Activation Card - Only show if asaas_api_key is NULL */}
+        {!hasAsaasApiKey && (
+          <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 shadow-lg">
+            {/* Decorative elements */}
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
+            <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-primary/5 blur-2xl" />
+            
+            <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+                <Rocket className="w-7 h-7 text-primary-foreground" />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-foreground mb-1">
+                  Potencialize seu faturamento com o Clube de Assinaturas 🚀
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Chega de cobrar clientes manualmente! Ative recebimentos automáticos via Cartão e Pix e profissionalize sua barbearia.
+                </p>
+              </div>
+              
+              <Button 
+                onClick={() => {
+                  navigate("/settings");
+                  // Use setTimeout to ensure navigation completes before setting tab
+                  setTimeout(() => {
+                    const event = new CustomEvent('navigate-settings-tab', { detail: 'banking' });
+                    window.dispatchEvent(event);
+                  }, 100);
+                }}
+                className="flex-shrink-0 gap-2 shadow-lg shadow-primary/25"
+                size="lg"
+              >
+                Ativar Pagamentos Automáticos
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-2">
