@@ -218,6 +218,23 @@ export function ManualSubscriptionModal({
     setSaving(true);
 
     try {
+      // Check if client already has an active subscription
+      const { data: existingSubscription, error: checkError } = await supabase
+        .from("client_club_subscriptions")
+        .select("id")
+        .eq("barbershop_id", barbershopId)
+        .eq("client_id", clientId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      if (existingSubscription) {
+        toast.error("Este cliente já possui uma assinatura ativa");
+        setSaving(false);
+        return;
+      }
+
       // 1. Create subscription record
       const { data: subscriptionData, error: subError } = await supabase
         .from("client_club_subscriptions")
@@ -247,18 +264,21 @@ export function ManualSubscriptionModal({
           status: "pago",
         });
 
-      if (transError) throw transError;
+      if (transError) {
+        // Rollback: delete the subscription if transaction fails
+        await supabase
+          .from("client_club_subscriptions")
+          .delete()
+          .eq("id", subscriptionData.id);
+        throw transError;
+      }
 
       toast.success("Assinatura criada com sucesso!");
       onSuccess();
       onClose();
     } catch (error: any) {
       console.error("Error creating subscription:", error);
-      if (error?.code === "23505") {
-        toast.error("Este cliente já possui uma assinatura ativa");
-      } else {
-        toast.error("Erro ao criar assinatura");
-      }
+      toast.error(error?.message || "Erro ao criar assinatura");
     } finally {
       setSaving(false);
     }
