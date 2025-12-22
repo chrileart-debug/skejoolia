@@ -164,7 +164,8 @@ export default function Club() {
           next_due_date,
           payment_origin
         `)
-        .eq("barbershop_id", barbershop.id);
+        .eq("barbershop_id", barbershop.id)
+        .neq("status", "canceled");
 
       if (error) throw error;
 
