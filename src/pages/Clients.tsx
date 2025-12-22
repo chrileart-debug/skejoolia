@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { 
   Users, Phone, Bot, Scissors, DollarSign, Calendar, Search, 
   UserPlus, Pencil, Trash2, Crown, Mail, CreditCard, MapPin, 
-  Clock, FileText, Sparkles
+  Clock, FileText, Sparkles, RefreshCw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +43,8 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
 import { ManualSubscriptionModal } from "@/components/club/ManualSubscriptionModal";
+import { VipBadge, VipCrown } from "@/components/club/VipBadge";
+import { RenewalModal } from "@/components/club/RenewalModal";
 import { toast } from "sonner";
 
 interface OutletContextType {
@@ -77,6 +79,8 @@ interface Cliente {
   plan_name?: string | null;
   plan_price?: number | null;
   subscription_status?: string | null;
+  next_due_date?: string | null;
+  payment_origin?: string | null;
 }
 
 interface Agente {
@@ -118,6 +122,10 @@ export default function Clients() {
   // Manual subscription modal state
   const [vipModalOpen, setVipModalOpen] = useState(false);
   const [vipClient, setVipClient] = useState<Cliente | null>(null);
+  
+  // Renewal modal state
+  const [renewalModalOpen, setRenewalModalOpen] = useState(false);
+  const [renewalClient, setRenewalClient] = useState<Cliente | null>(null);
 
   useEffect(() => {
     if (user && barbershop) {
@@ -149,6 +157,8 @@ export default function Clients() {
             id,
             status,
             plan_id,
+            next_due_date,
+            payment_origin,
             barber_plans (
               name,
               price
@@ -198,6 +208,8 @@ export default function Clients() {
           plan_name: activeSubscription?.barber_plans?.name || null,
           plan_price: activeSubscription?.barber_plans?.price || null,
           subscription_status: activeSubscription?.status || null,
+          next_due_date: activeSubscription?.next_due_date || null,
+          payment_origin: activeSubscription?.payment_origin || null,
         };
       });
 
@@ -624,8 +636,12 @@ export default function Clients() {
                         </span>
                       </div>
                       {client.has_subscription && (
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
-                          <Crown className="w-3 h-3 text-white" />
+                        <div className="absolute -top-1 -right-1">
+                          <VipBadge 
+                            status={client.subscription_status || ""} 
+                            nextDueDate={client.next_due_date || null}
+                            size="sm"
+                          />
                         </div>
                       )}
                     </div>
@@ -637,9 +653,15 @@ export default function Clients() {
                           {client.nome || "Cliente sem nome"}
                         </h3>
                         {client.has_subscription && (
-                          <Badge className="text-xs bg-amber-500/20 text-amber-600 hover:bg-amber-500/30 shrink-0">
-                            {client.plan_name}
-                          </Badge>
+                          <>
+                            <VipCrown 
+                              status={client.subscription_status || ""} 
+                              nextDueDate={client.next_due_date || null}
+                            />
+                            <Badge className="text-xs bg-amber-500/20 text-amber-600 hover:bg-amber-500/30 shrink-0">
+                              {client.plan_name}
+                            </Badge>
+                          </>
                         )}
                         {client.has_active_appointment && (
                           <Badge variant="default" className="text-xs bg-green-500/20 text-green-600 hover:bg-green-500/30 shrink-0">
@@ -697,8 +719,12 @@ export default function Clients() {
                   </span>
                 </div>
                 {viewingClient?.has_subscription && (
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
-                    <Crown className="w-4 h-4 text-white" />
+                  <div className="absolute -bottom-1 -right-1">
+                    <VipBadge 
+                      status={viewingClient.subscription_status || ""} 
+                      nextDueDate={viewingClient.next_due_date || null}
+                      size="md"
+                    />
                   </div>
                 )}
               </div>
@@ -749,47 +775,88 @@ export default function Clients() {
             )}
 
             {/* Subscription Plan & Credits */}
-            {viewingClient?.has_subscription && (
-              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-amber-500" />
-                    <span className="font-semibold">{viewingClient.plan_name}</span>
+            {viewingClient?.has_subscription && (() => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const dueDate = viewingClient.next_due_date ? new Date(viewingClient.next_due_date) : null;
+              if (dueDate) dueDate.setHours(0, 0, 0, 0);
+              const isExpired = dueDate ? dueDate < today : false;
+              
+              return (
+                <div className={`p-4 border rounded-xl ${isExpired ? 'bg-red-500/10 border-red-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <VipCrown 
+                        status={viewingClient.subscription_status || ""} 
+                        nextDueDate={viewingClient.next_due_date || null}
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold">{viewingClient.plan_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isExpired ? (
+                        <Badge className="bg-red-500/20 text-red-600">Vencido</Badge>
+                      ) : (
+                        <Badge className="bg-emerald-500/20 text-emerald-600">Ativo</Badge>
+                      )}
+                    </div>
                   </div>
-                  <Badge className="bg-emerald-500/20 text-emerald-600">Ativo</Badge>
-                </div>
-                
-                {/* Service Credits */}
-                {loadingCredits ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-3/4" />
-                  </div>
-                ) : clientCredits.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground font-medium">Créditos do mês</p>
-                    {clientCredits.map((credit) => (
-                      <div key={credit.serviceId} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span>{credit.serviceName}</span>
-                          <span className="font-medium">
-                            {credit.quantityLimit === 0 
-                              ? "∞" 
-                              : `${credit.remaining}/${credit.quantityLimit}`}
-                          </span>
+                  
+                  {/* Due Date Info */}
+                  {viewingClient.next_due_date && (
+                    <p className={`text-xs mb-3 ${isExpired ? 'text-red-600' : 'text-muted-foreground'}`}>
+                      {isExpired ? 'Venceu' : 'Vence'} em: {new Date(viewingClient.next_due_date).toLocaleDateString("pt-BR")}
+                    </p>
+                  )}
+                  
+                  {/* Renewal Button for Manual Subscriptions */}
+                  {viewingClient.payment_origin === 'manual' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mb-3 gap-2"
+                      onClick={() => {
+                        setRenewalClient(viewingClient);
+                        setRenewalModalOpen(true);
+                      }}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Renovar Assinatura
+                    </Button>
+                  )}
+                  
+                  {/* Service Credits */}
+                  {loadingCredits ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  ) : clientCredits.length > 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground font-medium">Créditos do mês</p>
+                      {clientCredits.map((credit) => (
+                        <div key={credit.serviceId} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span>{credit.serviceName}</span>
+                            <span className="font-medium">
+                              {credit.quantityLimit === 0 
+                                ? "∞" 
+                                : `${credit.remaining}/${credit.quantityLimit}`}
+                            </span>
+                          </div>
+                          <Progress 
+                            value={credit.quantityLimit === 0 ? 100 : (credit.remaining / credit.quantityLimit) * 100} 
+                            className="h-2"
+                          />
                         </div>
-                        <Progress 
-                          value={credit.quantityLimit === 0 ? 100 : (credit.remaining / credit.quantityLimit) * 100} 
-                          className="h-2"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Nenhum serviço no plano</p>
-                )}
-              </div>
-            )}
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum serviço no plano</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Agent Toggle */}
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
@@ -977,6 +1044,28 @@ export default function Clients() {
           telefone: vipClient.telefone,
         } : null}
       />
+
+      {/* Renewal Modal */}
+      {renewalClient && (
+        <RenewalModal
+          open={renewalModalOpen}
+          onClose={() => {
+            setRenewalModalOpen(false);
+            setRenewalClient(null);
+          }}
+          onSuccess={() => {
+            loadClients();
+            setViewingClient(null);
+          }}
+          subscriptionId={renewalClient.subscription_id || ""}
+          clientName={renewalClient.nome || "Cliente"}
+          planName={renewalClient.plan_name || "Plano"}
+          planPrice={renewalClient.plan_price || 0}
+          nextDueDate={renewalClient.next_due_date || ""}
+          barbershopId={barbershop?.id || ""}
+          clientId={renewalClient.client_id}
+        />
+      )}
     </div>
   );
 }

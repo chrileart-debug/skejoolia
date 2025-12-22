@@ -885,6 +885,7 @@ export type Database = {
       }
       integracao_whatsapp: {
         Row: {
+          api_integracao: string | null
           barbershop_id: string
           created_at: string
           email: string | null
@@ -899,6 +900,7 @@ export type Database = {
           vinculado_em: string | null
         }
         Insert: {
+          api_integracao?: string | null
           barbershop_id: string
           created_at?: string
           email?: string | null
@@ -913,6 +915,7 @@ export type Database = {
           vinculado_em?: string | null
         }
         Update: {
+          api_integracao?: string | null
           barbershop_id?: string
           created_at?: string
           email?: string | null
