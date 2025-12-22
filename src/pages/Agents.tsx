@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -29,13 +30,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
-import { Json } from "@/integrations/supabase/types";
-import {
-  WorkScheduleEditor,
-  WorkSchedule,
-  DEFAULT_WORK_SCHEDULE,
-  parseWorkSchedule,
-} from "@/components/agents/WorkScheduleEditor";
 import {
   WhatsAppIntegrationManager,
   Integration,
@@ -46,15 +40,10 @@ import {
 interface Agent {
   id: string;
   name: string;
-  role: string;
-  gender: string;
   voiceTone: string;
-  objective: string;
   charLimit: number | null;
-  restrictions: string;
-  workSchedule: WorkSchedule;
   whatsappId: string | null;
-  status: "online" | "offline";
+  ativo: boolean;
 }
 
 interface OutletContextType {
@@ -83,14 +72,10 @@ export default function Agents() {
   const [isCreatingWithAI, setIsCreatingWithAI] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
-    role: "",
-    gender: "",
     voiceTone: "",
-    objective: "",
     charLimit: "Não há limitação",
-    restrictions: "",
-    workSchedule: { ...DEFAULT_WORK_SCHEDULE } as WorkSchedule,
     whatsappId: "",
+    ativo: true,
   });
 
   useEffect(() => {
@@ -119,15 +104,10 @@ export default function Agents() {
       const mappedAgents: Agent[] = (data || []).map((item) => ({
         id: item.id_agente,
         name: item.nome,
-        role: item.funcao || "",
-        gender: item.sexo || "",
         voiceTone: item.tom_de_voz || "",
-        objective: item.objetivo || "",
         charLimit: item.limite_caracteres,
-        restrictions: item.restricoes || "",
-        workSchedule: parseWorkSchedule(item.horario_trabalho),
         whatsappId: item.whatsapp_id,
-        status: item.ativo ? "online" : "offline",
+        ativo: item.ativo ?? true,
       }));
 
       setAgents(mappedAgents);
@@ -177,14 +157,10 @@ export default function Agents() {
   const resetForm = () => {
     setFormData({
       name: "",
-      role: "",
-      gender: "",
       voiceTone: "",
-      objective: "",
       charLimit: "Não há limitação",
-      restrictions: "",
-      workSchedule: { ...DEFAULT_WORK_SCHEDULE },
       whatsappId: "",
+      ativo: true,
     });
     setEditingAgent(null);
   };
@@ -209,14 +185,10 @@ export default function Agents() {
     setEditingAgent(agent);
     setFormData({
       name: agent.name,
-      role: agent.role,
-      gender: agent.gender,
       voiceTone: agent.voiceTone,
-      objective: agent.objective,
       charLimit: getCharLimitLabel(agent.charLimit),
-      restrictions: agent.restrictions,
-      workSchedule: agent.workSchedule,
       whatsappId: agent.whatsappId || "",
+      ativo: agent.ativo,
     });
     setIsDialogOpen(true);
   };
@@ -249,8 +221,8 @@ export default function Agents() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.role) {
-      toast.error("Preencha os campos obrigatórios");
+    if (!formData.name) {
+      toast.error("Preencha o nome do agente");
       return;
     }
 
@@ -264,14 +236,10 @@ export default function Agents() {
     try {
       const agentData = {
         nome: formData.name,
-        funcao: formData.role,
-        sexo: formData.gender || null,
         tom_de_voz: formData.voiceTone || null,
-        objetivo: formData.objective || null,
         limite_caracteres: getCharLimitValue(formData.charLimit),
-        restricoes: formData.restrictions || null,
-        horario_trabalho: formData.workSchedule as unknown as Json,
         whatsapp_id: formData.whatsappId || null,
+        ativo: formData.ativo,
       };
 
       if (editingAgent) {
@@ -304,14 +272,10 @@ export default function Agents() {
               ? {
                   ...a,
                   name: formData.name,
-                  role: formData.role,
-                  gender: formData.gender,
                   voiceTone: formData.voiceTone,
-                  objective: formData.objective,
                   charLimit: getCharLimitValue(formData.charLimit),
-                  restrictions: formData.restrictions,
-                  workSchedule: formData.workSchedule,
                   whatsappId: formData.whatsappId || null,
+                  ativo: formData.ativo,
                 }
               : a
           )
@@ -342,15 +306,10 @@ export default function Agents() {
         const newAgent: Agent = {
           id: data.id_agente,
           name: data.nome,
-          role: data.funcao || "",
-          gender: data.sexo || "",
           voiceTone: data.tom_de_voz || "",
-          objective: data.objetivo || "",
           charLimit: data.limite_caracteres,
-          restrictions: data.restricoes || "",
-          workSchedule: parseWorkSchedule(data.horario_trabalho),
           whatsappId: data.whatsapp_id,
-          status: data.ativo ? "online" : "offline",
+          ativo: data.ativo ?? true,
         };
         setAgents([newAgent, ...agents]);
         window.dispatchEvent(new CustomEvent("whatsapp:updated"));
@@ -498,29 +457,17 @@ export default function Agents() {
                         <h3 className="font-semibold text-foreground">
                           {agent.name}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {agent.role}
-                        </p>
+                        {agent.voiceTone && (
+                          <p className="text-sm text-muted-foreground">
+                            {agent.voiceTone}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <StatusBadge status={agent.status} />
+                    <StatusBadge status={agent.ativo ? "online" : "offline"} />
                   </div>
 
                   <div className="space-y-2 mb-4">
-                    {agent.voiceTone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Tom de voz:</span>
-                        <span className="text-foreground">{agent.voiceTone}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">Dias ativos:</span>
-                      <span className="text-foreground">
-                        {Object.entries(agent.workSchedule)
-                          .filter(([, val]) => val.enabled)
-                          .length} dias
-                      </span>
-                    </div>
                     {whatsappIntegration && (
                       <div className="flex items-center gap-2 text-sm">
                         <MessageSquare className={`w-4 h-4 ${whatsappIntegration.status === "conectado" ? "text-success" : "text-muted-foreground"}`} />
@@ -580,84 +527,55 @@ export default function Agents() {
           </DialogHeader>
 
           <div className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in" style={{ animationDelay: '50ms' }}>
-              <div className="space-y-2 transition-all duration-200">
-                <Label>Nome *</Label>
-                <Input
-                  placeholder="Nome do agente"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  className="transition-all duration-200 focus:scale-[1.01]"
-                />
+            {/* Switch para ativar/desativar agente */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30 animate-fade-in">
+              <div className="space-y-0.5">
+                <Label>Agente Ativo</Label>
+                <p className="text-xs text-muted-foreground">
+                  {formData.ativo ? "O agente está funcionando" : "O agente está pausado"}
+                </p>
               </div>
-              <div className="space-y-2 transition-all duration-200">
-                <Label>Função *</Label>
-                <Input
-                  placeholder="Ex: Atendimento"
-                  value={formData.role}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role: e.target.value })
-                  }
-                  className="transition-all duration-200 focus:scale-[1.01]"
-                />
-              </div>
+              <Switch
+                checked={formData.ativo}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, ativo: checked })
+                }
+              />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in" style={{ animationDelay: '100ms' }}>
-              <div className="space-y-2 transition-all duration-200">
-                <Label>Sexo</Label>
-                <Select
-                  value={formData.gender}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, gender: value })
-                  }
-                >
-                  <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Masculino">Masculino</SelectItem>
-                    <SelectItem value="Feminino">Feminino</SelectItem>
-                    <SelectItem value="Neutro">Neutro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2 transition-all duration-200">
-                <Label>Tom de voz</Label>
-                <Select
-                  value={formData.voiceTone}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, voiceTone: value })
-                  }
-                >
-                  <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Amigável">Amigável</SelectItem>
-                    <SelectItem value="Formal">Formal</SelectItem>
-                    <SelectItem value="Descontraído">Descontraído</SelectItem>
-                    <SelectItem value="Profissional">Profissional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '150ms' }}>
-              <Label>Objetivo</Label>
+            <div className="space-y-2 transition-all duration-200 animate-fade-in" style={{ animationDelay: '50ms' }}>
+              <Label>Nome *</Label>
               <Input
-                placeholder="Ex: Agendar cortes e tirar dúvidas"
-                value={formData.objective}
+                placeholder="Nome do agente"
+                value={formData.name}
                 onChange={(e) =>
-                  setFormData({ ...formData, objective: e.target.value })
+                  setFormData({ ...formData, name: e.target.value })
                 }
                 className="transition-all duration-200 focus:scale-[1.01]"
               />
             </div>
 
-            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '200ms' }}>
+            <div className="space-y-2 transition-all duration-200 animate-fade-in" style={{ animationDelay: '100ms' }}>
+              <Label>Tom de voz</Label>
+              <Select
+                value={formData.voiceTone}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, voiceTone: value })
+                }
+              >
+                <SelectTrigger className="transition-all duration-200 hover:border-primary/50">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Amigável">Amigável</SelectItem>
+                  <SelectItem value="Formal">Formal</SelectItem>
+                  <SelectItem value="Descontraído">Descontraído</SelectItem>
+                  <SelectItem value="Profissional">Profissional</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '150ms' }}>
               <Label>Limite de caracteres da resposta</Label>
               <Select
                 value={formData.charLimit}
@@ -677,29 +595,7 @@ export default function Agents() {
               </Select>
             </div>
 
-            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '250ms' }}>
-              <Label>Restrições (até 180 palavras)</Label>
-              <Textarea
-                placeholder="Ex: Não oferecer descontos acima de 10%"
-                value={formData.restrictions}
-                onChange={(e) =>
-                  setFormData({ ...formData, restrictions: e.target.value })
-                }
-                rows={3}
-                className="transition-all duration-200 focus:scale-[1.005]"
-              />
-            </div>
-
-            <div className="animate-fade-in" style={{ animationDelay: '300ms' }}>
-              <WorkScheduleEditor
-                value={formData.workSchedule}
-                onChange={(schedule) =>
-                  setFormData({ ...formData, workSchedule: schedule })
-                }
-              />
-            </div>
-
-            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '350ms' }}>
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: '200ms' }}>
               <Label>Integração WhatsApp</Label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 p-3 rounded-xl border border-border bg-muted/30 min-w-0 transition-all duration-200 hover:border-primary/30">
@@ -734,7 +630,7 @@ export default function Agents() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 animate-fade-in" style={{ animationDelay: '400ms' }}>
+            <div className="flex gap-3 pt-4 animate-fade-in" style={{ animationDelay: '250ms' }}>
               <Button
                 variant="outline"
                 className="flex-1 transition-all duration-200 hover:scale-[1.02]"
