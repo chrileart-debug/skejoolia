@@ -5,6 +5,7 @@ import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
+import { VipCrown } from "@/components/club/VipBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,6 @@ import {
   Plus,
   Bell,
   CheckCircle2,
-  Crown,
   Loader2,
 } from "lucide-react";
 import {
@@ -61,6 +61,8 @@ interface Appointment {
   service_id: string | null;
   client_id: string | null;
   user_id: string;
+  subscription_status?: string | null;
+  subscription_next_due_date?: string | null;
 }
 
 interface Service {
@@ -168,7 +170,8 @@ export default function Schedule() {
 
     const { start, end } = getMonthRange(selectedDate);
     
-    const { data, error } = await supabase
+    // Fetch appointments
+    const { data: appointmentsData, error } = await supabase
       .from("agendamentos")
       .select("*")
       .eq("barbershop_id", barbershop.id)
@@ -179,9 +182,44 @@ export default function Schedule() {
     if (error) {
       console.error("Error fetching appointments:", error);
       toast.error("Erro ao carregar agendamentos");
-    } else {
-      setAppointments(data || []);
+      setLoading(false);
+      return;
     }
+
+    // Get unique client_ids to fetch subscription data
+    const clientIds = [...new Set((appointmentsData || [])
+      .filter(a => a.client_id)
+      .map(a => a.client_id))] as string[];
+
+    // Fetch active subscriptions for those clients
+    let subscriptionMap: Record<string, { status: string; next_due_date: string | null }> = {};
+    
+    if (clientIds.length > 0) {
+      const { data: subscriptions } = await supabase
+        .from("client_club_subscriptions")
+        .select("client_id, status, next_due_date")
+        .eq("barbershop_id", barbershop.id)
+        .eq("status", "active")
+        .in("client_id", clientIds);
+
+      if (subscriptions) {
+        subscriptions.forEach(sub => {
+          subscriptionMap[sub.client_id] = {
+            status: sub.status || "",
+            next_due_date: sub.next_due_date
+          };
+        });
+      }
+    }
+
+    // Merge subscription data into appointments
+    const enrichedAppointments = (appointmentsData || []).map(apt => ({
+      ...apt,
+      subscription_status: apt.client_id ? subscriptionMap[apt.client_id]?.status : null,
+      subscription_next_due_date: apt.client_id ? subscriptionMap[apt.client_id]?.next_due_date : null,
+    }));
+
+    setAppointments(enrichedAppointments);
     setLoading(false);
   };
 
@@ -619,15 +657,22 @@ export default function Schedule() {
                         <div
                           key={apt.id_agendamento}
                           className={cn(
-                            "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate",
+                            "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5",
                             apt.status === "completed" && "bg-green-500/20 text-green-700 dark:text-green-400",
                             apt.status === "pending" && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
                             apt.status === "confirmed" && "bg-blue-500/20 text-blue-700 dark:text-blue-400",
                             apt.status === "cancelled" && "bg-red-500/20 text-red-700 dark:text-red-400"
                           )}
                         >
+                          {apt.subscription_status === "active" && (
+                            <VipCrown 
+                              status={apt.subscription_status} 
+                              nextDueDate={apt.subscription_next_due_date || null}
+                              className="w-3 h-3 flex-shrink-0"
+                            />
+                          )}
                           <span className="hidden sm:inline">{formatTimeFromISO(apt.start_time)} - </span>
-                          {apt.nome_cliente || "Cliente"}
+                          <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
                         </div>
                       ))}
                       {dayAppointments.length > 2 && (
@@ -673,7 +718,15 @@ export default function Schedule() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{apt.nome_cliente || "Cliente não informado"}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium truncate">{apt.nome_cliente || "Cliente não informado"}</p>
+                        {apt.subscription_status === "active" && (
+                          <VipCrown 
+                            status={apt.subscription_status} 
+                            nextDueDate={apt.subscription_next_due_date || null} 
+                          />
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {formatTimeFromISO(apt.start_time)} - {getServiceName(apt.service_id)}
                       </p>
@@ -859,7 +912,7 @@ export default function Schedule() {
             {isClientVip && (
               <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-amber-500" />
+                  <VipCrown status="active" nextDueDate={null} className="w-5 h-5" />
                   <span className="font-semibold text-amber-600 dark:text-amber-400">
                     Membro VIP Detectado
                   </span>
