@@ -274,8 +274,8 @@ export default function Dashboard() {
       <div className="p-4 lg:p-6 space-y-6">
         <InstallBanner />
 
-        {/* Financial Activation Card - Only show if asaas_api_key is NULL */}
-        {!hasAsaasApiKey && (
+        {/* Financial Activation Card - Hidden for now, keeping code for future reactivation */}
+        {false && !hasAsaasApiKey && (
           <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 shadow-lg">
             {/* Decorative elements */}
             <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
