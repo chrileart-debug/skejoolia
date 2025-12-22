@@ -11,12 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
 import { PublishPlanModal } from "@/components/club/PublishPlanModal";
 import { ManualSubscriptionModal } from "@/components/club/ManualSubscriptionModal";
+import { VipBadge, VipCrown } from "@/components/club/VipBadge";
+import { RenewalModal } from "@/components/club/RenewalModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,12 +57,14 @@ interface Subscriber {
   plan_id: string;
   status: string;
   next_due_date: string | null;
+  payment_origin: string | null;
   client?: {
     nome: string;
     telefone: string;
   };
   plan?: {
     name: string;
+    price: number;
   };
 }
 
@@ -81,6 +85,10 @@ export default function Club() {
   
   // Manual subscription modal state
   const [manualSubscriptionModalOpen, setManualSubscriptionModalOpen] = useState(false);
+  
+  // Renewal modal state
+  const [renewalModalOpen, setRenewalModalOpen] = useState(false);
+  const [renewalSubscriber, setRenewalSubscriber] = useState<Subscriber | null>(null);
   
   // Check if there are any draft plans
   const hasDraftPlans = plans.some(plan => !plan.is_published);
@@ -148,7 +156,8 @@ export default function Club() {
           client_id,
           plan_id,
           status,
-          next_due_date
+          next_due_date,
+          payment_origin
         `)
         .eq("barbershop_id", barbershop.id);
 
@@ -165,7 +174,7 @@ export default function Club() {
 
           const { data: plan } = await supabase
             .from("barber_plans")
-            .select("name")
+            .select("name, price")
             .eq("id", sub.plan_id)
             .single();
 
@@ -496,56 +505,72 @@ export default function Club() {
             />
           ) : (
             <div className="space-y-4">
-              {subscribers.map((sub) => (
-                <Card key={sub.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-4">
-                      {/* Avatar with crown for active subscribers */}
-                      <div className="relative">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="text-primary font-semibold">
-                            {sub.client?.nome?.charAt(0).toUpperCase() || "C"}
-                          </span>
-                        </div>
-                        {sub.status === "active" && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow-sm">
-                            <Crown className="w-3 h-3 text-white" />
+              {subscribers.map((sub) => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dueDate = sub.next_due_date ? new Date(sub.next_due_date) : null;
+                if (dueDate) dueDate.setHours(0, 0, 0, 0);
+                const isExpired = dueDate && sub.status === "active" ? dueDate < today : false;
+                
+                return (
+                  <Card key={sub.id}>
+                    <CardContent className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-4">
+                        {/* Avatar with crown */}
+                        <div className="relative">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-primary font-semibold">
+                              {sub.client?.nome?.charAt(0).toUpperCase() || "C"}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">
-                            {sub.client?.nome || "Cliente"}
-                          </p>
                           {sub.status === "active" && (
-                            <Crown className="w-4 h-4 text-amber-500" />
+                            <div className="absolute -top-1 -right-1">
+                              <VipBadge status={sub.status} nextDueDate={sub.next_due_date} size="sm" />
+                            </div>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {sub.client?.telefone || "Sem telefone"}
-                        </p>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{sub.client?.nome || "Cliente"}</p>
+                            <VipCrown status={sub.status} nextDueDate={sub.next_due_date} />
+                          </div>
+                          <p className="text-sm text-muted-foreground">{sub.client?.telefone || "Sem telefone"}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {sub.plan?.name || "Plano"}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getStatusBadge(sub.status || "pending")}
-                        {sub.next_due_date && (
-                          <span className="text-xs text-muted-foreground">
-                            Vence:{" "}
-                            {new Date(sub.next_due_date).toLocaleDateString(
-                              "pt-BR"
-                            )}
-                          </span>
+                      <div className="text-right space-y-2">
+                        <p className="text-sm font-medium">{sub.plan?.name || "Plano"}</p>
+                        <div className="flex items-center gap-2">
+                          {isExpired ? (
+                            <Badge variant="destructive">Vencido</Badge>
+                          ) : (
+                            getStatusBadge(sub.status || "pending")
+                          )}
+                          {sub.next_due_date && (
+                            <span className={`text-xs ${isExpired ? 'text-red-500' : 'text-muted-foreground'}`}>
+                              {new Date(sub.next_due_date).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
+                        </div>
+                        {/* Renewal Button for manual subscriptions */}
+                        {sub.payment_origin === "manual" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-xs"
+                            onClick={() => {
+                              setRenewalSubscriber(sub);
+                              setRenewalModalOpen(true);
+                            }}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Renovar
+                          </Button>
                         )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -598,6 +623,27 @@ export default function Club() {
         userId={user?.id || ""}
         showClientSearch={true}
       />
+
+      {/* Renewal Modal */}
+      {renewalSubscriber && (
+        <RenewalModal
+          open={renewalModalOpen}
+          onClose={() => {
+            setRenewalModalOpen(false);
+            setRenewalSubscriber(null);
+          }}
+          onSuccess={() => {
+            fetchSubscribers();
+          }}
+          subscriptionId={renewalSubscriber.id}
+          clientName={renewalSubscriber.client?.nome || "Cliente"}
+          planName={renewalSubscriber.plan?.name || "Plano"}
+          planPrice={renewalSubscriber.plan?.price || 0}
+          nextDueDate={renewalSubscriber.next_due_date || ""}
+          barbershopId={barbershop?.id || ""}
+          clientId={renewalSubscriber.client_id}
+        />
+      )}
     </div>
   );
 }
