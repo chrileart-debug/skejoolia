@@ -303,8 +303,8 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
                   </div>
                 )}
 
-                {/* CTA Button */}
-                {isPublished ? (
+                {/* CTA Button - Hidden for now, keeping code for future reactivation */}
+                {false && isPublished ? (
                   <Button
                     onClick={() => handleSubscribe(plan)}
                     className="w-full gap-2"
@@ -322,21 +322,7 @@ export const PublicClubSection = ({ barbershopId, barbershopName, loggedInClient
                       </>
                     )}
                   </Button>
-                ) : (
-                  <div className="space-y-2">
-                    <Button
-                      disabled
-                      variant="outline"
-                      className="w-full border-warning/30 text-warning cursor-not-allowed"
-                    >
-                      <Clock className="w-4 h-4 mr-2" />
-                      Assinaturas em breve
-                    </Button>
-                    <p className="text-xs text-center text-muted-foreground">
-                      Estamos preparando novidades para você!
-                    </p>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           );
