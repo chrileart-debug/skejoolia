@@ -311,6 +311,7 @@ export type Database = {
       }
       barbershop_reminders: {
         Row: {
+          agent_id: string | null
           barbershop_id: string
           created_at: string | null
           display_order: number | null
@@ -321,6 +322,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          agent_id?: string | null
           barbershop_id: string
           created_at?: string | null
           display_order?: number | null
@@ -331,6 +333,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          agent_id?: string | null
           barbershop_id?: string
           created_at?: string | null
           display_order?: number | null
@@ -341,6 +344,20 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "barbershop_reminders_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agentes"
+            referencedColumns: ["id_agente"]
+          },
+          {
+            foreignKeyName: "barbershop_reminders_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agentes_integracoes_view"
+            referencedColumns: ["id_agente"]
+          },
           {
             foreignKeyName: "barbershop_reminders_barbershop_id_fkey"
             columns: ["barbershop_id"]

@@ -16,9 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Bell, Plus, Trash2, Loader2 } from "lucide-react";
+import { Bell, Plus, Trash2, Loader2, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+interface Agent {
+  id_agente: string;
+  nome: string;
+  ativo: boolean;
+}
 
 interface Reminder {
   id?: string;
@@ -26,6 +32,7 @@ interface Reminder {
   reminder_value: number;
   is_enabled: boolean;
   display_order: number;
+  agent_id?: string | null;
 }
 
 interface ReminderConfigModalProps {
@@ -46,6 +53,7 @@ export function ReminderConfigModal({
   barbershopId,
 }: ReminderConfigModalProps) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [masterEnabled, setMasterEnabled] = useState(false);
   const [customMessage, setCustomMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,6 +63,7 @@ export function ReminderConfigModal({
     if (open && barbershopId) {
       loadReminders();
       loadBarbershopSettings();
+      loadAgents();
     }
   }, [open, barbershopId]);
 
@@ -68,6 +77,21 @@ export function ReminderConfigModal({
     if (data) {
       setMasterEnabled(data.webhook_reminders_enabled || false);
       setCustomMessage(data.reminder_message_template || "");
+    }
+  };
+
+  const loadAgents = async () => {
+    const { data, error } = await supabase
+      .from("agentes")
+      .select("id_agente, nome, ativo")
+      .eq("barbershop_id", barbershopId)
+      .eq("ativo", true)
+      .order("nome");
+
+    if (error) {
+      console.error("Error loading agents:", error);
+    } else {
+      setAgents(data || []);
     }
   };
 
@@ -90,6 +114,7 @@ export function ReminderConfigModal({
           reminder_value: r.reminder_value,
           is_enabled: r.is_enabled,
           display_order: r.display_order,
+          agent_id: r.agent_id,
         })) || []
       );
     }
@@ -109,6 +134,7 @@ export function ReminderConfigModal({
         reminder_value: 1,
         is_enabled: true,
         display_order: reminders.length,
+        agent_id: agents.length > 0 ? agents[0].id_agente : null,
       },
     ]);
   };
@@ -187,6 +213,7 @@ export function ReminderConfigModal({
             reminder_value: r.reminder_value,
             is_enabled: r.is_enabled,
             display_order: index,
+            agent_id: r.agent_id || null,
           }))
         );
 
@@ -250,71 +277,96 @@ export function ReminderConfigModal({
                       {reminders.map((reminder, index) => (
                         <div
                           key={index}
-                          className="flex items-center gap-2 p-3 bg-card border border-border rounded-lg"
+                          className="p-3 bg-card border border-border rounded-lg space-y-3"
                         >
-                          {/* Value selector */}
-                          <Select
-                            value={reminder.reminder_value.toString()}
-                            onValueChange={(v) =>
-                              updateReminder(index, "reminder_value", parseInt(v))
-                            }
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {getValueOptions(reminder.reminder_type).map(
-                                (opt) => (
-                                  <SelectItem key={opt} value={opt.toString()}>
-                                    {opt}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
-
-                          {/* Type selector */}
-                          <Select
-                            value={reminder.reminder_type}
-                            onValueChange={(v) => {
-                              updateReminder(
-                                index,
-                                "reminder_type",
-                                v as "minutes" | "hours" | "days"
-                              );
-                              // Reset value to first option of new type
-                              const newOptions = getValueOptions(
-                                v as "minutes" | "hours" | "days"
-                              );
-                              updateReminder(index, "reminder_value", newOptions[0]);
-                            }}
-                          >
-                            <SelectTrigger className="w-28">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="minutes">minutos</SelectItem>
-                              <SelectItem value="hours">hora(s)</SelectItem>
-                              <SelectItem value="days">dia(s)</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          {/* Enabled toggle */}
-                          <div className="flex-1 flex items-center justify-end gap-2">
-                            <Switch
-                              checked={reminder.is_enabled}
-                              onCheckedChange={(v) =>
-                                updateReminder(index, "is_enabled", v)
+                          <div className="flex items-center gap-2">
+                            {/* Value selector */}
+                            <Select
+                              value={reminder.reminder_value.toString()}
+                              onValueChange={(v) =>
+                                updateReminder(index, "reminder_value", parseInt(v))
                               }
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => removeReminder(index)}
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getValueOptions(reminder.reminder_type).map(
+                                  (opt) => (
+                                    <SelectItem key={opt} value={opt.toString()}>
+                                      {opt}
+                                    </SelectItem>
+                                  )
+                                )}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Type selector */}
+                            <Select
+                              value={reminder.reminder_type}
+                              onValueChange={(v) => {
+                                updateReminder(
+                                  index,
+                                  "reminder_type",
+                                  v as "minutes" | "hours" | "days"
+                                );
+                                // Reset value to first option of new type
+                                const newOptions = getValueOptions(
+                                  v as "minutes" | "hours" | "days"
+                                );
+                                updateReminder(index, "reminder_value", newOptions[0]);
+                              }}
+                            >
+                              <SelectTrigger className="w-28">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="minutes">minutos</SelectItem>
+                                <SelectItem value="hours">hora(s)</SelectItem>
+                                <SelectItem value="days">dia(s)</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            {/* Enabled toggle */}
+                            <div className="flex-1 flex items-center justify-end gap-2">
+                              <Switch
+                                checked={reminder.is_enabled}
+                                onCheckedChange={(v) =>
+                                  updateReminder(index, "is_enabled", v)
+                                }
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => removeReminder(index)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Agent selector */}
+                          <div className="flex items-center gap-2">
+                            <Bot className="w-4 h-4 text-muted-foreground" />
+                            <Select
+                              value={reminder.agent_id || "none"}
+                              onValueChange={(v) =>
+                                updateReminder(index, "agent_id", v === "none" ? null : v)
+                              }
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Selecionar agente" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Sem agente</SelectItem>
+                                {agents.map((agent) => (
+                                  <SelectItem key={agent.id_agente} value={agent.id_agente}>
+                                    {agent.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                       ))}
