@@ -14,6 +14,7 @@ interface Reminder {
   reminder_type: "minutes" | "hours" | "days";
   reminder_value: number;
   is_enabled: boolean;
+  agent_id: string | null;
 }
 
 serve(async (req: Request) => {
@@ -89,7 +90,8 @@ serve(async (req: Request) => {
           start_time,
           nome_cliente,
           telefone_cliente,
-          service_id
+          service_id,
+          client_id
         `)
         .eq("barbershop_id", barbershop.id)
         .in("status", ["pending", "confirmed"])
@@ -192,12 +194,15 @@ serve(async (req: Request) => {
               barbershop_id: barbershop.id,
               barbershop_name: barbershop.name,
               barbershop_phone: barbershop.phone || "",
+              client_id: appointment.client_id || "",
               client_name: appointment.nome_cliente || "Cliente",
               client_phone: appointment.telefone_cliente || "",
+              appointment_id: appointment.id_agendamento,
               service_name: serviceName,
               appointment_time: formattedTime,
               reminder_type: reminder.reminder_type,
               reminder_value: reminder.reminder_value,
+              agent_id: reminder.agent_id || "",
               custom_message: barbershop.reminder_message_template || "",
             };
 
