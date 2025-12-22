@@ -219,7 +219,7 @@ export function ManualSubscriptionModal({
 
     try {
       // Check if client already has an active subscription
-      const { data: existingSubscription, error: checkError } = await supabase
+      const { data: activeSubscription, error: activeCheckError } = await supabase
         .from("client_club_subscriptions")
         .select("id")
         .eq("barbershop_id", barbershopId)
@@ -227,53 +227,93 @@ export function ManualSubscriptionModal({
         .eq("status", "active")
         .maybeSingle();
 
-      if (checkError) throw checkError;
+      if (activeCheckError) throw activeCheckError;
 
-      if (existingSubscription) {
+      if (activeSubscription) {
         toast.error("Este cliente já possui uma assinatura ativa");
         setSaving(false);
         return;
       }
 
-      // 1. Create subscription record
-      const { data: subscriptionData, error: subError } = await supabase
+      // Check if there's a canceled subscription to reactivate
+      const { data: canceledSubscription, error: canceledCheckError } = await supabase
         .from("client_club_subscriptions")
-        .insert({
-          barbershop_id: barbershopId,
-          client_id: clientId,
-          plan_id: selectedPlanId,
-          status: "active",
-          payment_origin: "manual",
-          next_due_date: nextDueDate,
-        })
         .select("id")
-        .single();
+        .eq("barbershop_id", barbershopId)
+        .eq("client_id", clientId)
+        .eq("status", "canceled")
+        .maybeSingle();
 
-      if (subError) throw subError;
+      if (canceledCheckError) throw canceledCheckError;
 
-      // 2. Create transaction record
       const planPrice = selectedPlan?.price || 0;
+      let subscriptionId: string;
+
+      if (canceledSubscription) {
+        // REACTIVATE: Update existing canceled subscription
+        const { error: updateError } = await supabase
+          .from("client_club_subscriptions")
+          .update({
+            plan_id: selectedPlanId,
+            status: "active",
+            payment_origin: "manual",
+            next_due_date: nextDueDate,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", canceledSubscription.id);
+
+        if (updateError) throw updateError;
+
+        subscriptionId = canceledSubscription.id;
+
+        // Clear previous usage data
+        await supabase
+          .from("client_subscription_usage")
+          .delete()
+          .eq("subscription_id", subscriptionId);
+      } else {
+        // CREATE: New subscription record
+        const { data: subscriptionData, error: subError } = await supabase
+          .from("client_club_subscriptions")
+          .insert({
+            barbershop_id: barbershopId,
+            client_id: clientId,
+            plan_id: selectedPlanId,
+            status: "active",
+            payment_origin: "manual",
+            next_due_date: nextDueDate,
+          })
+          .select("id")
+          .single();
+
+        if (subError) throw subError;
+        subscriptionId = subscriptionData.id;
+      }
+
+      // Create transaction record (for both new and reactivated)
       const { error: transError } = await supabase
         .from("client_transactions")
         .insert({
           barbershop_id: barbershopId,
           client_id: clientId,
-          subscription_id: subscriptionData.id,
+          subscription_id: subscriptionId,
           amount: planPrice,
           payment_method: "dinheiro",
           status: "pago",
         });
 
       if (transError) {
-        // Rollback: delete the subscription if transaction fails
-        await supabase
-          .from("client_club_subscriptions")
-          .delete()
-          .eq("id", subscriptionData.id);
+        // Rollback only for new subscriptions
+        if (!canceledSubscription) {
+          await supabase
+            .from("client_club_subscriptions")
+            .delete()
+            .eq("id", subscriptionId);
+        }
         throw transError;
       }
 
-      toast.success("Assinatura criada com sucesso!");
+      toast.success(canceledSubscription ? "Assinatura reativada com sucesso!" : "Assinatura criada com sucesso!");
       onSuccess();
       onClose();
     } catch (error: any) {
