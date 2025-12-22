@@ -445,22 +445,22 @@ export default function Settings() {
           throw new Error("Webhook request failed");
         }
 
-        toast.success("Dados enviados! Sua conta bancária está sendo ativada.");
-        
-        // Refresh data to check for asaas_api_key update
+        // Silent success - just show standard profile update message
+        // Refresh data in background
         setTimeout(() => {
           loadData();
         }, 2000);
         
       } catch (error) {
         console.error("Webhook error:", error);
-        toast.error("Erro ao enviar dados para ativação. Tente novamente.");
+        // Silent failure - don't show banking-related errors
       } finally {
         setIsSubmittingWebhook(false);
       }
-    } else {
-      toast.success("Dados da empresa salvos com sucesso");
     }
+    
+    // Always show standard success message
+    toast.success("Perfil atualizado com sucesso");
 
     setIsLoading(false);
   };
@@ -537,7 +537,7 @@ export default function Settings() {
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
         {isOwner && barbershopId ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">Perfil</span>
@@ -546,10 +546,13 @@ export default function Settings() {
                 <Building2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Empresa</span>
               </TabsTrigger>
-              <TabsTrigger value="banking" className="flex items-center gap-2">
-                <Landmark className="w-4 h-4" />
-                <span className="hidden sm:inline">Bancário</span>
-              </TabsTrigger>
+              {/* Banking tab hidden - keeping code for future reactivation */}
+              {false && (
+                <TabsTrigger value="banking" className="flex items-center gap-2">
+                  <Landmark className="w-4 h-4" />
+                  <span className="hidden sm:inline">Bancário</span>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* Tab 1: Perfil - User data only */}
