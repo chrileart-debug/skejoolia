@@ -12,32 +12,41 @@ import { createCheckoutSession } from "@/lib/webhook";
 const Plans = () => {
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
-  const { subscription, plan, isTrialing, daysRemaining, loading } = useSubscription();
+  const { subscription, plan, plans, isTrialing, daysRemaining, loading } = useSubscription();
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   const currentPlanSlug = subscription?.plan_slug || "basico";
+  
+  const basicoPlan = plans.find(p => p.slug === "basico");
+  const corporativoPlan = plans.find(p => p.slug === "corporativo");
 
-  const planFeatures = {
-    basico: [
-      "1 agente IA",
-      "1 integração WhatsApp",
-      "3 serviços",
-      "10 agendamentos/mês",
-      "Agendamento manual e automático",
-      "7 dias de teste grátis",
-    ],
-    corporativo: [
-      "5 agentes IA",
-      "5 integrações WhatsApp",
-      "Serviços ilimitados",
-      "Agendamentos ilimitados",
-      "Agendamento manual e automático",
-      "Suporte prioritário",
-      "Atualizações mais rápidas",
-      "Auxílio na criação de agentes",
-      "7 dias de teste grátis",
-    ],
+  const formatLimit = (value: number | null) => {
+    if (value === null || value >= 9999) return "Ilimitados";
+    return value.toString();
   };
+
+  const getPlanFeatures = (planData: typeof basicoPlan) => {
+    if (!planData) return [];
+    const isUnlimitedServices = planData.max_services === null || planData.max_services >= 9999;
+    const isUnlimitedAppointments = planData.max_appointments_month === null || planData.max_appointments_month >= 9999;
+    
+    return [
+      `${planData.max_agents} agente${planData.max_agents > 1 ? 's' : ''} IA`,
+      `${planData.max_whatsapp} integração${planData.max_whatsapp > 1 ? 'ões' : ''} WhatsApp`,
+      isUnlimitedServices ? "Serviços ilimitados" : `${planData.max_services} serviços`,
+      isUnlimitedAppointments ? "Agendamentos ilimitados" : `${planData.max_appointments_month} agendamentos/mês`,
+      "Agendamento manual e automático",
+      "7 dias de teste grátis",
+    ];
+  };
+
+  const corporativoExtraFeatures = [
+    "Suporte prioritário",
+    "Atualizações mais rápidas",
+    "Auxílio na criação de agentes",
+    "Pode adicionar membros à equipe",
+    "Pode criar planos de assinatura",
+  ];
 
   const handleUpgrade = async () => {
     console.log("=== handleUpgrade iniciado ===");
@@ -67,12 +76,10 @@ const Plans = () => {
       action: "upgrade",
       user_id: user.id,
       plan_slug: "corporativo",
-      price: 49.9,
+      price: corporativoPlan?.price || 79.9,
       subscription_id: subscription.id,
       barbershop_id: barbershop.id,
     };
-
-    console.log("Payload para webhook:", payload);
 
     setUpgradeLoading(true);
     try {
@@ -151,13 +158,15 @@ const Plans = () => {
               Básico
             </CardTitle>
             <div className="mt-2">
-              <span className="text-3xl font-bold text-foreground">R$ 29,90</span>
+              <span className="text-3xl font-bold text-foreground">
+                R$ {basicoPlan?.price.toFixed(2).replace(".", ",")}
+              </span>
               <span className="text-muted-foreground">/mês</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <ul className="space-y-3">
-              {planFeatures.basico.map((feature, index) => (
+              {getPlanFeatures(basicoPlan).map((feature, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm">
                   <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <span className="text-muted-foreground">{feature}</span>
@@ -198,14 +207,22 @@ const Plans = () => {
               Corporativo
             </CardTitle>
             <div className="mt-2">
-              <span className="text-3xl font-bold text-foreground">R$ 49,90</span>
+              <span className="text-3xl font-bold text-foreground">
+                R$ {corporativoPlan?.price.toFixed(2).replace(".", ",")}
+              </span>
               <span className="text-muted-foreground">/mês</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <ul className="space-y-3">
-              {planFeatures.corporativo.map((feature, index) => (
+              {getPlanFeatures(corporativoPlan).map((feature, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm">
+                  <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground">{feature}</span>
+                </li>
+              ))}
+              {corporativoExtraFeatures.map((feature, index) => (
+                <li key={`extra-${index}`} className="flex items-start gap-2 text-sm">
                   <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <span className="text-muted-foreground">{feature}</span>
                 </li>
