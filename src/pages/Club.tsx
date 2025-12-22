@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
@@ -89,6 +89,11 @@ export default function Club() {
   // Renewal modal state
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [renewalSubscriber, setRenewalSubscriber] = useState<Subscriber | null>(null);
+  
+  // Cancel subscription state
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [subscriberToCancel, setSubscriberToCancel] = useState<Subscriber | null>(null);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
   
   // Check if there are any draft plans
   const hasDraftPlans = plans.some(plan => !plan.is_published);
@@ -287,12 +292,60 @@ export default function Club() {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    if (!subscriberToCancel || !barbershop?.id) return;
+    
+    setCancellingSubscription(true);
+    
+    try {
+      if (subscriberToCancel.payment_origin === "manual") {
+        // Manual subscription: directly update DB
+        const { error } = await supabase
+          .from("client_club_subscriptions")
+          .update({ status: "canceled" })
+          .eq("id", subscriberToCancel.id);
+        
+        if (error) throw error;
+        
+        toast.success("Assinatura manual cancelada");
+        fetchSubscribers();
+      } else {
+        // Asaas subscription: send webhook
+        const response = await fetch("https://webhook.lernow.com/webhook/cliente-barber-cancelar-assinatura-skjool", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            subscription_id: subscriberToCancel.id,
+            client_id: subscriberToCancel.client_id,
+            barbershop_id: barbershop.id,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error("Erro ao enviar solicitação de cancelamento");
+        }
+        
+        toast.success("Solicitação de cancelamento enviada ao Asaas. O status será atualizado em breve.");
+      }
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      toast.error("Erro ao cancelar assinatura");
+    } finally {
+      setCancellingSubscription(false);
+      setCancelDialogOpen(false);
+      setSubscriberToCancel(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
       active: { label: "Ativo", variant: "default" },
       pending: { label: "Pendente", variant: "secondary" },
       overdue: { label: "Vencido", variant: "destructive" },
       cancelled: { label: "Cancelado", variant: "outline" },
+      canceled: { label: "Cancelado", variant: "outline" },
     };
     const config = statusMap[status] || { label: status, variant: "secondary" };
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -552,7 +605,7 @@ export default function Club() {
                           )}
                         </div>
                         {/* Renewal Button for manual subscriptions */}
-                        {sub.payment_origin === "manual" && (
+                        {sub.payment_origin === "manual" && sub.status === "active" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -564,6 +617,21 @@ export default function Club() {
                           >
                             <RefreshCw className="w-3 h-3" />
                             Renovar
+                          </Button>
+                        )}
+                        {/* Cancel Button for active subscriptions */}
+                        {sub.status === "active" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              setSubscriberToCancel(sub);
+                              setCancelDialogOpen(true);
+                            }}
+                          >
+                            <XCircle className="w-3 h-3" />
+                            Cancelar
                           </Button>
                         )}
                       </div>
@@ -644,6 +712,45 @@ export default function Club() {
           clientId={renewalSubscriber.client_id}
         />
       )}
+
+      {/* Cancel Subscription Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar a assinatura de{" "}
+              <strong>{subscriberToCancel?.client?.nome || "este cliente"}</strong>?
+              {subscriberToCancel?.payment_origin === "asaas" ? (
+                <span className="block mt-2 text-warning">
+                  Esta assinatura é gerenciada pelo Asaas. Uma solicitação de cancelamento será enviada.
+                </span>
+              ) : (
+                <span className="block mt-2">
+                  O status da assinatura será alterado para cancelado imediatamente.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancellingSubscription}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelSubscription}
+              disabled={cancellingSubscription}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancellingSubscription ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                "Confirmar Cancelamento"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

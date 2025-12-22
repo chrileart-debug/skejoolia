@@ -25,6 +25,7 @@ import {
   Clock,
   XCircle,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 
 interface ClientData {
@@ -42,6 +43,7 @@ interface Subscription {
   status: string | null;
   plan_id: string;
   next_due_date: string | null;
+  payment_origin: string | null;
 }
 
 interface Plan {
@@ -142,6 +144,10 @@ export const ClientPortal = ({
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
+  
+  // Subscription cancellation state
+  const [cancelSubscriptionOpen, setCancelSubscriptionOpen] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
 
   useEffect(() => {
     const fetchSubscriptionData = async () => {
@@ -315,6 +321,54 @@ export const ClientPortal = ({
       setCancellingAppointment(null);
       setConfirmCancelOpen(false);
       setAppointmentToCancel(null);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!subscription) return;
+    
+    setCancellingSubscription(true);
+    
+    try {
+      if (subscription.payment_origin === "manual") {
+        // Manual subscription: directly update DB
+        const { error } = await supabase
+          .from("client_club_subscriptions")
+          .update({ status: "canceled" })
+          .eq("id", subscription.id);
+        
+        if (error) throw error;
+        
+        toast.success("Assinatura manual cancelada");
+        setSubscription(null);
+        setPlan(null);
+        setPlanItems([]);
+      } else {
+        // Asaas subscription: send webhook
+        const response = await fetch("https://webhook.lernow.com/webhook/cliente-barber-cancelar-assinatura-skjool", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            subscription_id: subscription.id,
+            client_id: client.client_id,
+            barbershop_id: barbershopId,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error("Erro ao enviar solicitação de cancelamento");
+        }
+        
+        toast.success("Solicitação de cancelamento enviada ao Asaas. O status será atualizado em breve.");
+      }
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      toast.error("Erro ao cancelar assinatura");
+    } finally {
+      setCancellingSubscription(false);
+      setCancelSubscriptionOpen(false);
     }
   };
 
@@ -564,6 +618,19 @@ export const ClientPortal = ({
               </div>
             </div>
           )}
+
+          {/* Cancel Subscription Button */}
+          <div className="px-6 pb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              onClick={() => setCancelSubscriptionOpen(true)}
+            >
+              <XCircle className="w-4 h-4" />
+              Cancelar Minha Assinatura
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="bg-gradient-to-br from-primary/5 to-transparent rounded-xl border border-dashed border-primary/30 p-6 text-center">
@@ -577,7 +644,7 @@ export const ClientPortal = ({
         </div>
       )}
 
-      {/* Cancel Confirmation Dialog */}
+      {/* Cancel Appointment Confirmation Dialog */}
       <AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -593,6 +660,44 @@ export const ClientPortal = ({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Cancelar agendamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Subscription Confirmation Dialog */}
+      <AlertDialog open={cancelSubscriptionOpen} onOpenChange={setCancelSubscriptionOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar sua assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja cancelar sua assinatura do plano <strong>{plan?.name}</strong>?
+              {subscription?.payment_origin === "asaas" ? (
+                <span className="block mt-2 text-muted-foreground">
+                  Uma solicitação de cancelamento será enviada. O status será atualizado em breve.
+                </span>
+              ) : (
+                <span className="block mt-2 text-muted-foreground">
+                  Você perderá acesso aos benefícios do plano imediatamente.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancellingSubscription}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelSubscription}
+              disabled={cancellingSubscription}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancellingSubscription ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelando...
+                </>
+              ) : (
+                "Confirmar Cancelamento"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
