@@ -40,11 +40,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { toast } from "sonner";
+import { VipCrown } from "@/components/club/VipBadge";
 
 interface Cliente {
   client_id: string;
   nome: string | null;
   telefone: string | null;
+  subscription_status?: string | null;
+  subscription_next_due_date?: string | null;
 }
 
 interface ServiceCredit {
@@ -142,16 +145,38 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
   const [clientServiceCredits, setClientServiceCredits] = useState<ServiceCredit[]>([]);
   const [loadingCredits, setLoadingCredits] = useState(false);
 
-  // Fetch clients
+  // Fetch clients with VIP status
   useEffect(() => {
     const fetchClients = async () => {
       if (!barbershop?.id) return;
-      const { data } = await supabase
+      
+      // Fetch clients
+      const { data: clientsData } = await supabase
         .from("clientes")
         .select("client_id, nome, telefone")
         .eq("barbershop_id", barbershop.id)
         .order("nome");
-      if (data) setClients(data);
+      
+      if (!clientsData) return;
+      
+      // Fetch active subscriptions
+      const { data: subscriptions } = await supabase
+        .from("client_club_subscriptions")
+        .select("client_id, status, next_due_date")
+        .eq("barbershop_id", barbershop.id)
+        .eq("status", "active");
+      
+      // Merge data
+      const clientsWithVip = clientsData.map(client => {
+        const sub = subscriptions?.find(s => s.client_id === client.client_id);
+        return {
+          ...client,
+          subscription_status: sub?.status || null,
+          subscription_next_due_date: sub?.next_due_date || null,
+        };
+      });
+      
+      setClients(clientsWithVip);
     };
     if (open) fetchClients();
   }, [open, barbershop?.id]);
@@ -848,8 +873,18 @@ function Step1Client({
                 onClick={() => onClientSelect(client)}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 hover:border-primary/50 transition-all text-left group"
               >
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                  <User className="w-6 h-6 text-muted-foreground" />
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                    <User className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  {client.subscription_status === "active" && (
+                    <div className="absolute -top-1 -right-1">
+                      <VipCrown 
+                        status={client.subscription_status} 
+                        nextDueDate={client.subscription_next_due_date || null}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{client.nome || "Sem nome"}</p>

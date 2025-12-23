@@ -86,6 +86,13 @@ export type Database = {
             referencedColumns: ["client_id"]
           },
           {
+            foreignKeyName: "agendamentos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "agendamentos_transaction_id_fkey"
             columns: ["transaction_id"]
             isOneToOne: false
@@ -242,6 +249,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "barber_plans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "barber_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["plan_id"]
           },
           {
             foreignKeyName: "barber_plan_items_service_id_fkey"
@@ -593,11 +607,25 @@ export type Database = {
             referencedColumns: ["client_id"]
           },
           {
+            foreignKeyName: "client_checkout_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "client_checkout_sessions_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "barber_plans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_checkout_sessions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["plan_id"]
           },
         ]
       }
@@ -661,11 +689,25 @@ export type Database = {
             referencedColumns: ["client_id"]
           },
           {
+            foreignKeyName: "client_club_subscriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "client_club_subscriptions_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "barber_plans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_club_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
+            referencedColumns: ["plan_id"]
           },
         ]
       }
@@ -776,6 +818,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "client_transactions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "vw_dashboard_assinaturas"
             referencedColumns: ["client_id"]
           },
           {
@@ -1556,6 +1605,31 @@ export type Database = {
           equipe_detalhada: Json | null
         }
         Relationships: []
+      }
+      vw_dashboard_assinaturas: {
+        Row: {
+          barbershop_id: string | null
+          client_id: string | null
+          detalhes_assinatura: Json | null
+          nome_cliente: string | null
+          plan_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_club_subscriptions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_club_subscriptions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "view_contexto_agente"
+            referencedColumns: ["barbershop_id"]
+          },
+        ]
       }
     }
     Functions: {
