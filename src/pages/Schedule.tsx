@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/Header";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -9,6 +10,7 @@ import { VipCrown } from "@/components/club/VipBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -123,14 +125,12 @@ export default function Schedule() {
   const { onMenuClick } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const queryClient = useQueryClient();
+  
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedDayAppointments, setSelectedDayAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
@@ -165,112 +165,123 @@ export default function Schedule() {
     };
   };
 
-  const fetchAppointments = async () => {
-    if (!barbershop?.id) return;
+  // Query for appointments with caching
+  const { data: appointments = [], isLoading: isLoadingAppointments } = useQuery({
+    queryKey: ["schedule-appointments", barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()],
+    queryFn: async () => {
+      if (!barbershop?.id) return [];
 
-    const { start, end } = getMonthRange(selectedDate);
-    
-    // Fetch appointments
-    const { data: appointmentsData, error } = await supabase
-      .from("agendamentos")
-      .select("*")
-      .eq("barbershop_id", barbershop.id)
-      .gte("start_time", start)
-      .lte("start_time", end)
-      .order("start_time", { ascending: true });
-
-    if (error) {
-      console.error("Error fetching appointments:", error);
-      toast.error("Erro ao carregar agendamentos");
-      setLoading(false);
-      return;
-    }
-
-    // Get unique client_ids to fetch subscription data
-    const clientIds = [...new Set((appointmentsData || [])
-      .filter(a => a.client_id)
-      .map(a => a.client_id))] as string[];
-
-    // Fetch active subscriptions for those clients
-    let subscriptionMap: Record<string, { status: string; next_due_date: string | null }> = {};
-    
-    if (clientIds.length > 0) {
-      const { data: subscriptions } = await supabase
-        .from("client_club_subscriptions")
-        .select("client_id, status, next_due_date")
+      const { start, end } = getMonthRange(selectedDate);
+      
+      const { data: appointmentsData, error } = await supabase
+        .from("agendamentos")
+        .select("*")
         .eq("barbershop_id", barbershop.id)
-        .eq("status", "active")
-        .in("client_id", clientIds);
+        .gte("start_time", start)
+        .lte("start_time", end)
+        .order("start_time", { ascending: true });
 
-      if (subscriptions) {
-        subscriptions.forEach(sub => {
-          subscriptionMap[sub.client_id] = {
-            status: sub.status || "",
-            next_due_date: sub.next_due_date
-          };
-        });
+      if (error) {
+        console.error("Error fetching appointments:", error);
+        throw error;
       }
-    }
 
-    // Merge subscription data into appointments
-    const enrichedAppointments = (appointmentsData || []).map(apt => ({
-      ...apt,
-      subscription_status: apt.client_id ? subscriptionMap[apt.client_id]?.status : null,
-      subscription_next_due_date: apt.client_id ? subscriptionMap[apt.client_id]?.next_due_date : null,
-    }));
+      const clientIds = [...new Set((appointmentsData || [])
+        .filter(a => a.client_id)
+        .map(a => a.client_id))] as string[];
 
-    setAppointments(enrichedAppointments);
-    setLoading(false);
-  };
+      let subscriptionMap: Record<string, { status: string; next_due_date: string | null }> = {};
+      
+      if (clientIds.length > 0) {
+        const { data: subscriptions } = await supabase
+          .from("client_club_subscriptions")
+          .select("client_id, status, next_due_date")
+          .eq("barbershop_id", barbershop.id)
+          .eq("status", "active")
+          .in("client_id", clientIds);
 
-  const fetchServices = async () => {
-    if (!barbershop?.id) return;
+        if (subscriptions) {
+          subscriptions.forEach(sub => {
+            subscriptionMap[sub.client_id] = {
+              status: sub.status || "",
+              next_due_date: sub.next_due_date
+            };
+          });
+        }
+      }
 
-    const { data, error } = await supabase
-      .from("services")
-      .select("id, name, duration_minutes, price")
-      .eq("barbershop_id", barbershop.id)
-      .eq("is_active", true);
+      return (appointmentsData || []).map(apt => ({
+        ...apt,
+        subscription_status: apt.client_id ? subscriptionMap[apt.client_id]?.status : null,
+        subscription_next_due_date: apt.client_id ? subscriptionMap[apt.client_id]?.next_due_date : null,
+      }));
+    },
+    enabled: !!barbershop?.id,
+    staleTime: 1000 * 60 * 2, // 2 minutes cache
+    placeholderData: (previousData) => previousData,
+  });
 
-    if (error) {
-      console.error("Error fetching services:", error);
-    } else {
-      setServices(data || []);
-    }
-  };
+  // Query for services with caching
+  const { data: services = [] } = useQuery({
+    queryKey: ["schedule-services", barbershop?.id],
+    queryFn: async () => {
+      if (!barbershop?.id) return [];
 
-  const fetchStaffMembers = async () => {
-    if (!barbershop?.id) return;
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, name, duration_minutes, price")
+        .eq("barbershop_id", barbershop.id)
+        .eq("is_active", true);
 
-    const { data, error } = await supabase.rpc("get_barbershop_team", {
-      p_barbershop_id: barbershop.id
-    });
+      if (error) {
+        console.error("Error fetching services:", error);
+        throw error;
+      }
 
-    if (!error && data) {
-      const members = data
+      return data || [];
+    },
+    enabled: !!barbershop?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes cache
+  });
+
+  // Query for staff members with caching
+  const { data: staffMembers = [] } = useQuery({
+    queryKey: ["schedule-staff", barbershop?.id],
+    queryFn: async () => {
+      if (!barbershop?.id) return [];
+
+      const { data, error } = await supabase.rpc("get_barbershop_team", {
+        p_barbershop_id: barbershop.id
+      });
+
+      if (error) {
+        console.error("Error fetching staff:", error);
+        throw error;
+      }
+
+      return (data || [])
         .filter((m: any) => m.status === "active")
         .map((m: any) => ({
           user_id: m.user_id,
           name: m.name
         }));
-      setStaffMembers(members);
-    }
-  };
+    },
+    enabled: !!barbershop?.id,
+    staleTime: 1000 * 60 * 5, // 5 minutes cache
+  });
 
-  useEffect(() => {
-    if (barbershop?.id) {
-      fetchAppointments();
-      fetchServices();
-      fetchStaffMembers();
-    }
-  }, [barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()]);
+  const invalidateAppointments = () => {
+    queryClient.invalidateQueries({ 
+      queryKey: ["schedule-appointments", barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()] 
+    });
+  };
 
   const handleCreate = () => {
     setIsBookingModalOpen(true);
   };
 
   const handleBookingSuccess = () => {
-    fetchAppointments();
+    invalidateAppointments();
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -283,9 +294,7 @@ export default function Schedule() {
       console.error("Error updating status:", error);
       toast.error("Erro ao atualizar status");
     } else {
-      setAppointments(
-        appointments.map((a) => (a.id_agendamento === id ? { ...a, status } : a))
-      );
+      invalidateAppointments();
       setSelectedDayAppointments(
         selectedDayAppointments.map((a) => (a.id_agendamento === id ? { ...a, status } : a))
       );
@@ -339,7 +348,7 @@ export default function Schedule() {
       toast.success("Agendamento atualizado");
       setIsEditDialogOpen(false);
       setEditingAppointment(null);
-      fetchAppointments();
+      invalidateAppointments();
       if (isDayDialogOpen) {
         const updatedAppt = {
           ...editingAppointment,
@@ -369,7 +378,7 @@ export default function Schedule() {
     } else {
       toast.success("Agendamento excluído");
       setDeleteAppointmentId(null);
-      fetchAppointments();
+      invalidateAppointments();
       setSelectedDayAppointments((prev) =>
         prev.filter((a) => a.id_agendamento !== deleteAppointmentId)
       );
@@ -473,11 +482,7 @@ export default function Schedule() {
       toast.success("Atendimento concluído com sucesso!");
 
       // Update local state
-      setAppointments(prev =>
-        prev.map(a => a.id_agendamento === finishingAppointment.id_agendamento
-          ? { ...a, status: "completed" }
-          : a)
-      );
+      invalidateAppointments();
       setSelectedDayAppointments(prev =>
         prev.map(a => a.id_agendamento === finishingAppointment.id_agendamento
           ? { ...a, status: "completed" }
@@ -628,64 +633,82 @@ export default function Schedule() {
           </div>
 
           {/* Calendar days */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day, index) => {
-              const dayAppointments = getAppointmentsForDay(day.date);
-              const hasAppointments = dayAppointments.length > 0;
-
-              return (
-                <button
+          {isLoadingAppointments ? (
+            <div className="grid grid-cols-7">
+              {Array(42).fill(0).map((_, index) => (
+                <div
                   key={index}
-                  onClick={() => handleDayClick(day.date)}
-                  className={cn(
-                    "min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border text-left transition-colors hover:bg-muted/50",
-                    !day.isCurrentMonth && "bg-muted/30 text-muted-foreground",
-                    isToday(day.date) && "bg-primary/10"
-                  )}
+                  className="min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border"
                 >
-                  <span
-                    className={cn(
-                      "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full",
-                      isToday(day.date) && "bg-primary text-primary-foreground font-semibold"
-                    )}
-                  >
-                    {day.date.getDate()}
-                  </span>
-                  {hasAppointments && (
+                  <Skeleton className="w-6 h-6 sm:w-7 sm:h-7 rounded-full" />
+                  {index % 3 === 0 && (
                     <div className="mt-1 space-y-0.5">
-                      {dayAppointments.slice(0, 2).map((apt) => (
-                        <div
-                          key={apt.id_agendamento}
-                          className={cn(
-                            "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5",
-                            apt.status === "completed" && "bg-green-500/20 text-green-700 dark:text-green-400",
-                            apt.status === "pending" && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-                            apt.status === "confirmed" && "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-                            apt.status === "cancelled" && "bg-red-500/20 text-red-700 dark:text-red-400"
-                          )}
-                        >
-                          {apt.subscription_status === "active" && (
-                            <VipCrown 
-                              status={apt.subscription_status} 
-                              nextDueDate={apt.subscription_next_due_date || null}
-                              className="w-3 h-3 flex-shrink-0"
-                            />
-                          )}
-                          <span className="hidden sm:inline">{formatTimeFromISO(apt.start_time)} - </span>
-                          <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
-                        </div>
-                      ))}
-                      {dayAppointments.length > 2 && (
-                        <div className="text-[10px] text-muted-foreground px-1">
-                          +{dayAppointments.length - 2}
-                        </div>
-                      )}
+                      <Skeleton className="h-4 w-full" />
                     </div>
                   )}
-                </button>
-              );
-            })}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day, index) => {
+                const dayAppointments = getAppointmentsForDay(day.date);
+                const hasAppointments = dayAppointments.length > 0;
+
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleDayClick(day.date)}
+                    className={cn(
+                      "min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border text-left transition-colors hover:bg-muted/50",
+                      !day.isCurrentMonth && "bg-muted/30 text-muted-foreground",
+                      isToday(day.date) && "bg-primary/10"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full",
+                        isToday(day.date) && "bg-primary text-primary-foreground font-semibold"
+                      )}
+                    >
+                      {day.date.getDate()}
+                    </span>
+                    {hasAppointments && (
+                      <div className="mt-1 space-y-0.5">
+                        {dayAppointments.slice(0, 2).map((apt) => (
+                          <div
+                            key={apt.id_agendamento}
+                            className={cn(
+                              "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5",
+                              apt.status === "completed" && "bg-green-500/20 text-green-700 dark:text-green-400",
+                              apt.status === "pending" && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
+                              apt.status === "confirmed" && "bg-blue-500/20 text-blue-700 dark:text-blue-400",
+                              apt.status === "cancelled" && "bg-red-500/20 text-red-700 dark:text-red-400"
+                            )}
+                          >
+                            {apt.subscription_status === "active" && (
+                              <VipCrown 
+                                status={apt.subscription_status} 
+                                nextDueDate={apt.subscription_next_due_date || null}
+                                className="w-3 h-3 flex-shrink-0"
+                              />
+                            )}
+                            <span className="hidden sm:inline">{formatTimeFromISO(apt.start_time)} - </span>
+                            <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
+                          </div>
+                        ))}
+                        {dayAppointments.length > 2 && (
+                          <div className="text-[10px] text-muted-foreground px-1">
+                            +{dayAppointments.length - 2}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
