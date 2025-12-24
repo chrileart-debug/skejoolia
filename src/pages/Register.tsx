@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PlanSelector } from "@/components/subscription/PlanSelector";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 type RegistrationStep = "plan-selection" | "form";
 
@@ -27,6 +28,7 @@ export default function Register() {
   const fromGoogle = searchParams.get("from") === "google";
   const planFromUrl = searchParams.get("plan"); // Get plan from URL query param
   const { signUp, user, loading } = useAuth();
+  const { trackCompleteRegistration } = useFacebookPixel();
   const [step, setStep] = useState<RegistrationStep>("plan-selection");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -113,12 +115,16 @@ export default function Register() {
 
     setIsLoading(true);
 
-    // Sign up with metadata including plan_slug for the database trigger
+    // Gerar event_id único para deduplicação Facebook
+    const fbEventId = generateEventId();
+
+    // Sign up with metadata including plan_slug and fb_event_id for the database trigger
     const { error } = await signUp(formData.email, formData.password, {
       nome: formData.name,
       numero: formData.phone,
       nome_empresa: formData.barbershopName,
       plan_slug: selectedPlan,
+      fb_event_id: fbEventId,
     });
 
     if (error) {
@@ -130,6 +136,9 @@ export default function Register() {
       setIsLoading(false);
       return;
     }
+
+    // Disparar evento client-side para Facebook Pixel (deduplicação)
+    trackCompleteRegistration({ userRole: "owner", eventId: fbEventId });
 
     // The database trigger handles creating user_settings and subscription
     // Just show success message and redirect
@@ -237,8 +246,10 @@ export default function Register() {
                 return;
               }
               
-              // Store selected plan in localStorage before OAuth redirect
+              // Gerar event_id e armazenar para deduplicação após OAuth
+              const fbEventId = generateEventId();
               localStorage.setItem("pending_plan_slug", selectedPlan);
+              localStorage.setItem("pending_fb_event_id", fbEventId);
               
               setIsGoogleLoading(true);
               const { error } = await supabase.auth.signInWithOAuth({
