@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.check-reminders]
 verify_jwt = false
+
+[functions.fb-conversions]
+verify_jwt = false
