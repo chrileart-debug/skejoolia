@@ -38,9 +38,9 @@ serve(async (req) => {
       || 'unknown';
     const clientUserAgent = req.headers.get('user-agent') || 'unknown';
 
-    const { user_id, role } = await req.json();
+    const { user_id, role, event_id } = await req.json();
 
-    console.log('FB Conversions triggered for user_id:', user_id, 'role:', role);
+    console.log('FB Conversions triggered for user_id:', user_id, 'role:', role, 'event_id:', event_id);
 
     if (!user_id || !role) {
       return new Response(
@@ -88,6 +88,8 @@ serve(async (req) => {
           event_name: 'CompleteRegistration',
           event_time: eventTime,
           action_source: 'website',
+          // event_id para deduplicação com o evento client-side
+          ...(event_id && { event_id: event_id }),
           user_data: {
             ...(hashedEmail && { em: [hashedEmail] }),
             ...(hashedPhone && { ph: [hashedPhone] }),
