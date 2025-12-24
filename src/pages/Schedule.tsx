@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/Header";
@@ -126,6 +126,13 @@ export default function Schedule() {
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
   const queryClient = useQueryClient();
+
+  // Keep the last known barbershop id to avoid a brief "empty" render while contexts re-hydrate on navigation
+  const lastBarbershopIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (barbershop?.id) lastBarbershopIdRef.current = barbershop.id;
+  }, [barbershop?.id]);
+  const activeBarbershopId = barbershop?.id ?? lastBarbershopIdRef.current;
   
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
@@ -166,17 +173,25 @@ export default function Schedule() {
   };
 
   // Query for appointments with caching
-  const { data: appointments = [], isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ["schedule-appointments", barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()],
+  const {
+    data: appointmentsData,
+    isLoading: isLoadingAppointments,
+  } = useQuery({
+    queryKey: [
+      "schedule-appointments",
+      activeBarbershopId,
+      selectedDate.getMonth(),
+      selectedDate.getFullYear(),
+    ],
     queryFn: async () => {
-      if (!barbershop?.id) return [];
+      if (!activeBarbershopId) return [];
 
       const { start, end } = getMonthRange(selectedDate);
-      
-      const { data: appointmentsData, error } = await supabase
+
+      const { data: appointmentsRows, error } = await supabase
         .from("agendamentos")
         .select("*")
-        .eq("barbershop_id", barbershop.id)
+        .eq("barbershop_id", activeBarbershopId)
         .gte("start_time", start)
         .lte("start_time", end)
         .order("start_time", { ascending: true });
@@ -186,51 +201,67 @@ export default function Schedule() {
         throw error;
       }
 
-      const clientIds = [...new Set((appointmentsData || [])
-        .filter(a => a.client_id)
-        .map(a => a.client_id))] as string[];
+      const clientIds =
+        [...
+          new Set(
+            (appointmentsRows || [])
+              .filter((a) => a.client_id)
+              .map((a) => a.client_id)
+          ),
+        ] as string[];
 
-      let subscriptionMap: Record<string, { status: string; next_due_date: string | null }> = {};
-      
+      const subscriptionMap: Record<
+        string,
+        { status: string; next_due_date: string | null }
+      > = {};
+
       if (clientIds.length > 0) {
         const { data: subscriptions } = await supabase
           .from("client_club_subscriptions")
           .select("client_id, status, next_due_date")
-          .eq("barbershop_id", barbershop.id)
+          .eq("barbershop_id", activeBarbershopId)
           .eq("status", "active")
           .in("client_id", clientIds);
 
         if (subscriptions) {
-          subscriptions.forEach(sub => {
+          subscriptions.forEach((sub) => {
             subscriptionMap[sub.client_id] = {
               status: sub.status || "",
-              next_due_date: sub.next_due_date
+              next_due_date: sub.next_due_date,
             };
           });
         }
       }
 
-      return (appointmentsData || []).map(apt => ({
+      return (appointmentsRows || []).map((apt) => ({
         ...apt,
-        subscription_status: apt.client_id ? subscriptionMap[apt.client_id]?.status : null,
-        subscription_next_due_date: apt.client_id ? subscriptionMap[apt.client_id]?.next_due_date : null,
+        subscription_status: apt.client_id
+          ? subscriptionMap[apt.client_id]?.status
+          : null,
+        subscription_next_due_date: apt.client_id
+          ? subscriptionMap[apt.client_id]?.next_due_date
+          : null,
       }));
     },
-    enabled: !!barbershop?.id,
-    staleTime: 1000 * 60 * 2, // 2 minutes cache
+    enabled: !!activeBarbershopId,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
     placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
   });
+
+  const appointments = appointmentsData ?? [];
 
   // Query for services with caching
   const { data: services = [] } = useQuery({
-    queryKey: ["schedule-services", barbershop?.id],
+    queryKey: ["schedule-services", activeBarbershopId],
     queryFn: async () => {
-      if (!barbershop?.id) return [];
+      if (!activeBarbershopId) return [];
 
       const { data, error } = await supabase
         .from("services")
         .select("id, name, duration_minutes, price")
-        .eq("barbershop_id", barbershop.id)
+        .eq("barbershop_id", activeBarbershopId)
         .eq("is_active", true);
 
       if (error) {
@@ -240,18 +271,20 @@ export default function Schedule() {
 
       return data || [];
     },
-    enabled: !!barbershop?.id,
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
+    enabled: !!activeBarbershopId,
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 60,
+    refetchOnWindowFocus: false,
   });
 
   // Query for staff members with caching
   const { data: staffMembers = [] } = useQuery({
-    queryKey: ["schedule-staff", barbershop?.id],
+    queryKey: ["schedule-staff", activeBarbershopId],
     queryFn: async () => {
-      if (!barbershop?.id) return [];
+      if (!activeBarbershopId) return [];
 
       const { data, error } = await supabase.rpc("get_barbershop_team", {
-        p_barbershop_id: barbershop.id
+        p_barbershop_id: activeBarbershopId,
       });
 
       if (error) {
@@ -263,16 +296,24 @@ export default function Schedule() {
         .filter((m: any) => m.status === "active")
         .map((m: any) => ({
           user_id: m.user_id,
-          name: m.name
+          name: m.name,
         }));
     },
-    enabled: !!barbershop?.id,
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
+    enabled: !!activeBarbershopId,
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 60,
+    refetchOnWindowFocus: false,
   });
 
   const invalidateAppointments = () => {
-    queryClient.invalidateQueries({ 
-      queryKey: ["schedule-appointments", barbershop?.id, selectedDate.getMonth(), selectedDate.getFullYear()] 
+    if (!activeBarbershopId) return;
+    queryClient.invalidateQueries({
+      queryKey: [
+        "schedule-appointments",
+        activeBarbershopId,
+        selectedDate.getMonth(),
+        selectedDate.getFullYear(),
+      ],
     });
   };
 
@@ -633,7 +674,7 @@ export default function Schedule() {
           </div>
 
           {/* Calendar days */}
-          {isLoadingAppointments ? (
+          {isLoadingAppointments && !appointmentsData ? (
             <div className="grid grid-cols-7">
               {Array(42).fill(0).map((_, index) => (
                 <div
