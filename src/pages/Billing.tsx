@@ -281,6 +281,29 @@ export default function Billing() {
     );
   }
 
+  // Show fallback when no active subscription
+  if (!subscription && !loading) {
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+        <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center max-w-md space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Nenhuma assinatura ativa</h2>
+            <p className="text-muted-foreground">
+              Você ainda não possui uma assinatura ativa. Escolha um plano para começar a usar todos os recursos.
+            </p>
+            <Button onClick={() => window.location.href = "/plans"} className="mt-4">
+              Ver planos disponíveis
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />

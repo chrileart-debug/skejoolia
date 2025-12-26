@@ -90,47 +90,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       .from("subscriptions")
       .select("*")
       .eq("user_id", user.id)
-      .eq("status", "active")
+      .in("status", ["active", "trialing"])
       .order("created_at", { ascending: false })
       .maybeSingle();
 
-    if (error && error.code === "PGRST116") {
-      // No subscription found - create fallback if not already attempted
-      if (!fallbackAttemptedRef.current) {
-        fallbackAttemptedRef.current = true;
-        console.log("No subscription found, creating fallback...");
-        
-        // Fetch plans if not available
-        let plansToUse = plans;
-        if (plansToUse.length === 0) {
-          const { data: fetchedPlans } = await supabase
-            .from("plans")
-            .select("*")
-            .eq("is_active", true);
-          
-          if (fetchedPlans) {
-            plansToUse = fetchedPlans as Plan[];
-            setPlans(plansToUse);
-          }
-        }
-        
-        const fallbackData = await createFallbackSubscription(user.id, plansToUse);
-        
-        if (fallbackData) {
-          setSubscription(fallbackData as unknown as Subscription);
-          
-          // Fetch the plan details
-          const { data: planData } = await supabase
-            .from("plans")
-            .select("*")
-            .eq("slug", fallbackData.plan_slug)
-            .single();
+    // No active/trialing subscription found
+    if (!data) {
+      // No active subscription - set null and let UI handle fallback display
+      setSubscription(null);
+      setPlan(null);
+      setLoading(false);
+      return;
+    }
 
-          if (planData) {
-            setPlan(planData as Plan);
-          }
-        }
-      }
+    if (error) {
+      console.error("Error fetching subscription:", error);
+      setSubscription(null);
+      setPlan(null);
       setLoading(false);
       return;
     }
