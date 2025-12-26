@@ -2,15 +2,20 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+declare const __BUILD_ID__: string;
+
 // Build version for debugging cache issues
-const BUILD_VERSION = new Date().toISOString();
-console.log(`[Build] Version: ${BUILD_VERSION}`);
+const BUILD_ID = typeof __BUILD_ID__ !== "undefined" ? __BUILD_ID__ : new Date().toISOString();
+console.log(`[Build] ID: ${BUILD_ID}`);
 
 // Register Service Worker with proper update handling
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js", {
+      // Cache-bust the SW URL to avoid Hostinger/edge cache traps
+      const swUrl = `/sw.js?build=${encodeURIComponent(BUILD_ID)}`;
+
+      const registration = await navigator.serviceWorker.register(swUrl, {
         updateViaCache: "none", // Force browser to check for SW updates
       });
 
