@@ -80,7 +80,7 @@ export function useSmartBooking() {
     }
   };
 
-  // Fetch all staff members
+  // Fetch all staff members who are service providers
   const fetchStaffMembers = async () => {
     if (!barbershop?.id) return;
 
@@ -89,9 +89,19 @@ export function useSmartBooking() {
     });
 
     if (!error && data) {
-      // Only include active members
+      // Only include active members who are service providers
+      // First get the is_service_provider status from user_barbershop_roles
+      const { data: rolesData } = await supabase
+        .from("user_barbershop_roles")
+        .select("user_id, is_service_provider")
+        .eq("barbershop_id", barbershop.id)
+        .eq("status", "active")
+        .eq("is_service_provider", true);
+
+      const serviceProviderIds = new Set(rolesData?.map(r => r.user_id) || []);
+
       const activeMembers = data
-        .filter((m: any) => m.status === "active")
+        .filter((m: any) => m.status === "active" && serviceProviderIds.has(m.user_id))
         .map((m: any) => ({
           user_id: m.user_id,
           name: m.name,
