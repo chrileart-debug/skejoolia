@@ -217,7 +217,8 @@ serve(async (req) => {
           barbershop_id: barbershop_id,
           role: 'staff',
           permissions: memberPermissions,
-          status: 'pending'  // <-- LOCAL STATUS: pending until they set password
+          status: 'pending',  // <-- LOCAL STATUS: pending until they set password
+          is_service_provider: true  // Staff are always service providers
         });
 
       if (insertRoleError) {
@@ -226,6 +227,30 @@ serve(async (req) => {
           JSON.stringify({ error: 'Failed to add user to team' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+
+      // Create default staff schedules for the re-hired user
+      const defaultSchedules = [];
+      for (let day = 0; day <= 6; day++) {
+        const isWorkingDay = day >= 1 && day <= 5;
+        defaultSchedules.push({
+          user_id: existingUser.id,
+          barbershop_id: barbershop_id,
+          day_of_week: day,
+          start_time: '08:00',
+          end_time: '18:00',
+          is_working: isWorkingDay,
+        });
+      }
+
+      const { error: scheduleError } = await supabaseAdmin
+        .from('staff_schedules')
+        .insert(defaultSchedules);
+
+      if (scheduleError) {
+        console.error('Error creating default staff schedules for re-hired user:', scheduleError);
+      } else {
+        console.log('Default staff schedules created for re-hired user');
       }
 
       console.log('Existing user added to barbershop as staff with pending status');
@@ -322,13 +347,39 @@ serve(async (req) => {
           barbershop_id: barbershop_id,
           role: 'staff',
           permissions: memberPermissions,
-          status: 'pending'  // <-- LOCAL STATUS: pending until they set password
+          status: 'pending',  // <-- LOCAL STATUS: pending until they set password
+          is_service_provider: true  // Staff are always service providers
         });
 
       if (insertRoleError) {
         console.error('Error inserting user_barbershop_roles:', insertRoleError);
       } else {
         console.log('User role inserted for new user with pending status');
+        
+        // Create default staff schedules for the new user
+        const defaultSchedules = [];
+        for (let day = 0; day <= 6; day++) {
+          // Monday (1) to Friday (5) = working days
+          const isWorkingDay = day >= 1 && day <= 5;
+          defaultSchedules.push({
+            user_id: newUserId,
+            barbershop_id: barbershop_id,
+            day_of_week: day,
+            start_time: '08:00',
+            end_time: '18:00',
+            is_working: isWorkingDay,
+          });
+        }
+
+        const { error: scheduleError } = await supabaseAdmin
+          .from('staff_schedules')
+          .insert(defaultSchedules);
+
+        if (scheduleError) {
+          console.error('Error creating default staff schedules:', scheduleError);
+        } else {
+          console.log('Default staff schedules created for new user');
+        }
       }
     }
 
