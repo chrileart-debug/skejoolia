@@ -766,10 +766,10 @@ export default function Schedule() {
 
       {/* Public Shop FAB */}
       <Button
-        variant="outline"
-        size="icon"
+        variant="fab"
+        size="fab-sm"
         onClick={() => setIsPublicShopModalOpen(true)}
-        className="fixed bottom-40 right-4 lg:bottom-20 lg:right-6 z-40 h-12 w-12 rounded-full shadow-lg bg-background border-2"
+        className="fixed bottom-40 right-4 lg:bottom-20 lg:right-6 z-40"
       >
         <Store className="w-5 h-5" />
       </Button>
