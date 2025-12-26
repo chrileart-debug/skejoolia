@@ -764,17 +764,20 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* Public Shop FAB */}
-      <Button
-        variant="fab"
-        size="fab"
-        onClick={() => setIsPublicShopModalOpen(true)}
-        className="fixed bottom-[7.5rem] right-4 lg:bottom-[5.5rem] lg:right-6 z-40"
-      >
-        <Store className="w-6 h-6" />
-      </Button>
+      {/* Floating actions */}
+      <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-40 flex flex-col items-end gap-3">
+        <Button
+          variant="fab"
+          size="fab"
+          onClick={() => setIsPublicShopModalOpen(true)}
+          aria-label="Configurar loja pública"
+        >
+          <Store className="w-6 h-6" />
+        </Button>
 
-      <FAB onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
+        <FAB floating={false} onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
+      </div>
+
 
       {/* Smart Booking Modal */}
       <SmartBookingModal
