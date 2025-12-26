@@ -98,27 +98,26 @@ export function PublicShopModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
+          <DialogTitle className="flex items-center gap-2">
             <Store className="w-5 h-5 text-primary" />
             Minha Loja Pública
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 pt-3">
-          {/* Slug Input */}
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Link personalizado</Label>
-            <div className="flex items-center rounded-xl border border-input bg-muted/30 overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-all">
-              <span className="px-3 py-2.5 text-sm text-muted-foreground bg-muted/50 border-r border-input font-mono">
+            <Label>Link personalizado</Label>
+            <div className="flex">
+              <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md">
                 /a/
               </span>
               <Input
                 value={slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
                 placeholder="minha-barbearia"
-                className="border-0 bg-transparent focus-visible:ring-0 font-mono text-sm"
+                className="rounded-l-none"
               />
             </div>
             {slugError && (
@@ -129,38 +128,34 @@ export function PublicShopModal({
             </p>
           </div>
 
-          {/* URL Preview - Copyable Card */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Prévia do link</Label>
-            <button
+            <Label>Prévia do link</Label>
+            <div
               onClick={copyToClipboard}
-              disabled={!slug}
               className={cn(
-                "w-full flex items-center justify-between gap-3 p-3.5 rounded-xl border transition-all text-left",
-                slug 
-                  ? "bg-muted/30 border-border hover:bg-muted/50 hover:border-primary/50 cursor-pointer" 
-                  : "bg-muted/20 border-border/50 cursor-not-allowed opacity-60"
+                "flex items-center justify-between p-3 rounded-md border cursor-pointer transition-colors",
+                slug ? "bg-muted hover:bg-muted/80" : "bg-muted/50 cursor-not-allowed"
               )}
             >
-              <span className="text-sm text-foreground truncate font-mono">
-                {fullUrl}
-              </span>
-              <div className={cn(
-                "flex-shrink-0 p-1.5 rounded-lg transition-colors",
-                copied ? "bg-green-500/20 text-green-500" : "bg-muted text-muted-foreground"
-              )}>
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span className="text-sm truncate">{fullUrl}</span>
+              <div className="ml-2 flex-shrink-0">
+                {copied ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4 text-muted-foreground" />
+                )}
               </div>
-            </button>
-            <p className="text-xs text-muted-foreground">
-              Clique para copiar o link
-            </p>
+            </div>
+            {slug && (
+              <p className="text-xs text-muted-foreground">
+                Clique para copiar
+              </p>
+            )}
           </div>
 
-          {/* Save Button */}
           <Button
             onClick={handleSave}
-            className="w-full h-11"
+            className="w-full"
             disabled={isLoading || !slug.trim()}
           >
             {isLoading ? (
