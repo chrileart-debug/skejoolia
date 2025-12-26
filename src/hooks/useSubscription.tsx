@@ -90,7 +90,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       .from("subscriptions")
       .select("*")
       .eq("user_id", user.id)
-      .single();
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .maybeSingle();
 
     if (error && error.code === "PGRST116") {
       // No subscription found - create fallback if not already attempted
