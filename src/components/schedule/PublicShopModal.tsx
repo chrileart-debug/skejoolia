@@ -106,18 +106,18 @@ export function PublicShopModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 overflow-hidden">
           <div className="space-y-2">
             <Label>Link personalizado</Label>
-            <div className="flex">
-              <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md">
+            <div className="flex w-full items-center min-w-0">
+              <span className="shrink-0 inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-r-0 border-input rounded-l-md h-10">
                 /a/
               </span>
               <Input
                 value={slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
                 placeholder="minha-barbearia"
-                className="rounded-l-none"
+                className="rounded-l-none flex-1 min-w-0"
               />
             </div>
             {slugError && (
@@ -133,12 +133,12 @@ export function PublicShopModal({
             <div
               onClick={copyToClipboard}
               className={cn(
-                "flex items-center justify-between p-3 rounded-md border cursor-pointer transition-colors",
+                "flex items-center justify-between p-3 rounded-md border cursor-pointer transition-colors w-full min-w-0",
                 slug ? "bg-muted hover:bg-muted/80" : "bg-muted/50 cursor-not-allowed"
               )}
             >
-              <span className="text-sm truncate">{fullUrl}</span>
-              <div className="ml-2 flex-shrink-0">
+              <span className="text-sm flex-1 min-w-0 truncate">{fullUrl}</span>
+              <div className="ml-2 shrink-0">
                 {copied ? (
                   <Check className="w-4 h-4 text-green-500" />
                 ) : (
