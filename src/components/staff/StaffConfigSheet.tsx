@@ -14,6 +14,7 @@ import { StaffServicesTab } from "./StaffServicesTab";
 import { StaffScheduleTab } from "./StaffScheduleTab";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createDefaultStaffSchedules } from "@/lib/staffScheduleDefaults";
 
 interface StaffConfigSheetProps {
   open: boolean;
@@ -84,6 +85,14 @@ export function StaffConfigSheet({
         .eq("barbershop_id", barbershopId);
 
       if (error) throw error;
+
+      // When enabling service provider, create default schedules
+      if (checked) {
+        const result = await createDefaultStaffSchedules(staffMember.user_id, barbershopId);
+        if (!result.success) {
+          console.warn("Failed to create default schedules:", result.error);
+        }
+      }
 
       setIsServiceProvider(checked);
       toast.success(checked 
