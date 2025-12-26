@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "next-themes";
 import { SplashScreen } from "@/components/pwa/SplashScreen";
+import { FacebookPixel } from "@/components/tracking/FacebookPixel";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -61,6 +62,7 @@ const App = () => {
               <Toaster />
               <Sonner />
               <BrowserRouter>
+                <FacebookPixel />
                 <Routes>
                 {/* Auth routes */}
                   <Route path="/" element={<Login />} />
