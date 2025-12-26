@@ -1483,6 +1483,7 @@ export type Database = {
           barbershop_id: string
           created_at: string
           id: string
+          is_service_provider: boolean | null
           permissions: Json | null
           role: Database["public"]["Enums"]["barbershop_role"]
           status: string
@@ -1492,6 +1493,7 @@ export type Database = {
           barbershop_id: string
           created_at?: string
           id?: string
+          is_service_provider?: boolean | null
           permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
           status?: string
@@ -1501,6 +1503,7 @@ export type Database = {
           barbershop_id?: string
           created_at?: string
           id?: string
+          is_service_provider?: boolean | null
           permissions?: Json | null
           role?: Database["public"]["Enums"]["barbershop_role"]
           status?: string

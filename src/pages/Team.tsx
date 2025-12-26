@@ -450,6 +450,19 @@ export default function Team() {
                         <Settings2 className="w-4 h-4" />
                       </Button>
                     )}
+
+                    {/* Config button for owner on corporativo plan (optional service provider) */}
+                    {!isBasicoPlan && member.role === "owner" && member.user_id === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary"
+                        onClick={() => handleOpenConfig(member)}
+                        title="Configurar como profissional"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    )}
                     
                     {/* Actions for staff members (only on corporativo plan or for non-self) */}
                     {member.user_id !== user?.id && !isBasicoPlan && (

@@ -272,9 +272,10 @@ const PublicBooking = () => {
             .order("display_order"),
           supabase
             .from("user_barbershop_roles")
-            .select("user_id")
+            .select("user_id, is_service_provider")
             .eq("barbershop_id", barbershopData.id)
-            .eq("status", "active"),
+            .eq("status", "active")
+            .eq("is_service_provider", true),
           supabase
             .from("staff_services")
             .select("user_id, service_id")

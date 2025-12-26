@@ -1,4 +1,5 @@
-import { Briefcase, Calendar } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Briefcase, Calendar, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -7,8 +8,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { StaffServicesTab } from "./StaffServicesTab";
 import { StaffScheduleTab } from "./StaffScheduleTab";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface StaffConfigSheetProps {
   open: boolean;
@@ -29,10 +34,83 @@ export function StaffConfigSheet({
   barbershopId,
   isOwner
 }: StaffConfigSheetProps) {
+  const [isServiceProvider, setIsServiceProvider] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState(false);
+  const [savingProvider, setSavingProvider] = useState(false);
+
+  // Fetch current is_service_provider status
+  useEffect(() => {
+    const fetchServiceProviderStatus = async () => {
+      if (!staffMember || !barbershopId || !open) return;
+
+      setLoadingProvider(true);
+      try {
+        const { data, error } = await supabase
+          .from("user_barbershop_roles")
+          .select("is_service_provider")
+          .eq("user_id", staffMember.user_id)
+          .eq("barbershop_id", barbershopId)
+          .single();
+
+        if (error) throw error;
+        
+        // Staff members are always service providers, owners can toggle
+        if (staffMember.role === "staff") {
+          setIsServiceProvider(true);
+        } else {
+          setIsServiceProvider(data?.is_service_provider ?? false);
+        }
+      } catch (error) {
+        console.error("Error fetching service provider status:", error);
+        // Default: staff = true, owner = false
+        setIsServiceProvider(staffMember.role === "staff");
+      } finally {
+        setLoadingProvider(false);
+      }
+    };
+
+    fetchServiceProviderStatus();
+  }, [staffMember, barbershopId, open]);
+
+  const handleToggleServiceProvider = async (checked: boolean) => {
+    if (!staffMember || !barbershopId) return;
+
+    setSavingProvider(true);
+    try {
+      const { error } = await supabase
+        .from("user_barbershop_roles")
+        .update({ is_service_provider: checked })
+        .eq("user_id", staffMember.user_id)
+        .eq("barbershop_id", barbershopId);
+
+      if (error) throw error;
+
+      setIsServiceProvider(checked);
+      toast.success(checked 
+        ? "Agora você aparecerá como profissional na agenda" 
+        : "Você não aparecerá mais como profissional na agenda"
+      );
+    } catch (error) {
+      console.error("Error updating service provider status:", error);
+      toast.error("Erro ao atualizar configuração");
+    } finally {
+      setSavingProvider(false);
+    }
+  };
+
   if (!staffMember) return null;
 
   // Staff can only view their own config, owners can edit anyone's
   const isReadOnly = !isOwner;
+  
+  // Check if this is the owner configuring themselves
+  const isOwnerSelfConfig = staffMember.role === "owner";
+  
+  // Show switch only for owner self-config (staff are always service providers)
+  const showServiceProviderSwitch = isOwnerSelfConfig && isOwner;
+  
+  // Tabs should be disabled if owner has not enabled service provider mode
+  const tabsDisabled = isOwnerSelfConfig && !isServiceProvider && !loadingProvider;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -44,34 +122,77 @@ export function StaffConfigSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs defaultValue="services" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="services" className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4" />
-              Especialidades
-            </TabsTrigger>
-            <TabsTrigger value="schedule" className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Horários
-            </TabsTrigger>
-          </TabsList>
+        {/* Service Provider Switch - Only for owner self-config */}
+        {showServiceProviderSwitch && (
+          <div className="mb-6 p-4 rounded-lg border bg-muted/50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="service-provider-switch" className="text-base font-medium">
+                  Atuar como Profissional na Agenda
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {isServiceProvider 
+                    ? "Seu nome aparecerá para clientes agendarem" 
+                    : "Você atua apenas como administrador"}
+                </p>
+              </div>
+              {loadingProvider ? (
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Switch
+                  id="service-provider-switch"
+                  checked={isServiceProvider}
+                  onCheckedChange={handleToggleServiceProvider}
+                  disabled={savingProvider}
+                />
+              )}
+            </div>
+          </div>
+        )}
 
-          <TabsContent value="services" className="mt-4">
-            <StaffServicesTab
-              userId={staffMember.user_id}
-              barbershopId={barbershopId}
-              isReadOnly={isReadOnly}
-            />
-          </TabsContent>
+        {/* Tabs - Disabled message when owner hasn't enabled service provider */}
+        {tabsDisabled ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Calendar className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Modo Administrador
+            </h3>
+            <p className="text-muted-foreground max-w-xs">
+              Ative o switch acima para configurar suas especialidades e horários de atendimento.
+            </p>
+          </div>
+        ) : (
+          <Tabs defaultValue="services" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="services" className="flex items-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                Especialidades
+              </TabsTrigger>
+              <TabsTrigger value="schedule" className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Horários
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="schedule" className="mt-4">
-            <StaffScheduleTab
-              userId={staffMember.user_id}
-              barbershopId={barbershopId}
-              isReadOnly={isReadOnly}
-            />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="services" className="mt-4">
+              <StaffServicesTab
+                userId={staffMember.user_id}
+                barbershopId={barbershopId}
+                isReadOnly={isReadOnly}
+              />
+            </TabsContent>
+
+            <TabsContent value="schedule" className="mt-4">
+              <StaffScheduleTab
+                userId={staffMember.user_id}
+                barbershopId={barbershopId}
+                isReadOnly={isReadOnly}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
       </SheetContent>
     </Sheet>
   );
