@@ -765,7 +765,7 @@ export default function Schedule() {
       </div>
 
       {/* Floating actions */}
-      <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-40 flex flex-col items-end gap-3">
+      <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-40 flex flex-row items-center gap-3">
         <Button
           variant="fab"
           size="fab"
