@@ -24,7 +24,6 @@ import {
   Smartphone,
   CheckCircle,
   Download,
-  Link,
   Copy,
   Check,
   Loader2,
@@ -33,7 +32,6 @@ import {
   Store,
   CreditCard,
   AlertCircle,
-  ExternalLink,
 } from "lucide-react";
 import { usePWA } from "@/hooks/usePWA";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -60,8 +58,6 @@ export default function Settings() {
   const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
-  const [slugCopied, setSlugCopied] = useState(false);
-  const [slugError, setSlugError] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
   const [hasAsaasApiKey, setHasAsaasApiKey] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -77,10 +73,8 @@ export default function Settings() {
     email: "",
   });
 
-  // Business data - birthDate moved here for fiscal identity
   const [businessData, setBusinessData] = useState({
     company: "",
-    slug: "",
     publicPhone: "",
     logoUrl: "",
     niche: "",
@@ -230,7 +224,6 @@ export default function Settings() {
       if (barbershop) {
         setBusinessData({
           company: barbershop.name || "",
-          slug: barbershop.slug || "",
           publicPhone: barbershop.phone || "",
           logoUrl: barbershop.logo_url || "",
           niche: barbershop.nicho || "",
@@ -260,32 +253,6 @@ export default function Settings() {
         });
       }
     }
-  };
-
-  // Generate slug from company name
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
-
-  // Handle slug change
-  const handleSlugChange = (value: string) => {
-    const formatted = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-    setBusinessData({ ...businessData, slug: formatted });
-    setSlugError("");
-  };
-
-  // Copy public link to clipboard
-  const copyPublicLink = () => {
-    const link = `${window.location.origin}/a/${businessData.slug}`;
-    navigator.clipboard.writeText(link);
-    setSlugCopied(true);
-    toast.success("Link copiado!");
-    setTimeout(() => setSlugCopied(false), 2000);
   };
 
   // Handle profile photo upload
@@ -365,31 +332,12 @@ export default function Settings() {
     }
 
     setIsLoading(true);
-    setSlugError("");
-
-    // Check slug uniqueness if slug is provided
-    if (businessData.slug) {
-      const { data: existingSlug } = await supabase
-        .from("barbershops")
-        .select("id")
-        .eq("slug", businessData.slug)
-        .neq("id", barbershopId)
-        .maybeSingle();
-
-      if (existingSlug) {
-        setSlugError("Este link já está em uso. Escolha outro.");
-        toast.error("Este link já está em uso");
-        setIsLoading(false);
-        return;
-      }
-    }
 
     // Save business data to database
     const { error: businessError } = await supabase
       .from("barbershops")
       .update({
         name: businessData.company,
-        slug: businessData.slug || null,
         phone: businessData.publicPhone || null,
         logo_url: businessData.logoUrl || null,
         nicho: businessData.niche,
@@ -746,11 +694,6 @@ export default function Settings() {
                         onChange={(e) => {
                           setBusinessData({ ...businessData, company: e.target.value });
                           setValidationErrors(prev => ({ ...prev, company: "" }));
-                          // Auto-suggest slug if empty
-                          if (!businessData.slug) {
-                            const suggestedSlug = generateSlug(e.target.value);
-                            setBusinessData(prev => ({ ...prev, company: e.target.value, slug: suggestedSlug }));
-                          }
                         }}
                         placeholder="Nome da sua barbearia"
                         className={validationErrors.company ? "border-destructive" : ""}
@@ -1036,61 +979,6 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
-              {/* Grupo 4: Link de Agendamento */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Link className="w-5 h-5 text-primary" />
-                    Link de Agendamento
-                  </CardTitle>
-                  <CardDescription>
-                    URL pública para seus clientes agendarem
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Slug (identificador único)</Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex items-center rounded-md border border-input bg-background">
-                        <span className="px-3 py-2 text-sm text-muted-foreground bg-muted rounded-l-md border-r whitespace-nowrap">
-                          {window.location.origin}/a/
-                        </span>
-                        <Input
-                          value={businessData.slug}
-                          onChange={(e) => handleSlugChange(e.target.value)}
-                          placeholder="minha-barbearia"
-                          className="border-0 rounded-l-none focus-visible:ring-0"
-                        />
-                      </div>
-                      {businessData.slug && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={copyPublicLink}
-                        >
-                          {slugCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      )}
-                    </div>
-                    {slugError && (
-                      <p className="text-sm text-destructive">{slugError}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Use apenas letras minúsculas, números e hífens
-                    </p>
-                  </div>
-
-                  {businessData.slug && (
-                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                      <ExternalLink className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-sm text-muted-foreground truncate">
-                        {window.location.origin}/a/{businessData.slug}
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
               {/* Actions for Company tab */}
               <Button

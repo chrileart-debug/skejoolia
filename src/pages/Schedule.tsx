@@ -6,6 +6,7 @@ import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
+import { PublicShopModal } from "@/components/schedule/PublicShopModal";
 import { VipCrown } from "@/components/club/VipBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
   Bell,
   CheckCircle2,
   Loader2,
+  Store,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -133,6 +135,13 @@ export default function Schedule() {
     if (barbershop?.id) lastBarbershopIdRef.current = barbershop.id;
   }, [barbershop?.id]);
   const activeBarbershopId = barbershop?.id ?? lastBarbershopIdRef.current;
+
+  // Sync slug with barbershop
+  useEffect(() => {
+    if (barbershop?.slug) {
+      setCurrentSlug(barbershop.slug);
+    }
+  }, [barbershop?.slug]);
   
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
@@ -142,6 +151,8 @@ export default function Schedule() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isPublicShopModalOpen, setIsPublicShopModalOpen] = useState(false);
+  const [currentSlug, setCurrentSlug] = useState(barbershop?.slug || "");
   const [editFormData, setEditFormData] = useState({
     service: "",
     date: "",
@@ -753,6 +764,16 @@ export default function Schedule() {
         </div>
       </div>
 
+      {/* Public Shop FAB */}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setIsPublicShopModalOpen(true)}
+        className="fixed bottom-40 right-4 lg:bottom-20 lg:right-6 z-40 h-12 w-12 rounded-full shadow-lg bg-background border-2"
+      >
+        <Store className="w-5 h-5" />
+      </Button>
+
       <FAB onClick={handleCreate} icon={<Plus className="w-6 h-6" />} />
 
       {/* Smart Booking Modal */}
@@ -760,6 +781,15 @@ export default function Schedule() {
         open={isBookingModalOpen}
         onOpenChange={setIsBookingModalOpen}
         onSuccess={handleBookingSuccess}
+      />
+
+      {/* Public Shop Modal */}
+      <PublicShopModal
+        open={isPublicShopModalOpen}
+        onOpenChange={setIsPublicShopModalOpen}
+        barbershopId={activeBarbershopId}
+        currentSlug={currentSlug}
+        onSlugSaved={setCurrentSlug}
       />
 
       {/* Day Detail Dialog */}
