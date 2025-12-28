@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
@@ -448,8 +448,14 @@ export default function Agents() {
                           </div>
                         </TooltipTrigger>
                         {!hasActiveServices && !agent.ativo && (
-                          <TooltipContent>
+                          <TooltipContent className="flex flex-col gap-1">
                             <p>Adicione serviços para ativar o agente</p>
+                            <Link 
+                              to="/services" 
+                              className="text-xs text-primary hover:underline font-medium"
+                            >
+                              Ir para Serviços →
+                            </Link>
                           </TooltipContent>
                         )}
                       </Tooltip>
