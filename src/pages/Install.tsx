@@ -1,11 +1,11 @@
-import { Clock, Download, Share, Plus, Smartphone, CheckCircle2, Zap, Wifi, Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Clock, Share, Plus, Smartphone, CheckCircle2, Zap, Wifi, Bell, MoreVertical } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { usePWA } from "@/hooks/usePWA";
 import { Link } from "react-router-dom";
 
 export default function Install() {
-  const { isInstallable, isInstalled, isIOS, promptInstall } = usePWA();
+  const { isInstalled, isIOS } = usePWA();
 
   const benefits = [
     { icon: Zap, title: "Acesso Rápido", description: "Abra direto da tela inicial" },
@@ -86,9 +86,9 @@ export default function Install() {
                     <span className="text-primary font-medium">1</span>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Toque no botão Compartilhar</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Share className="w-4 h-4" /> No Safari, toque no ícone de compartilhar
+                    <p className="font-medium text-foreground">Abra no Safari</p>
+                    <p className="text-sm text-muted-foreground">
+                      A instalação funciona apenas no navegador Safari
                     </p>
                   </div>
                 </div>
@@ -97,9 +97,11 @@ export default function Install() {
                     <span className="text-primary font-medium">2</span>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Role para baixo</p>
+                    <p className="font-medium text-foreground flex items-center gap-1">
+                      Toque em <Share className="w-4 h-4" /> Compartilhar
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Procure a opção "Adicionar à Tela de Início"
+                      Na barra inferior do Safari
                     </p>
                   </div>
                 </div>
@@ -109,30 +111,14 @@ export default function Install() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground flex items-center gap-1">
-                      Toque em <Plus className="w-4 h-4" /> Adicionar
+                      Toque em <Plus className="w-4 h-4" /> Tela de Início
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Confirme para adicionar o Skejool à sua tela inicial
+                      Role para baixo e selecione "Adicionar à Tela de Início"
                     </p>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        ) : isInstallable ? (
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 text-center">
-              <Download className="w-12 h-12 mx-auto mb-4 text-primary" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                Pronto para instalar!
-              </h2>
-              <p className="text-muted-foreground mb-4">
-                Clique no botão abaixo para adicionar o Skejool à sua tela inicial.
-              </p>
-              <Button onClick={promptInstall} className="w-full" size="lg">
-                <Download className="w-5 h-5 mr-2" />
-                Instalar Skejool
-              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -158,9 +144,11 @@ export default function Install() {
                     <span className="text-primary font-medium">2</span>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Toque no menu (⋮)</p>
+                    <p className="font-medium text-foreground flex items-center gap-1">
+                      Toque no menu <MoreVertical className="w-4 h-4" />
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      No canto superior direito do Chrome
+                      No canto superior direito do Chrome (três pontinhos)
                     </p>
                   </div>
                 </div>
