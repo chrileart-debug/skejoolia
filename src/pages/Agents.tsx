@@ -10,6 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -408,33 +414,46 @@ export default function Agents() {
                         )}
                       </div>
                     </div>
-                    <Switch
-                      checked={agent.ativo}
-                      disabled={!hasActiveServices && !agent.ativo}
-                      onCheckedChange={async (checked) => {
-                        if (checked && !hasActiveServices) {
-                          toast.error("Adicione pelo menos um serviço antes de ativar o agente");
-                          return;
-                        }
-                        
-                        try {
-                          const { error } = await supabase
-                            .from("agentes")
-                            .update({ ativo: checked })
-                            .eq("id_agente", agent.id);
-                          
-                          if (error) throw error;
-                          
-                          setAgents(agents.map(a => 
-                            a.id === agent.id ? { ...a, ativo: checked } : a
-                          ));
-                          toast.success(checked ? "Agente ativado" : "Agente desativado");
-                        } catch (error) {
-                          console.error("Erro ao atualizar agente:", error);
-                          toast.error("Erro ao atualizar status do agente");
-                        }
-                      }}
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <Switch
+                              checked={agent.ativo}
+                              disabled={!hasActiveServices && !agent.ativo}
+                              onCheckedChange={async (checked) => {
+                                if (checked && !hasActiveServices) {
+                                  toast.error("Adicione pelo menos um serviço antes de ativar o agente");
+                                  return;
+                                }
+                                
+                                try {
+                                  const { error } = await supabase
+                                    .from("agentes")
+                                    .update({ ativo: checked })
+                                    .eq("id_agente", agent.id);
+                                  
+                                  if (error) throw error;
+                                  
+                                  setAgents(agents.map(a => 
+                                    a.id === agent.id ? { ...a, ativo: checked } : a
+                                  ));
+                                  toast.success(checked ? "Agente ativado" : "Agente desativado");
+                                } catch (error) {
+                                  console.error("Erro ao atualizar agente:", error);
+                                  toast.error("Erro ao atualizar status do agente");
+                                }
+                              }}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {!hasActiveServices && !agent.ativo && (
+                          <TooltipContent>
+                            <p>Adicione serviços para ativar o agente</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
 
                   <div className="space-y-2 mb-4">
