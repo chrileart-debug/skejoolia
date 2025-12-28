@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
-import { InstallBanner } from "@/components/pwa/InstallBanner";
+
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -283,7 +283,7 @@ export default function Dashboard() {
       />
 
       <div className="p-4 lg:p-6 space-y-6">
-        <InstallBanner />
+        
 
         {/* Financial Activation Card - Hidden for now, keeping code for future reactivation */}
         {false && !hasAsaasApiKey && (
