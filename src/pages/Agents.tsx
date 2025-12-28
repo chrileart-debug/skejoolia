@@ -179,7 +179,7 @@ export default function Agents() {
       voiceTone: "",
       charLimit: "Não há limitação",
       whatsappId: "",
-      ativo: true,
+      ativo: hasActiveServices, // Só ativa por padrão se houver serviços
     });
     setEditingAgent(null);
   };
