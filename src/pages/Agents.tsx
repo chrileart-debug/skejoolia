@@ -56,6 +56,7 @@ export default function Agents() {
   const { checkLimit } = useSubscription();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
+  const [hasActiveServices, setHasActiveServices] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
@@ -78,8 +79,24 @@ export default function Agents() {
     if (user) {
       fetchAgents();
       fetchWhatsAppIntegrations();
+      fetchServices();
     }
   }, [user]);
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("services")
+        .select("id")
+        .eq("is_active", true)
+        .limit(1);
+
+      if (error) throw error;
+      setHasActiveServices((data || []).length > 0);
+    } catch (error) {
+      console.error("Erro ao verificar serviços:", error);
+    }
+  };
 
   // Listen for whatsapp:updated events
   useEffect(() => {
@@ -393,7 +410,13 @@ export default function Agents() {
                     </div>
                     <Switch
                       checked={agent.ativo}
+                      disabled={!hasActiveServices && !agent.ativo}
                       onCheckedChange={async (checked) => {
+                        if (checked && !hasActiveServices) {
+                          toast.error("Adicione pelo menos um serviço antes de ativar o agente");
+                          return;
+                        }
+                        
                         try {
                           const { error } = await supabase
                             .from("agentes")
