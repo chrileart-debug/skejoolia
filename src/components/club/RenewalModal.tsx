@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Crown, Loader2, RefreshCw } from "lucide-react";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 interface RenewalModalProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function RenewalModal({
   clientId,
 }: RenewalModalProps) {
   const [isRenewing, setIsRenewing] = useState(false);
+  const { trackPurchase } = useFacebookPixel();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -82,6 +84,15 @@ export function RenewalModal({
         });
 
       if (transError) throw transError;
+
+      // Track Purchase event for Facebook Pixel
+      trackPurchase({
+        value: planPrice,
+        currency: "BRL",
+        contentName: `Renovação ${planName}`,
+        contentType: "subscription_renewal",
+        eventId: generateEventId(clientId),
+      });
 
       toast.success("Assinatura renovada com sucesso!");
       onSuccess();

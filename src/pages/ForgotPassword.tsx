@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const { trackLead } = useFacebookPixel();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +33,12 @@ export default function ForgotPassword() {
       setIsLoading(false);
       return;
     }
+
+    // Track Lead event (user re-engaged by requesting password reset)
+    trackLead({
+      contentName: "Password Reset Request",
+      eventId: generateEventId(),
+    });
 
     setEmailSent(true);
     setIsLoading(false);

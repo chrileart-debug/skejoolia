@@ -6,12 +6,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { toast } from "sonner";
 import { createCheckoutSession } from "@/lib/webhook";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 export function TrialBanner() {
   const { isTrialing, daysRemaining, plan, subscription } = useSubscription();
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
   const [subscribing, setSubscribing] = useState(false);
+  const { trackInitiateCheckout } = useFacebookPixel();
 
   if (!isTrialing || daysRemaining <= 0) return null;
 
@@ -20,6 +22,14 @@ export function TrialBanner() {
       toast.error("Dados de assinatura não encontrados");
       return;
     }
+
+    // Track InitiateCheckout event
+    trackInitiateCheckout({
+      value: plan.price,
+      currency: "BRL",
+      contentName: `Plano ${plan.name}`,
+      eventId: generateEventId(user.id),
+    });
 
     setSubscribing(true);
     try {
