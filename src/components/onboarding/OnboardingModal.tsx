@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhoneMask } from "@/lib/phoneMask";
+import { sendNewUserWebhook } from "@/lib/webhook";
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -68,6 +69,22 @@ export function OnboardingModal({
 
         if (settingsError) throw settingsError;
       }
+
+      // Buscar dados do usuário para o webhook
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userSettings } = await supabase
+        .from("user_settings")
+        .select("nome")
+        .eq("user_id", userId)
+        .single();
+
+      // Disparar webhook de novo usuário (cadastro via Google)
+      sendNewUserWebhook({
+        nome: userSettings?.nome || user?.user_metadata?.full_name || "",
+        numero: formData.phone.trim(),
+        email: user?.email || "",
+        origem: "google",
+      }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
 
       toast.success("Dados salvos com sucesso!");
       onComplete();

@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PlanSelector } from "@/components/subscription/PlanSelector";
 import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
+import { sendNewUserWebhook } from "@/lib/webhook";
 
 type RegistrationStep = "plan-selection" | "form";
 
@@ -139,6 +140,15 @@ export default function Register() {
 
     // Disparar evento client-side para Facebook Pixel (deduplicação)
     trackCompleteRegistration({ userRole: "owner", eventId: fbEventId });
+
+    // Disparar webhook de novo usuário cadastrado
+    sendNewUserWebhook({
+      nome: formData.name,
+      numero: formData.phone,
+      email: formData.email,
+      plano: selectedPlan,
+      origem: "formulario",
+    }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
 
     // The database trigger handles creating user_settings and subscription
     // Just show success message and redirect
