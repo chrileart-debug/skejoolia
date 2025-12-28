@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 interface Plan {
   id: string;
@@ -69,6 +69,7 @@ export const PublicClubCheckoutModal = ({
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const { trackLead, trackInitiateCheckout } = useFacebookPixel();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +105,20 @@ export const PublicClubCheckoutModal = ({
 
     setSubmitting(true);
     console.log("✅ Validation passed, starting submission...");
+
+    // Track Lead event (user provided contact info)
+    trackLead({
+      contentName: `Interesse em ${plan.name}`,
+      eventId: generateEventId(),
+    });
+
+    // Track InitiateCheckout event
+    trackInitiateCheckout({
+      value: plan.price,
+      currency: "BRL",
+      contentName: plan.name,
+      eventId: generateEventId(),
+    });
 
     try {
       // First, upsert the client in clientes table
