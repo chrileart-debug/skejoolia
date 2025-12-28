@@ -95,13 +95,7 @@ export function useFacebookPixel() {
     []
   );
 
-  // PageView manual (já é automático no FacebookPixel.tsx)
-  const trackPageView = useCallback(() => {
-    if (typeof window !== "undefined" && window.fbq) {
-      window.fbq("track", "PageView");
-      console.log("[FB Pixel] PageView tracked manually");
-    }
-  }, []);
+  // trackPageView removido - agora é automático via index.html + FacebookPixel.tsx
 
   // Evento customizado genérico
   const trackCustomEvent = useCallback(
@@ -120,7 +114,6 @@ export function useFacebookPixel() {
     trackPurchase,
     trackInitiateCheckout,
     trackLead,
-    trackPageView,
     trackCustomEvent,
     generateEventId,
   };
