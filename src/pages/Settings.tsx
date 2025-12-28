@@ -53,7 +53,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isOwner } = useBarbershop();
-  const { isInstalled, isInstallable, isMobile, promptInstall } = usePWA();
+  const { isInstalled, isMobile } = usePWA();
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
@@ -620,17 +620,11 @@ export default function Settings() {
                           Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
                         </p>
                         <Button
-                          onClick={() => {
-                            if (isInstallable) {
-                              promptInstall();
-                            } else {
-                              navigate("/instalar");
-                            }
-                          }}
+                          onClick={() => navigate("/instalar")}
                           className="w-full sm:w-auto"
                         >
                           <Download className="w-4 h-4 mr-2" />
-                          Baixar Aplicativo
+                          Como Instalar
                         </Button>
                       </div>
                     )}
@@ -1300,17 +1294,11 @@ export default function Settings() {
                         Tenha acesso rápido ao Skejool direto da tela inicial do seu celular
                       </p>
                       <Button
-                        onClick={() => {
-                          if (isInstallable) {
-                            promptInstall();
-                          } else {
-                            navigate("/instalar");
-                          }
-                        }}
+                        onClick={() => navigate("/instalar")}
                         className="w-full sm:w-auto"
                       >
                         <Download className="w-4 h-4 mr-2" />
-                        Baixar Aplicativo
+                        Como Instalar
                       </Button>
                     </div>
                   )}
