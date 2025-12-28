@@ -26,6 +26,7 @@ interface StaffConfigSheetProps {
   } | null;
   barbershopId: string;
   isOwner: boolean;
+  isBasicoPlan?: boolean;
 }
 
 export function StaffConfigSheet({
@@ -33,7 +34,8 @@ export function StaffConfigSheet({
   onOpenChange,
   staffMember,
   barbershopId,
-  isOwner
+  isOwner,
+  isBasicoPlan = false
 }: StaffConfigSheetProps) {
   const [isServiceProvider, setIsServiceProvider] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState(false);
@@ -55,16 +57,16 @@ export function StaffConfigSheet({
 
         if (error) throw error;
         
-        // Staff members are always service providers, owners can toggle
-        if (staffMember.role === "staff") {
+        // Staff members are always service providers, owners can toggle (unless basico plan)
+        if (staffMember.role === "staff" || isBasicoPlan) {
           setIsServiceProvider(true);
         } else {
           setIsServiceProvider(data?.is_service_provider ?? false);
         }
       } catch (error) {
         console.error("Error fetching service provider status:", error);
-        // Default: staff = true, owner = false
-        setIsServiceProvider(staffMember.role === "staff");
+        // Default: staff = true, owner on basico = true, owner on corporativo = false
+        setIsServiceProvider(staffMember.role === "staff" || isBasicoPlan);
       } finally {
         setLoadingProvider(false);
       }
@@ -115,11 +117,11 @@ export function StaffConfigSheet({
   // Check if this is the owner configuring themselves
   const isOwnerSelfConfig = staffMember.role === "owner";
   
-  // Show switch only for owner self-config (staff are always service providers)
-  const showServiceProviderSwitch = isOwnerSelfConfig && isOwner;
+  // Show switch only for owner self-config on corporativo plan (basico is always service provider)
+  const showServiceProviderSwitch = isOwnerSelfConfig && isOwner && !isBasicoPlan;
   
-  // Tabs should be disabled if owner has not enabled service provider mode
-  const tabsDisabled = isOwnerSelfConfig && !isServiceProvider && !loadingProvider;
+  // Tabs should be disabled if owner has not enabled service provider mode (not on basico)
+  const tabsDisabled = isOwnerSelfConfig && !isServiceProvider && !loadingProvider && !isBasicoPlan;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
