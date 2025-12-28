@@ -40,7 +40,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoUploader } from "@/components/settings/LogoUploader";
-import { AppRepairCard } from "@/components/settings/AppRepairCard";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -506,7 +505,6 @@ export default function Settings() {
 
             {/* Tab 1: Perfil - User data only */}
             <TabsContent value="profile" className="space-y-6 mt-6">
-              <AppRepairCard />
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
