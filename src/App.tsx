@@ -19,7 +19,7 @@ import UpdatePassword from "./pages/UpdatePassword";
 import Support from "./pages/Support";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
-import Install from "./pages/Install";
+
 import Dashboard from "./pages/Dashboard";
 import Agents from "./pages/Agents";
 import Integrations from "./pages/Integrations";
@@ -76,7 +76,7 @@ const App = () => {
                   <Route path="/suporte" element={<Support />} />
                   <Route path="/privacidade" element={<Privacy />} />
                   <Route path="/termos" element={<Terms />} />
-                  <Route path="/instalar" element={<Install />} />
+                  
                   <Route path="/a/:slug" element={<PublicBooking />} />
                   
                   {/* Protected App routes */}
