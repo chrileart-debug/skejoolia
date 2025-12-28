@@ -84,6 +84,7 @@ export function OnboardingModal({
         numero: formData.phone.trim(),
         email: user?.email || "",
         origem: "google",
+        barbershop_id: barbershopId,
       }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
 
       toast.success("Dados salvos com sucesso!");
