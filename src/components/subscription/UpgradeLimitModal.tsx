@@ -54,7 +54,7 @@ export function UpgradeLimitModal({
 
   const handleUpgrade = () => {
     onOpenChange(false);
-    navigate("/settings?tab=subscription");
+    navigate("/plans");
   };
 
   return (
