@@ -377,8 +377,8 @@ export default function Agents() {
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                        <Bot className="w-6 h-6 text-primary-foreground" />
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${agent.ativo ? "gradient-primary" : "bg-muted"}`}>
+                        <Bot className={`w-6 h-6 ${agent.ativo ? "text-primary-foreground" : "text-muted-foreground"}`} />
                       </div>
                       <div>
                         <h3 className="font-semibold text-foreground">
@@ -391,7 +391,27 @@ export default function Agents() {
                         )}
                       </div>
                     </div>
-                    <StatusBadge status={agent.ativo ? "online" : "offline"} />
+                    <Switch
+                      checked={agent.ativo}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          const { error } = await supabase
+                            .from("agentes")
+                            .update({ ativo: checked })
+                            .eq("id_agente", agent.id);
+                          
+                          if (error) throw error;
+                          
+                          setAgents(agents.map(a => 
+                            a.id === agent.id ? { ...a, ativo: checked } : a
+                          ));
+                          toast.success(checked ? "Agente ativado" : "Agente desativado");
+                        } catch (error) {
+                          console.error("Erro ao atualizar agente:", error);
+                          toast.error("Erro ao atualizar status do agente");
+                        }
+                      }}
+                    />
                   </div>
 
                   <div className="space-y-2 mb-4">
