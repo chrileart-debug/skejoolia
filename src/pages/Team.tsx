@@ -702,6 +702,7 @@ export default function Team() {
         staffMember={configMember}
         barbershopId={barbershop?.id || ""}
         isOwner={isOwner}
+        isBasicoPlan={isBasicoPlan}
       />
     </div>
   );
