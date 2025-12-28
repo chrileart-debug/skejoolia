@@ -11,6 +11,7 @@ export const WEBHOOK_ENDPOINTS = {
   WHATSAPP_STATUS: "https://webhook.lernow.com/webhook/integracao_whatsapp_status",
   ASAAS_CHECKOUT: "https://webhook.lernow.com/webhook/asaas-checkout-skejool",
   CRIAR_AGENTE_IA: "https://webhook.lernow.com/webhook/criar-agente-skejool",
+  NEW_USER_REGISTRATION: "https://webhook.lernow.com/webhook/novo-usuario-skejool",
 } as const;
 
 interface WebhookOptions {
@@ -185,5 +186,23 @@ export async function criarAgenteAutomatico(payload: {
 }): Promise<WebhookResponse<CriarAgenteIAResponse>> {
   return webhookRequest<CriarAgenteIAResponse>(WEBHOOK_ENDPOINTS.CRIAR_AGENTE_IA, {
     body: payload,
+  });
+}
+
+// Webhook para novo usuário cadastrado
+export interface NewUserWebhookPayload {
+  nome: string;
+  numero: string;
+  email: string;
+  plano?: string;
+  origem: "formulario" | "google";
+}
+
+export async function sendNewUserWebhook(
+  payload: NewUserWebhookPayload
+): Promise<WebhookResponse<unknown>> {
+  return webhookRequest(WEBHOOK_ENDPOINTS.NEW_USER_REGISTRATION, {
+    body: payload as unknown as Record<string, unknown>,
+    requireAuth: false, // Não requer auth pois pode ser chamado no momento do signup
   });
 }
