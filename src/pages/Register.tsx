@@ -141,6 +141,20 @@ export default function Register() {
     // Disparar evento client-side para Facebook Pixel (deduplicação)
     trackCompleteRegistration({ userRole: "owner", eventId: fbEventId });
 
+    // Buscar barbershop_id do usuário recém-criado (criado pelo trigger)
+    // Nota: O trigger cria o barbershop junto com o user, então buscamos pelo email
+    const { data: session } = await supabase.auth.getSession();
+    let barbershopId = "";
+    
+    if (session?.session?.user?.id) {
+      const { data: barbershopData } = await supabase
+        .from("barbershops")
+        .select("id")
+        .eq("owner_id", session.session.user.id)
+        .single();
+      barbershopId = barbershopData?.id || "";
+    }
+
     // Disparar webhook de novo usuário cadastrado
     sendNewUserWebhook({
       nome: formData.name,
@@ -148,6 +162,7 @@ export default function Register() {
       email: formData.email,
       plano: selectedPlan,
       origem: "formulario",
+      barbershop_id: barbershopId,
     }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
 
     // The database trigger handles creating user_settings and subscription

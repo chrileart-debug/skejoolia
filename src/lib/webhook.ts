@@ -196,6 +196,7 @@ export interface NewUserWebhookPayload {
   email: string;
   plano?: string;
   origem: "formulario" | "google";
+  barbershop_id: string;
 }
 
 export async function sendNewUserWebhook(
