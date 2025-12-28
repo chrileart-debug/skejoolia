@@ -519,13 +519,40 @@ export default function Agents() {
                 <p className="text-xs text-muted-foreground">
                   {formData.ativo ? "O agente está funcionando" : "O agente está pausado"}
                 </p>
+                {!hasActiveServices && !formData.ativo && (
+                  <Link 
+                    to="/services" 
+                    className="text-xs text-primary hover:underline font-medium"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Adicione serviços para ativar →
+                  </Link>
+                )}
               </div>
-              <Switch
-                checked={formData.ativo}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, ativo: checked })
-                }
-              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <Switch
+                        checked={formData.ativo}
+                        disabled={!hasActiveServices && !formData.ativo}
+                        onCheckedChange={(checked) => {
+                          if (checked && !hasActiveServices) {
+                            toast.error("Adicione pelo menos um serviço antes de ativar o agente");
+                            return;
+                          }
+                          setFormData({ ...formData, ativo: checked });
+                        }}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  {!hasActiveServices && !formData.ativo && (
+                    <TooltipContent>
+                      <p>Adicione serviços para ativar o agente</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             <div className="space-y-2 transition-all duration-200 animate-fade-in" style={{ animationDelay: '50ms' }}>
