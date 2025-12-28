@@ -78,6 +78,8 @@ serve(async (req) => {
     const hashedEmail = userData.email ? await sha256Hash(userData.email) : null;
     const hashedPhone = userData.numero ? await sha256Hash(userData.numero.replace(/\D/g, '')) : null;
     const hashedName = userData.nome ? await sha256Hash(userData.nome) : null;
+    // external_id para melhor correspondência de usuários no Facebook
+    const hashedExternalId = await sha256Hash(user_id);
 
     // Montar payload para Facebook Conversions API
     const eventTime = Math.floor(Date.now() / 1000);
@@ -94,6 +96,7 @@ serve(async (req) => {
             ...(hashedEmail && { em: [hashedEmail] }),
             ...(hashedPhone && { ph: [hashedPhone] }),
             ...(hashedName && { fn: [hashedName] }),
+            external_id: [hashedExternalId],
             client_ip_address: clientIp,
             client_user_agent: clientUserAgent,
           },

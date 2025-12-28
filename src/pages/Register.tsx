@@ -260,6 +260,8 @@ export default function Register() {
                     access_type: 'offline',
                     prompt: 'consent',
                   },
+                  // Passar fb_event_id via metadata para deduplicação CAPI
+                  skipBrowserRedirect: false,
                 },
               });
               if (error) {
