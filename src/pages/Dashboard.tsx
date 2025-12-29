@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFacebookPixel } from "@/hooks/useFacebookPixel";
+
 import {
   Calendar,
   Wallet,
@@ -66,7 +66,6 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
   const queryClient = useQueryClient();
-  const { trackCompleteRegistration } = useFacebookPixel();
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
   const today = new Date();
@@ -91,13 +90,12 @@ export default function Dashboard() {
     refetchInterval: 10000, // Auto-refresh every 10 seconds to detect webhook updates
   });
 
-  // Handle pending OAuth plan update and FB Pixel event
+  // Handle pending OAuth plan update
   useEffect(() => {
     const updatePendingPlan = async () => {
       if (!user?.id) return;
       
       const pendingPlan = localStorage.getItem("pending_plan_slug");
-      const pendingFbEventId = localStorage.getItem("pending_fb_event_id");
       
       if (!pendingPlan) return;
       
@@ -108,19 +106,16 @@ export default function Dashboard() {
       
       if (!error) {
         localStorage.removeItem("pending_plan_slug");
+        localStorage.removeItem("pending_fb_event_id");
         queryClient.invalidateQueries({ queryKey: ["subscription"] });
         
-        // Disparar evento CompleteRegistration client-side com o mesmo event_id
-        // para deduplicação com o evento server-side (CAPI)
-        if (pendingFbEventId) {
-          trackCompleteRegistration({ userRole: "owner", eventId: pendingFbEventId });
-          localStorage.removeItem("pending_fb_event_id");
-        }
+        // NOTA: Evento FB Pixel é disparado apenas server-side (CAPI)
+        // via trigger de banco para evitar duplicação
       }
     };
     
     updatePendingPlan();
-  }, [user?.id, queryClient, trackCompleteRegistration]);
+  }, [user?.id, queryClient]);
 
   // Fetch services for price lookup
   const { data: servicesMap = {} } = useQuery({

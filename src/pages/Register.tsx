@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PlanSelector } from "@/components/subscription/PlanSelector";
-import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
+import { generateEventId } from "@/hooks/useFacebookPixel";
 import { sendNewUserWebhook } from "@/lib/webhook";
 
 type RegistrationStep = "plan-selection" | "form";
@@ -29,7 +29,6 @@ export default function Register() {
   const fromGoogle = searchParams.get("from") === "google";
   const planFromUrl = searchParams.get("plan"); // Get plan from URL query param
   const { signUp, user, loading } = useAuth();
-  const { trackCompleteRegistration } = useFacebookPixel();
   const [step, setStep] = useState<RegistrationStep>("plan-selection");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -138,8 +137,8 @@ export default function Register() {
       return;
     }
 
-    // Disparar evento client-side para Facebook Pixel (deduplicação)
-    trackCompleteRegistration({ userRole: "owner", eventId: fbEventId });
+    // NOTA: Evento FB Pixel é disparado apenas server-side (CAPI) via trigger de banco
+    // para evitar duplicação. O event_id é passado nos metadados do signUp.
 
     // Buscar barbershop_id do usuário recém-criado (criado pelo trigger)
     // Nota: O trigger cria o barbershop junto com o user, então buscamos pelo email
