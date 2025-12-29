@@ -51,7 +51,6 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { CategoryManager } from "@/components/services/CategoryManager";
@@ -75,17 +74,39 @@ interface PackageItem {
   quantity: number;
 }
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  icon: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
+  categories: Category[];
+  refreshCategories: () => Promise<void>;
 }
 
 export default function Services() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop, categories, refreshCategories } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop, categories, loading: barbershopLoading, refreshCategories } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -667,7 +688,7 @@ export default function Services() {
     return floatValue.toFixed(2);
   };
 
-  if (isLoading || barbershopLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen">
         <Header title="Serviços" subtitle="Gerencie seu cardápio" onMenuClick={onMenuClick} />

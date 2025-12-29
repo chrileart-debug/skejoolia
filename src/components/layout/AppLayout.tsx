@@ -9,9 +9,24 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { supabase } from "@/integrations/supabase/client";
 
+interface Category {
+  id: string;
+  name: string;
+  icon: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
 export function AppLayout() {
   const { user } = useAuth();
-  const { barbershop, loading: barbershopLoading, refreshBarbershop } = useBarbershop();
+  const { 
+    barbershop, 
+    categories, 
+    loading: barbershopLoading, 
+    isOwner, 
+    refreshBarbershop, 
+    refreshCategories 
+  } = useBarbershop();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -100,7 +115,10 @@ export function AppLayout() {
           <Outlet context={{ 
             onMenuClick: handleMobileMenuToggle, 
             barbershop,
-            barbershopSlug: barbershop?.slug || null 
+            barbershopSlug: barbershop?.slug || null,
+            isOwner,
+            categories,
+            refreshCategories,
           }} />
         </main>
       </div>
