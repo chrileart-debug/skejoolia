@@ -6,6 +6,48 @@
     
     <!-- Facebook Pixel Code - SINGLE INIT ONLY -->
     <script>
+      // DEBUG: Wrapper to track all fbq('init') calls with stack trace
+      (function() {
+        var initCount = 0;
+        var originalFbq = null;
+        
+        function wrapFbq() {
+          if (!window.fbq || window.fbq._wrapped) return;
+          originalFbq = window.fbq;
+          
+          window.fbq = function() {
+            var args = Array.prototype.slice.call(arguments);
+            if (args[0] === 'init') {
+              initCount++;
+              console.warn('[FB Pixel DEBUG] fbq("init") called - count: ' + initCount);
+              console.trace('[FB Pixel DEBUG] Stack trace for init #' + initCount);
+            }
+            return originalFbq.apply(this, args);
+          };
+          
+          // Copy all properties from original
+          for (var key in originalFbq) {
+            if (originalFbq.hasOwnProperty(key)) {
+              window.fbq[key] = originalFbq[key];
+            }
+          }
+          window.fbq._wrapped = true;
+          window.fbq.callMethod = originalFbq.callMethod;
+          window.fbq.queue = originalFbq.queue;
+        }
+        
+        // Wrap after pixel loads
+        var checkInterval = setInterval(function() {
+          if (window.fbq && !window.fbq._wrapped) {
+            wrapFbq();
+            clearInterval(checkInterval);
+          }
+        }, 10);
+        
+        // Also wrap on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', wrapFbq);
+      })();
+      
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
