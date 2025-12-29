@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PlanSelector } from "@/components/subscription/PlanSelector";
-import { generateEventId } from "@/hooks/useFacebookPixel";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 import { sendNewUserWebhook } from "@/lib/webhook";
 
 type RegistrationStep = "plan-selection" | "form";
@@ -29,6 +29,7 @@ export default function Register() {
   const fromGoogle = searchParams.get("from") === "google";
   const planFromUrl = searchParams.get("plan"); // Get plan from URL query param
   const { signUp, user, loading } = useAuth();
+  const { trackCompleteRegistration } = useFacebookPixel();
   const [step, setStep] = useState<RegistrationStep>("plan-selection");
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -137,22 +138,30 @@ export default function Register() {
       return;
     }
 
-    // NOTA: Evento FB Pixel é disparado apenas server-side (CAPI) via trigger de banco
-    // para evitar duplicação. O event_id é passado nos metadados do signUp.
-
     // Buscar barbershop_id do usuário recém-criado (criado pelo trigger)
-    // Nota: O trigger cria o barbershop junto com o user, então buscamos pelo email
     const { data: session } = await supabase.auth.getSession();
     let barbershopId = "";
+    const userId = session?.session?.user?.id;
     
-    if (session?.session?.user?.id) {
+    if (userId) {
       const { data: barbershopData } = await supabase
         .from("barbershops")
         .select("id")
-        .eq("owner_id", session.session.user.id)
+        .eq("owner_id", userId)
         .single();
       barbershopId = barbershopData?.id || "";
     }
+
+    // DISPARO HÍBRIDO: Browser + CAPI com deduplicação via event_id
+    // O hook trackCompleteRegistration cuida de ambos os disparos
+    await trackCompleteRegistration({
+      eventId: fbEventId,
+      userRole: "owner",
+      email: formData.email,
+      phone: formData.phone,
+      name: formData.name,
+      userId: userId,
+    });
 
     // Disparar webhook de novo usuário cadastrado
     sendNewUserWebhook({

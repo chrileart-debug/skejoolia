@@ -25,7 +25,7 @@ serve(async (req) => {
     const FB_PIXEL_ID = Deno.env.get('FB_PIXEL_ID');
     
     if (!FB_ACCESS_TOKEN || !FB_PIXEL_ID) {
-      console.error('Facebook credentials not configured');
+      console.error('[FB CAPI] Facebook credentials not configured');
       return new Response(
         JSON.stringify({ error: 'Facebook credentials missing' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -38,76 +38,103 @@ serve(async (req) => {
       || 'unknown';
     const clientUserAgent = req.headers.get('user-agent') || 'unknown';
 
-    const { user_id, role, event_id } = await req.json();
+    const payload = await req.json();
+    const { 
+      event_id, 
+      role, 
+      user_id,
+      // Optional user data passed directly from client for better matching
+      email: directEmail,
+      phone: directPhone,
+      name: directName,
+    } = payload;
 
-    console.log('FB Conversions triggered for user_id:', user_id, 'role:', role, 'event_id:', event_id);
+    console.log('[FB CAPI] Triggered with:', { event_id, role, user_id: user_id ? 'present' : 'null' });
 
-    if (!user_id || !role) {
+    // event_id is REQUIRED for proper deduplication
+    if (!event_id) {
+      console.error('[FB CAPI] Missing event_id - required for deduplication');
       return new Response(
-        JSON.stringify({ error: 'user_id and role are required' }),
+        JSON.stringify({ error: 'event_id is required for deduplication' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Criar cliente Supabase com service role
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    // Try to get user data from database if user_id provided, otherwise use direct data
+    let email = directEmail;
+    let phone = directPhone;
+    let name = directName;
 
-    // Buscar dados do usuário em user_settings
-    const { data: userData, error: userError } = await supabase
-      .from('user_settings')
-      .select('nome, email, numero')
-      .eq('user_id', user_id)
-      .single();
+    if (user_id && (!email || !phone)) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
 
-    if (userError || !userData) {
-      console.error('Error fetching user data:', userError);
-      return new Response(
-        JSON.stringify({ error: 'User data not found', details: userError }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        const { data: userData, error: userError } = await supabase
+          .from('user_settings')
+          .select('nome, email, numero')
+          .eq('user_id', user_id)
+          .single();
+
+        if (!userError && userData) {
+          email = email || userData.email;
+          phone = phone || userData.numero;
+          name = name || userData.nome;
+          console.log('[FB CAPI] User data fetched from DB');
+        } else {
+          console.log('[FB CAPI] Could not fetch user data from DB:', userError?.message);
+        }
+      } catch (dbError) {
+        console.log('[FB CAPI] DB fetch error (non-blocking):', dbError);
+      }
     }
 
-    console.log('User data found:', { nome: userData.nome, email: userData.email ? '***' : null });
-
     // Preparar hashes SHA-256 para correspondência avançada
-    const hashedEmail = userData.email ? await sha256Hash(userData.email) : null;
-    const hashedPhone = userData.numero ? await sha256Hash(userData.numero.replace(/\D/g, '')) : null;
-    const hashedName = userData.nome ? await sha256Hash(userData.nome) : null;
-    // external_id para melhor correspondência de usuários no Facebook
-    const hashedExternalId = await sha256Hash(user_id);
+    const hashedEmail = email ? await sha256Hash(email) : null;
+    const hashedPhone = phone ? await sha256Hash(phone.replace(/\D/g, '')) : null;
+    const hashedName = name ? await sha256Hash(name) : null;
+    const hashedExternalId = user_id ? await sha256Hash(user_id) : null;
 
     // Montar payload para Facebook Conversions API
     const eventTime = Math.floor(Date.now() / 1000);
     
+    const userData: Record<string, unknown> = {
+      client_ip_address: clientIp,
+      client_user_agent: clientUserAgent,
+    };
+
+    if (hashedEmail) userData.em = [hashedEmail];
+    if (hashedPhone) userData.ph = [hashedPhone];
+    if (hashedName) userData.fn = [hashedName];
+    if (hashedExternalId) userData.external_id = [hashedExternalId];
+
     const eventPayload = {
       data: [
         {
           event_name: 'CompleteRegistration',
           event_time: eventTime,
           action_source: 'website',
-          // event_id para deduplicação com o evento client-side
-          ...(event_id && { event_id: event_id }),
-          user_data: {
-            ...(hashedEmail && { em: [hashedEmail] }),
-            ...(hashedPhone && { ph: [hashedPhone] }),
-            ...(hashedName && { fn: [hashedName] }),
-            external_id: [hashedExternalId],
-            client_ip_address: clientIp,
-            client_user_agent: clientUserAgent,
-          },
+          event_id: event_id, // CRITICAL: same as eventID on browser for dedup
+          user_data: userData,
           custom_data: {
-            user_role: role, // 'owner' ou 'staff'
+            user_role: role || 'owner',
           },
         },
       ],
     };
 
-    console.log('Sending event to Facebook CAPI:', JSON.stringify(eventPayload, null, 2));
+    console.log('[FB CAPI] Sending event to Facebook:', JSON.stringify({
+      event_id,
+      event_name: 'CompleteRegistration',
+      has_email: !!hashedEmail,
+      has_phone: !!hashedPhone,
+      has_name: !!hashedName,
+      has_external_id: !!hashedExternalId,
+    }));
 
     // Enviar para Facebook Conversions API
     const fbResponse = await fetch(
@@ -122,22 +149,25 @@ serve(async (req) => {
     const fbResult = await fbResponse.json();
 
     if (!fbResponse.ok) {
-      console.error('Facebook API error:', fbResult);
+      console.error('[FB CAPI] Facebook API error:', fbResult);
       return new Response(
         JSON.stringify({ error: 'Facebook API error', details: fbResult }),
         { status: fbResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Facebook CompleteRegistration event sent successfully:', fbResult);
+    console.log('[FB CAPI] CompleteRegistration sent successfully:', {
+      event_id,
+      events_received: fbResult.events_received,
+    });
 
     return new Response(
-      JSON.stringify({ success: true, facebook_response: fbResult }),
+      JSON.stringify({ success: true, event_id, facebook_response: fbResult }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in fb-conversions function:', error);
+    console.error('[FB CAPI] Error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Internal error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
