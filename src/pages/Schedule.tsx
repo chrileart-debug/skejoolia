@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/Header";
@@ -42,6 +42,8 @@ import {
   CheckCircle2,
   Loader2,
   Store,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -56,8 +58,19 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { cn } from "@/lib/utils";
+
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
 
 interface Appointment {
   id_agendamento: string;
@@ -87,6 +100,8 @@ interface StaffMember {
 
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
+  barbershopSlug: string | null;
 }
 
 const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
@@ -128,24 +143,13 @@ const formatDateToBrasilia = (date: Date): string => {
 };
 
 export default function Schedule() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  // Get barbershop from AppLayout context - already loaded, no need to refetch
+  const { onMenuClick, barbershop, barbershopSlug } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const queryClient = useQueryClient();
 
-  // Keep the last known barbershop id to avoid a brief "empty" render while contexts re-hydrate on navigation
-  const lastBarbershopIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (barbershop?.id) lastBarbershopIdRef.current = barbershop.id;
-  }, [barbershop?.id]);
-  const activeBarbershopId = barbershop?.id ?? lastBarbershopIdRef.current;
-
-  // Sync slug with barbershop
-  useEffect(() => {
-    if (barbershop?.slug) {
-      setCurrentSlug(barbershop.slug);
-    }
-  }, [barbershop?.slug]);
+  // Use barbershop ID directly from context
+  const activeBarbershopId = barbershop?.id || null;
   
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
@@ -156,7 +160,7 @@ export default function Schedule() {
   const [deleteAppointmentId, setDeleteAppointmentId] = useState<string | null>(null);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isPublicShopModalOpen, setIsPublicShopModalOpen] = useState(false);
-  const [currentSlug, setCurrentSlug] = useState(barbershop?.slug || "");
+  const [currentSlug, setCurrentSlug] = useState(barbershopSlug || "");
   const [viewType, setViewType] = useState<ViewType>("month");
   const [editFormData, setEditFormData] = useState({
     service: "",
@@ -175,7 +179,13 @@ export default function Schedule() {
     paymentMethod: "Dinheiro",
   });
   const [isProcessingFinish, setIsProcessingFinish] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
+  // Sync slug with barbershop when it changes
+  useEffect(() => {
+    if (barbershopSlug) {
+      setCurrentSlug(barbershopSlug);
+    }
+  }, [barbershopSlug]);
 
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
@@ -202,10 +212,13 @@ export default function Schedule() {
     };
   };
 
-  // Query for appointments with caching
+  // Query for appointments - simplified, no placeholderData, with error handling
   const {
     data: appointmentsData,
     isLoading: isLoadingAppointments,
+    isFetching: isFetchingAppointments,
+    isError: isErrorAppointments,
+    refetch: refetchAppointments,
   } = useQuery({
     queryKey: [
       "schedule-appointments",
@@ -276,26 +289,16 @@ export default function Schedule() {
     enabled: !!activeBarbershopId,
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
-    placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
   });
 
   const appointments = appointmentsData ?? [];
 
-  // Track when data is first loaded to prevent flash of empty content
-  useEffect(() => {
-    if (appointmentsData && appointmentsData.length >= 0 && !hasLoadedOnce) {
-      setHasLoadedOnce(true);
-    }
-  }, [appointmentsData, hasLoadedOnce]);
-
-  // Reset hasLoadedOnce when barbershop changes
-  useEffect(() => {
-    setHasLoadedOnce(false);
-  }, [activeBarbershopId]);
-
-  // Computed loading state that prevents flicker
-  const showLoadingState = !hasLoadedOnce || !activeBarbershopId || (isLoadingAppointments && !appointmentsData);
+  // Simplified loading state: show skeleton only when loading AND no cached data
+  const showLoadingState = !activeBarbershopId || (isLoadingAppointments && !appointmentsData);
+  
+  // Show subtle refresh indicator when refetching in background (but data exists)
+  const showRefreshingIndicator = isFetchingAppointments && !!appointmentsData;
 
   // Query for services with caching
   const { data: services = [] } = useQuery({
@@ -716,8 +719,11 @@ export default function Schedule() {
             <Button variant="outline" size="icon" onClick={() => navigatePeriod("prev")}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <h2 className="text-lg font-semibold min-w-[140px] sm:min-w-[180px] text-center">
+            <h2 className="text-lg font-semibold min-w-[140px] sm:min-w-[180px] text-center flex items-center justify-center gap-2">
               {getPeriodLabel()}
+              {showRefreshingIndicator && (
+                <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+              )}
             </h2>
             <Button variant="outline" size="icon" onClick={() => navigatePeriod("next")}>
               <ChevronRight className="w-4 h-4" />
@@ -736,46 +742,67 @@ export default function Schedule() {
           </div>
         </div>
 
-        {/* Views */}
-        {viewType === "month" && (
-          <MonthView
-            calendarDays={calendarDays}
-            appointments={appointments}
-            isLoading={showLoadingState}
-            onDayClick={handleDayClick}
-            formatTimeFromISO={formatTimeFromISO}
-            formatDateToBrasilia={formatDateToBrasilia}
-            getDateFromISO={getDateFromISO}
-            isToday={isToday}
-          />
+        {/* Error State */}
+        {isErrorAppointments && (
+          <div className="flex flex-col items-center justify-center py-16 px-4">
+            <div className="bg-destructive/10 rounded-full p-4 mb-4">
+              <AlertCircle className="w-8 h-8 text-destructive" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Erro ao carregar agendamentos</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Não foi possível carregar os agendamentos. Verifique sua conexão e tente novamente.
+            </p>
+            <Button onClick={() => refetchAppointments()} variant="default">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </div>
         )}
 
-        {viewType === "week" && (
-          <WeekView
-            selectedDate={selectedDate}
-            appointments={appointments}
-            isLoading={showLoadingState}
-            onDayClick={handleDayClick}
-            formatTimeFromISO={formatTimeFromISO}
-            formatDateToBrasilia={formatDateToBrasilia}
-            getDateFromISO={getDateFromISO}
-            isToday={isToday}
-            getServiceName={getServiceName}
-          />
-        )}
+        {/* Views - only show when no error */}
+        {!isErrorAppointments && (
+          <>
+            {viewType === "month" && (
+              <MonthView
+                calendarDays={calendarDays}
+                appointments={appointments}
+                isLoading={showLoadingState}
+                onDayClick={handleDayClick}
+                formatTimeFromISO={formatTimeFromISO}
+                formatDateToBrasilia={formatDateToBrasilia}
+                getDateFromISO={getDateFromISO}
+                isToday={isToday}
+              />
+            )}
 
-        {viewType === "day" && (
-          <DayView
-            selectedDate={selectedDate}
-            appointments={appointments}
-            isLoading={showLoadingState}
-            onAppointmentClick={handleAppointmentClickFromDayView}
-            formatTimeFromISO={formatTimeFromISO}
-            formatDateToBrasilia={formatDateToBrasilia}
-            getDateFromISO={getDateFromISO}
-            getServiceName={getServiceName}
-            getStaffName={getStaffName}
-          />
+            {viewType === "week" && (
+              <WeekView
+                selectedDate={selectedDate}
+                appointments={appointments}
+                isLoading={showLoadingState}
+                onDayClick={handleDayClick}
+                formatTimeFromISO={formatTimeFromISO}
+                formatDateToBrasilia={formatDateToBrasilia}
+                getDateFromISO={getDateFromISO}
+                isToday={isToday}
+                getServiceName={getServiceName}
+              />
+            )}
+
+            {viewType === "day" && (
+              <DayView
+                selectedDate={selectedDate}
+                appointments={appointments}
+                isLoading={showLoadingState}
+                onAppointmentClick={handleAppointmentClickFromDayView}
+                formatTimeFromISO={formatTimeFromISO}
+                formatDateToBrasilia={formatDateToBrasilia}
+                getDateFromISO={getDateFromISO}
+                getServiceName={getServiceName}
+                getStaffName={getStaffName}
+              />
+            )}
+          </>
         )}
       </div>
 
