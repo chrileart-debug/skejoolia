@@ -8,7 +8,6 @@ import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -36,8 +35,21 @@ import {
   Cell,
 } from "recharts";
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
 }
 
 const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
@@ -62,9 +74,8 @@ const formatCurrency = (value: number): string => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const queryClient = useQueryClient();
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 

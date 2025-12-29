@@ -28,7 +28,6 @@ import { MessageSquare, Plus, Trash2, Phone, Link2, Unlink, Loader2, QrCode, Bot
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { z } from "zod";
@@ -182,14 +181,26 @@ const isConnected = (data: any): boolean => {
   return false;
 };
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
 }
 
 export default function Integrations() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
