@@ -174,12 +174,25 @@ export default function Schedule() {
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const monthStr = String(month + 1).padStart(2, "0");
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    
+
+    // O calendário renderiza 42 dias (6 semanas), incluindo dias do mês anterior e do próximo.
+    // Então buscamos os agendamentos exatamente no mesmo range exibido na UI.
+    const firstDayOfMonth = new Date(year, month, 1);
+    const startingDayOfWeek = firstDayOfMonth.getDay(); // 0 = Domingo
+
+    const extendedStart = new Date(year, month, 1 - startingDayOfWeek);
+    const extendedEnd = new Date(year, month, 1 + 41 - startingDayOfWeek);
+
+    const formatDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
     return {
-      start: `${year}-${monthStr}-01T00:00:00-03:00`,
-      end: `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}T23:59:59-03:00`,
+      start: `${formatDate(extendedStart)}T00:00:00-03:00`,
+      end: `${formatDate(extendedEnd)}T23:59:59-03:00`,
     };
   };
 
