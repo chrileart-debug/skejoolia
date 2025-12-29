@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { useOutletContext } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createCheckoutSession, webhookRequest, WEBHOOK_ENDPOINTS } from "@/lib/webhook";
@@ -56,8 +55,21 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
 }
 
 interface Payment {
@@ -77,9 +89,8 @@ interface Payment {
 }
 
 export default function Billing() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const { subscription, plan, isTrialing, isActive, daysRemaining, loading } = useSubscription();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);

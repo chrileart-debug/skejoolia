@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,8 +46,21 @@ import { VipBadge, VipCrown } from "@/components/club/VipBadge";
 import { RenewalModal } from "@/components/club/RenewalModal";
 import { toast } from "sonner";
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
 }
 
 interface Cliente {
@@ -97,9 +109,8 @@ interface ServiceCredit {
 }
 
 export default function Clients() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const [clients, setClients] = useState<Cliente[]>([]);
   const [agents, setAgents] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);

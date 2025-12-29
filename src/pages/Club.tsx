@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,7 @@ import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
 import { PublishPlanModal } from "@/components/club/PublishPlanModal";
 import { ManualSubscriptionModal } from "@/components/club/ManualSubscriptionModal";
@@ -29,6 +28,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
+interface OutletContextType {
+  barbershop: Barbershop | null;
+}
 
 interface BarberPlan {
   id: string;
@@ -69,8 +84,8 @@ interface Subscriber {
 }
 
 export default function Club() {
+  const { barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const { isActive } = useSubscription();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<BarberPlan[]>([]);

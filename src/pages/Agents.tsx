@@ -32,7 +32,6 @@ import { Bot, Plus, Edit2, Trash2, Phone, Loader2, MessageSquare } from "lucide-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import {
@@ -51,14 +50,26 @@ interface Agent {
   ativo: boolean;
 }
 
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
 interface OutletContextType {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
 }
 
 export default function Agents() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
-  const { barbershop } = useBarbershop();
   const { checkLimit } = useSubscription();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
