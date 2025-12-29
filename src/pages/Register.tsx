@@ -36,6 +36,7 @@ export default function Register() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -79,12 +80,13 @@ export default function Register() {
     fetchPlans();
   }, [planFromUrl]);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (but not during registration process)
   useEffect(() => {
+    if (isRegistering) return; // Block redirect during registration
     if (!loading && user) {
       navigate("/dashboard");
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, isRegistering]);
 
   const handleSelectPlan = (planSlug: string) => {
     setSelectedPlan(planSlug);
@@ -103,7 +105,6 @@ export default function Register() {
       return;
     }
 
-
     if (formData.password.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
       return;
@@ -115,6 +116,7 @@ export default function Register() {
     }
 
     setIsLoading(true);
+    setIsRegistering(true); // Block automatic redirect during registration
 
     // Gerar event_id único para deduplicação Facebook
     const fbEventId = generateEventId();
@@ -134,22 +136,29 @@ export default function Register() {
       } else {
         toast.error(error.message);
       }
+      setIsRegistering(false);
       setIsLoading(false);
       return;
     }
 
-    // Buscar barbershop_id do usuário recém-criado (criado pelo trigger)
-    const { data: session } = await supabase.auth.getSession();
+    // Wait for session to be established and fetch barbershop_id
+    // Try up to 3 times with 500ms delay (session may take a moment)
     let barbershopId = "";
-    const userId = session?.session?.user?.id;
+    let userId = "";
     
-    if (userId) {
-      const { data: barbershopData } = await supabase
-        .from("barbershops")
-        .select("id")
-        .eq("owner_id", userId)
-        .single();
-      barbershopId = barbershopData?.id || "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user?.id) {
+        userId = sessionData.session.user.id;
+        const { data: barbershopData } = await supabase
+          .from("barbershops")
+          .select("id")
+          .eq("owner_id", userId)
+          .single();
+        barbershopId = barbershopData?.id || "";
+        if (barbershopId) break;
+      }
     }
 
     // DISPARO HÍBRIDO: Browser + CAPI com deduplicação via event_id
@@ -173,11 +182,12 @@ export default function Register() {
       barbershop_id: barbershopId,
     }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
 
-    // The database trigger handles creating user_settings and subscription
-    // Just show success message and redirect
-    toast.success("Conta criada com sucesso! Verifique seu e-mail para confirmar ou faça login.");
+    // Show success and redirect to dashboard
+    toast.success("Conta criada com sucesso!");
     setIsLoading(false);
-    navigate("/");
+    
+    // Single controlled redirect to dashboard
+    navigate("/dashboard");
   };
 
   const selectedPlanData = plans.find(p => p.slug === selectedPlan);
