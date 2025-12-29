@@ -72,18 +72,18 @@ export function DayView({
   if (isLoading) {
     return (
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-border animate-pulse">
           <Skeleton className="h-6 w-48" />
         </div>
         <div className="h-[600px] flex items-center justify-center">
-          <Skeleton className="h-8 w-32" />
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-xl overflow-hidden animate-fade-in">
       {/* Header com data completa */}
       <div className="p-4 border-b border-border bg-muted/30">
         <h3 className="text-lg font-semibold">
@@ -125,7 +125,7 @@ export function DayView({
                   right: "8px",
                 }}
                 className={cn(
-                  "rounded-lg px-3 py-2 text-left overflow-hidden border transition-all hover:shadow-md",
+                  "rounded-lg px-3 py-2 text-left overflow-hidden border transition-all duration-200 hover:shadow-md",
                   apt.status === "completed" &&
                     "bg-green-500/20 border-green-500/30 hover:bg-green-500/30",
                   apt.status === "pending" &&

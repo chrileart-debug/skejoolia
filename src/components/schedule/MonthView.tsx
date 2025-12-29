@@ -69,7 +69,7 @@ export function MonthView({
             .map((_, index) => (
               <div
                 key={index}
-                className="min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border"
+                className="min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border animate-pulse"
               >
                 <Skeleton className="w-6 h-6 sm:w-7 sm:h-7 rounded-full" />
                 {index % 3 === 0 && (
@@ -81,7 +81,7 @@ export function MonthView({
             ))}
         </div>
       ) : (
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-7 animate-fade-in">
           {calendarDays.map((day, index) => {
             const dayAppointments = getAppointmentsForDay(day.date);
             const hasAppointments = dayAppointments.length > 0;
@@ -110,7 +110,7 @@ export function MonthView({
                       <div
                         key={apt.id_agendamento}
                         className={cn(
-                          "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5",
+                          "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5 transition-all duration-200",
                           apt.status === "completed" &&
                             "bg-green-500/20 text-green-700 dark:text-green-400",
                           apt.status === "pending" &&
