@@ -28,11 +28,29 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useBarbershop, Permissions } from "@/hooks/useBarbershop";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
+
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  is_active: boolean;
+}
+
+export interface Permissions {
+  can_view_dashboard: boolean;
+  can_manage_agents: boolean;
+  can_manage_schedule: boolean;
+  can_view_clients: boolean;
+}
 
 interface TeamMember {
   role_id: string;
@@ -47,6 +65,8 @@ interface TeamMember {
 
 type OutletContextType = {
   onMenuClick: () => void;
+  barbershop: Barbershop | null;
+  isOwner: boolean;
 };
 
 const DEFAULT_PERMISSIONS: Permissions = {
@@ -57,8 +77,7 @@ const DEFAULT_PERMISSIONS: Permissions = {
 };
 
 export default function Team() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
-  const { barbershop, isOwner } = useBarbershop();
+  const { onMenuClick, barbershop, isOwner } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { subscription } = useSubscription();
   
