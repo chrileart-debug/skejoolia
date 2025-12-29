@@ -175,6 +175,7 @@ export default function Schedule() {
     paymentMethod: "Dinheiro",
   });
   const [isProcessingFinish, setIsProcessingFinish] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const getMonthRange = (date: Date) => {
     const year = date.getFullYear();
@@ -280,6 +281,21 @@ export default function Schedule() {
   });
 
   const appointments = appointmentsData ?? [];
+
+  // Track when data is first loaded to prevent flash of empty content
+  useEffect(() => {
+    if (appointmentsData && appointmentsData.length >= 0 && !hasLoadedOnce) {
+      setHasLoadedOnce(true);
+    }
+  }, [appointmentsData, hasLoadedOnce]);
+
+  // Reset hasLoadedOnce when barbershop changes
+  useEffect(() => {
+    setHasLoadedOnce(false);
+  }, [activeBarbershopId]);
+
+  // Computed loading state that prevents flicker
+  const showLoadingState = !hasLoadedOnce || !activeBarbershopId || (isLoadingAppointments && !appointmentsData);
 
   // Query for services with caching
   const { data: services = [] } = useQuery({
@@ -725,7 +741,7 @@ export default function Schedule() {
           <MonthView
             calendarDays={calendarDays}
             appointments={appointments}
-            isLoading={isLoadingAppointments && !appointmentsData}
+            isLoading={showLoadingState}
             onDayClick={handleDayClick}
             formatTimeFromISO={formatTimeFromISO}
             formatDateToBrasilia={formatDateToBrasilia}
@@ -738,7 +754,7 @@ export default function Schedule() {
           <WeekView
             selectedDate={selectedDate}
             appointments={appointments}
-            isLoading={isLoadingAppointments && !appointmentsData}
+            isLoading={showLoadingState}
             onDayClick={handleDayClick}
             formatTimeFromISO={formatTimeFromISO}
             formatDateToBrasilia={formatDateToBrasilia}
@@ -752,7 +768,7 @@ export default function Schedule() {
           <DayView
             selectedDate={selectedDate}
             appointments={appointments}
-            isLoading={isLoadingAppointments && !appointmentsData}
+            isLoading={showLoadingState}
             onAppointmentClick={handleAppointmentClickFromDayView}
             formatTimeFromISO={formatTimeFromISO}
             formatDateToBrasilia={formatDateToBrasilia}

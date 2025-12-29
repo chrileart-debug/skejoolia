@@ -87,20 +87,20 @@ export function WeekView({
         <div className="grid grid-cols-8 border-b border-border">
           <div className="p-2 border-r border-border" />
           {weekDays.map((day) => (
-            <div key={day} className="p-2 text-center text-xs sm:text-sm font-medium text-muted-foreground">
+            <div key={day} className="p-2 text-center text-xs sm:text-sm font-medium text-muted-foreground animate-pulse">
               <Skeleton className="h-4 w-full" />
             </div>
           ))}
         </div>
         <div className="h-[500px] flex items-center justify-center">
-          <Skeleton className="h-8 w-32" />
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-xl overflow-hidden animate-fade-in">
       {/* Header com dias da semana */}
       <div className="grid grid-cols-8 border-b border-border sticky top-0 bg-card z-10">
         <div className="p-2 border-r border-border text-center text-xs text-muted-foreground">
@@ -169,7 +169,7 @@ export function WeekView({
                     width,
                   }}
                   className={cn(
-                    "rounded px-1 py-0.5 text-[10px] sm:text-xs overflow-hidden text-left z-10 border",
+                    "rounded px-1 py-0.5 text-[10px] sm:text-xs overflow-hidden text-left z-10 border transition-all duration-200 hover:shadow-md",
                     apt.status === "completed" &&
                       "bg-green-500/20 border-green-500/30 text-green-700 dark:text-green-400",
                     apt.status === "pending" &&
