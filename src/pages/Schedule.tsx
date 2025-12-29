@@ -7,6 +7,10 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
 import { PublicShopModal } from "@/components/schedule/PublicShopModal";
+import { MonthView } from "@/components/schedule/MonthView";
+import { WeekView } from "@/components/schedule/WeekView";
+import { DayView } from "@/components/schedule/DayView";
+import { ViewToggle, ViewType } from "@/components/schedule/ViewToggle";
 import { VipCrown } from "@/components/club/VipBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,6 +157,7 @@ export default function Schedule() {
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isPublicShopModalOpen, setIsPublicShopModalOpen] = useState(false);
   const [currentSlug, setCurrentSlug] = useState(barbershop?.slug || "");
+  const [viewType, setViewType] = useState<ViewType>("month");
   const [editFormData, setEditFormData] = useState({
     service: "",
     date: "",
@@ -568,14 +573,44 @@ export default function Schedule() {
     }
   };
 
-  const navigateMonth = (direction: "prev" | "next") => {
+  const navigatePeriod = (direction: "prev" | "next") => {
     const newDate = new Date(selectedDate);
-    newDate.setMonth(newDate.getMonth() + (direction === "next" ? 1 : -1));
+    const delta = direction === "next" ? 1 : -1;
+
+    if (viewType === "month") {
+      newDate.setMonth(newDate.getMonth() + delta);
+    } else if (viewType === "week") {
+      newDate.setDate(newDate.getDate() + delta * 7);
+    } else {
+      newDate.setDate(newDate.getDate() + delta);
+    }
+
     setSelectedDate(newDate);
   };
 
   const goToToday = () => {
     setSelectedDate(new Date());
+  };
+
+  const getPeriodLabel = () => {
+    const monthNames = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    if (viewType === "month") {
+      return `${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+    } else if (viewType === "week") {
+      const startOfWeek = new Date(selectedDate);
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+
+      const formatShortDate = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
+      return `${formatShortDate(startOfWeek)} - ${formatShortDate(endOfWeek)}`;
+    } else {
+      return `${selectedDate.getDate()} de ${monthNames[selectedDate.getMonth()]}`;
+    }
   };
 
   const getServiceName = (service_id: string | null) => {
@@ -648,11 +683,11 @@ export default function Schedule() {
   };
 
   const calendarDays = generateCalendarDays();
-  const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-  const monthNames = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-  ];
+
+  const handleAppointmentClickFromDayView = (apt: Appointment) => {
+    setSelectedDayAppointments([apt]);
+    setIsDayDialogOpen(true);
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden">
@@ -660,121 +695,72 @@ export default function Schedule() {
 
       <div className="p-4 lg:p-6">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => navigateMonth("prev")}>
+            <Button variant="outline" size="icon" onClick={() => navigatePeriod("prev")}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <h2 className="text-lg font-semibold min-w-[160px] text-center">
-              {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+            <h2 className="text-lg font-semibold min-w-[140px] sm:min-w-[180px] text-center">
+              {getPeriodLabel()}
             </h2>
-            <Button variant="outline" size="icon" onClick={() => navigateMonth("next")}>
+            <Button variant="outline" size="icon" onClick={() => navigatePeriod("next")}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <ViewToggle value={viewType} onChange={setViewType} />
             <Button variant="outline" onClick={goToToday}>
               Hoje
             </Button>
             <Button variant="outline" onClick={() => setIsReminderModalOpen(true)}>
-              <Bell className="w-4 h-4 mr-2" />
-              Lembretes
+              <Bell className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Lembretes</span>
             </Button>
           </div>
         </div>
 
-        {/* Calendar Grid */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          {/* Week days header */}
-          <div className="grid grid-cols-7 border-b border-border">
-            {weekDays.map((day) => (
-              <div
-                key={day}
-                className="p-2 text-center text-xs sm:text-sm font-medium text-muted-foreground"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
+        {/* Views */}
+        {viewType === "month" && (
+          <MonthView
+            calendarDays={calendarDays}
+            appointments={appointments}
+            isLoading={isLoadingAppointments && !appointmentsData}
+            onDayClick={handleDayClick}
+            formatTimeFromISO={formatTimeFromISO}
+            formatDateToBrasilia={formatDateToBrasilia}
+            getDateFromISO={getDateFromISO}
+            isToday={isToday}
+          />
+        )}
 
-          {/* Calendar days */}
-          {isLoadingAppointments && !appointmentsData ? (
-            <div className="grid grid-cols-7">
-              {Array(42).fill(0).map((_, index) => (
-                <div
-                  key={index}
-                  className="min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border"
-                >
-                  <Skeleton className="w-6 h-6 sm:w-7 sm:h-7 rounded-full" />
-                  {index % 3 === 0 && (
-                    <div className="mt-1 space-y-0.5">
-                      <Skeleton className="h-4 w-full" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, index) => {
-                const dayAppointments = getAppointmentsForDay(day.date);
-                const hasAppointments = dayAppointments.length > 0;
+        {viewType === "week" && (
+          <WeekView
+            selectedDate={selectedDate}
+            appointments={appointments}
+            isLoading={isLoadingAppointments && !appointmentsData}
+            onDayClick={handleDayClick}
+            formatTimeFromISO={formatTimeFromISO}
+            formatDateToBrasilia={formatDateToBrasilia}
+            getDateFromISO={getDateFromISO}
+            isToday={isToday}
+            getServiceName={getServiceName}
+          />
+        )}
 
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleDayClick(day.date)}
-                    className={cn(
-                      "min-h-[60px] sm:min-h-[80px] p-1 sm:p-2 border-b border-r border-border text-left transition-colors hover:bg-muted/50",
-                      !day.isCurrentMonth && "bg-muted/30 text-muted-foreground",
-                      isToday(day.date) && "bg-primary/10"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm rounded-full",
-                        isToday(day.date) && "bg-primary text-primary-foreground font-semibold"
-                      )}
-                    >
-                      {day.date.getDate()}
-                    </span>
-                    {hasAppointments && (
-                      <div className="mt-1 space-y-0.5">
-                        {dayAppointments.slice(0, 2).map((apt) => (
-                          <div
-                            key={apt.id_agendamento}
-                            className={cn(
-                              "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5",
-                              apt.status === "completed" && "bg-green-500/20 text-green-700 dark:text-green-400",
-                              apt.status === "pending" && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-                              apt.status === "confirmed" && "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-                              apt.status === "cancelled" && "bg-red-500/20 text-red-700 dark:text-red-400"
-                            )}
-                          >
-                            {apt.subscription_status === "active" && (
-                              <VipCrown 
-                                status={apt.subscription_status} 
-                                nextDueDate={apt.subscription_next_due_date || null}
-                                className="w-3 h-3 flex-shrink-0"
-                              />
-                            )}
-                            <span className="hidden sm:inline">{formatTimeFromISO(apt.start_time)} - </span>
-                            <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
-                          </div>
-                        ))}
-                        {dayAppointments.length > 2 && (
-                          <div className="text-[10px] text-muted-foreground px-1">
-                            +{dayAppointments.length - 2}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {viewType === "day" && (
+          <DayView
+            selectedDate={selectedDate}
+            appointments={appointments}
+            isLoading={isLoadingAppointments && !appointmentsData}
+            onAppointmentClick={handleAppointmentClickFromDayView}
+            formatTimeFromISO={formatTimeFromISO}
+            formatDateToBrasilia={formatDateToBrasilia}
+            getDateFromISO={getDateFromISO}
+            getServiceName={getServiceName}
+            getStaffName={getStaffName}
+          />
+        )}
       </div>
 
       {/* Floating actions */}
