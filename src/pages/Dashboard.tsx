@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useFacebookPixel } from "@/hooks/useFacebookPixel";
 
 import {
   Calendar,
@@ -78,6 +79,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const { trackCompleteRegistration } = useFacebookPixel();
+  const hasHandledOAuthRef = useRef(false);
 
   const today = new Date();
   const todayStart = startOfDay(today).toISOString();
@@ -101,32 +104,52 @@ export default function Dashboard() {
     refetchInterval: 10000, // Auto-refresh every 10 seconds to detect webhook updates
   });
 
-  // Handle pending OAuth plan update
+  // Handle pending OAuth plan update AND Facebook Pixel event
   useEffect(() => {
-    const updatePendingPlan = async () => {
+    const handleOAuthRegistration = async () => {
       if (!user?.id) return;
       
+      // Guard to prevent duplicate handling
+      if (hasHandledOAuthRef.current) return;
+      
       const pendingPlan = localStorage.getItem("pending_plan_slug");
+      const pendingEventId = localStorage.getItem("pending_fb_event_id");
       
-      if (!pendingPlan) return;
+      if (!pendingPlan || !pendingEventId) return;
       
+      // Mark as handled immediately to prevent race conditions
+      hasHandledOAuthRef.current = true;
+      
+      // Update subscription with selected plan
       const { error } = await supabase
         .from("subscriptions")
         .update({ plan_slug: pendingPlan })
         .eq("user_id", user.id);
       
-      if (!error) {
-        localStorage.removeItem("pending_plan_slug");
-        localStorage.removeItem("pending_fb_event_id");
-        queryClient.invalidateQueries({ queryKey: ["subscription"] });
-        
-        // NOTA: Evento FB Pixel é disparado apenas server-side (CAPI)
-        // via trigger de banco para evitar duplicação
+      if (error) {
+        console.error("Error updating subscription:", error);
+        hasHandledOAuthRef.current = false; // Allow retry on error
+        return;
       }
+      
+      // Clear localStorage BEFORE firing events to prevent duplicates on refresh
+      localStorage.removeItem("pending_plan_slug");
+      localStorage.removeItem("pending_fb_event_id");
+      
+      // DISPARO HÍBRIDO: Browser + CAPI com deduplicação via event_id
+      await trackCompleteRegistration({
+        eventId: pendingEventId,
+        userRole: "owner",
+        email: user.email,
+        userId: user.id,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      console.log("[Dashboard] OAuth registration handled, FB events fired");
     };
     
-    updatePendingPlan();
-  }, [user?.id, queryClient]);
+    handleOAuthRegistration();
+  }, [user?.id, user?.email, queryClient, trackCompleteRegistration]);
 
   // Fetch services for price lookup
   const { data: servicesMap = {} } = useQuery({

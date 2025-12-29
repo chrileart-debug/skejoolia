@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 declare global {
   interface Window {
@@ -6,7 +7,10 @@ declare global {
   }
 }
 
-// Gera um event_id único para deduplicação entre client e server (CAPI)
+/**
+ * Generates a unique event_id for Facebook deduplication between browser and CAPI.
+ * Format: {userPart}_{timestamp}_{random}
+ */
 export function generateEventId(userId?: string): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 15);
@@ -14,22 +18,79 @@ export function generateEventId(userId?: string): string {
   return `${userPart}_${timestamp}_${random}`;
 }
 
+interface CompleteRegistrationParams {
+  eventId: string;
+  userRole?: string;
+  email?: string;
+  phone?: string;
+  name?: string;
+  userId?: string;
+}
+
 export function useFacebookPixel() {
-  // Evento CompleteRegistration com event_id para deduplicação
+  // Guard to prevent duplicate event firing
+  const hasFiredRegistration = useRef(false);
+
+  /**
+   * Tracks CompleteRegistration event on BOTH browser and CAPI with proper deduplication.
+   * This is the ONLY place CompleteRegistration should be called from.
+   * 
+   * @param params - Event parameters including eventId for deduplication
+   */
   const trackCompleteRegistration = useCallback(
-    (params: { userRole: string; eventId: string }) => {
+    async (params: CompleteRegistrationParams) => {
+      // Prevent duplicate firing (e.g., from re-renders or double-clicks)
+      if (hasFiredRegistration.current) {
+        console.log("[FB Pixel] CompleteRegistration already fired, skipping duplicate");
+        return;
+      }
+      hasFiredRegistration.current = true;
+
+      const { eventId, userRole = "owner", email, phone, name, userId } = params;
+
+      // 1. BROWSER EVENT (fbq)
       if (typeof window !== "undefined" && window.fbq) {
         window.fbq("track", "CompleteRegistration", {
-          user_role: params.userRole,
-          eventID: params.eventId,
+          content_name: userRole,
+          eventID: eventId, // eventID is the browser key for dedup
         });
-        console.log("[FB Pixel] CompleteRegistration tracked client-side:", params);
+        console.log("[FB Pixel] CompleteRegistration tracked browser-side:", { eventId, userRole });
       } else {
         console.warn("[FB Pixel] fbq not available for CompleteRegistration");
+      }
+
+      // 2. CAPI EVENT (Edge Function)
+      try {
+        const { data, error } = await supabase.functions.invoke("fb-conversions", {
+          body: {
+            event_id: eventId, // event_id is the CAPI key for dedup
+            role: userRole,
+            user_id: userId,
+            // Optional user data for better matching
+            email: email,
+            phone: phone,
+            name: name,
+          },
+        });
+
+        if (error) {
+          console.error("[FB Pixel] CAPI CompleteRegistration error:", error);
+        } else {
+          console.log("[FB Pixel] CompleteRegistration tracked CAPI-side:", data);
+        }
+      } catch (err) {
+        console.error("[FB Pixel] CAPI CompleteRegistration exception:", err);
       }
     },
     []
   );
+
+  /**
+   * Reset the guard (useful for testing or if user logs out and registers again)
+   */
+  const resetRegistrationGuard = useCallback(() => {
+    hasFiredRegistration.current = false;
+  }, []);
 
   // Evento Purchase com event_id para deduplicação
   const trackPurchase = useCallback(
@@ -95,8 +156,6 @@ export function useFacebookPixel() {
     []
   );
 
-  // trackPageView removido - agora é automático via index.html + FacebookPixel.tsx
-
   // Evento customizado genérico
   const trackCustomEvent = useCallback(
     (eventName: string, params?: Record<string, unknown>, eventId?: string) => {
@@ -111,6 +170,7 @@ export function useFacebookPixel() {
 
   return {
     trackCompleteRegistration,
+    resetRegistrationGuard,
     trackPurchase,
     trackInitiateCheckout,
     trackLead,
