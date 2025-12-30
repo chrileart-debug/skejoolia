@@ -26,15 +26,7 @@ import {
 } from "lucide-react";
 import { startOfDay, endOfDay, subDays, format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface Barbershop {
   id: string;
@@ -53,21 +45,21 @@ interface OutletContextType {
   barbershop: Barbershop | null;
 }
 
-const BRASILIA_TIMEZONE = 'America/Sao_Paulo';
+const BRASILIA_TIMEZONE = "America/Sao_Paulo";
 
 const formatTimeFromISO = (isoString: string): string => {
   const date = new Date(isoString);
-  return date.toLocaleTimeString("pt-BR", { 
-    hour: "2-digit", 
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
     minute: "2-digit",
-    timeZone: BRASILIA_TIMEZONE 
+    timeZone: BRASILIA_TIMEZONE,
   });
 };
 
 const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
@@ -98,7 +90,7 @@ export default function Dashboard() {
         .eq("id", barbershop.id)
         .single();
       if (error) return true;
-      return !!(data?.asaas_api_key);
+      return !!data?.asaas_api_key;
     },
     enabled: !!barbershop?.id,
     refetchInterval: 10000, // Auto-refresh every 10 seconds to detect webhook updates
@@ -108,34 +100,40 @@ export default function Dashboard() {
   useEffect(() => {
     const handleOAuthRegistration = async () => {
       if (!user?.id) return;
-      
+
       // Guard to prevent duplicate handling
       if (hasHandledOAuthRef.current) return;
-      
+
       const pendingPlan = localStorage.getItem("pending_plan_slug");
       const pendingEventId = localStorage.getItem("pending_fb_event_id");
       const alreadyTracked = localStorage.getItem(`fb_tracked_${user.id}`);
-      
+
       // CASE 1: Has pending localStorage data (normal OAuth flow)
       if (pendingPlan && pendingEventId) {
         hasHandledOAuthRef.current = true;
-        
+
+        // 🚀 CORREÇÃO APLICADA AQUI:
+        // Marcamos como rastreado IMEDIATAMENTE para bloquear concorrência
+        localStorage.setItem(`fb_tracked_${user.id}`, "true");
+
         // Update subscription with selected plan
         const { error } = await supabase
           .from("subscriptions")
           .update({ plan_slug: pendingPlan })
           .eq("user_id", user.id);
-        
+
         if (error) {
           console.error("Error updating subscription:", error);
+          // Se falhar o update do banco, removemos a flag para tentar na próxima
+          localStorage.removeItem(`fb_tracked_${user.id}`);
           hasHandledOAuthRef.current = false;
           return;
         }
-        
+
         // Clear localStorage BEFORE firing events
         localStorage.removeItem("pending_plan_slug");
         localStorage.removeItem("pending_fb_event_id");
-        
+
         // DISPARO HÍBRIDO: Browser + CAPI
         await trackCompleteRegistration({
           eventId: pendingEventId,
@@ -143,35 +141,36 @@ export default function Dashboard() {
           email: user.email,
           userId: user.id,
         });
-        
-        localStorage.setItem(`fb_tracked_${user.id}`, "true");
+
         queryClient.invalidateQueries({ queryKey: ["subscription"] });
         console.log("[Dashboard] OAuth registration handled, FB events fired");
         return;
       }
-      
+
       // CASE 2: FALLBACK - User is new (created < 2 min ago) but localStorage was lost
       if (!alreadyTracked && user.created_at) {
         const userCreatedAt = new Date(user.created_at);
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-        
+
         if (userCreatedAt > twoMinutesAgo) {
           hasHandledOAuthRef.current = true;
+          // Bloqueia imediatamente aqui também
+          localStorage.setItem(`fb_tracked_${user.id}`, "true");
+
           const newEventId = generateEventId(user.id);
-          
+
           await trackCompleteRegistration({
             eventId: newEventId,
             userRole: "owner",
             email: user.email,
             userId: user.id,
           });
-          
-          localStorage.setItem(`fb_tracked_${user.id}`, "true");
+
           console.log("[Dashboard] New user detected (fallback), FB events fired");
         }
       }
     };
-    
+
     handleOAuthRegistration();
   }, [user?.id, user?.email, user?.created_at, queryClient, trackCompleteRegistration]);
 
@@ -185,10 +184,13 @@ export default function Dashboard() {
         .select("id, name, price")
         .eq("barbershop_id", barbershop.id);
       if (error) throw error;
-      return (data || []).reduce((acc, s) => {
-        acc[s.id] = s;
-        return acc;
-      }, {} as Record<string, { id: string; name: string; price: number }>);
+      return (data || []).reduce(
+        (acc, s) => {
+          acc[s.id] = s;
+          return acc;
+        },
+        {} as Record<string, { id: string; name: string; price: number }>,
+      );
     },
     enabled: !!barbershop?.id,
   });
@@ -203,19 +205,19 @@ export default function Dashboard() {
         .select("user_id")
         .eq("barbershop_id", barbershop.id);
       if (error) throw error;
-      
-      const userIds = (data || []).map(d => d.user_id);
+
+      const userIds = (data || []).map((d) => d.user_id);
       if (userIds.length === 0) return {};
-      
-      const { data: settings } = await supabase
-        .from("user_settings")
-        .select("user_id, nome")
-        .in("user_id", userIds);
-      
-      return (settings || []).reduce((acc, s) => {
-        acc[s.user_id] = s.nome || "Profissional";
-        return acc;
-      }, {} as Record<string, string>);
+
+      const { data: settings } = await supabase.from("user_settings").select("user_id, nome").in("user_id", userIds);
+
+      return (settings || []).reduce(
+        (acc, s) => {
+          acc[s.user_id] = s.nome || "Profissional";
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
     },
     enabled: !!barbershop?.id,
   });
@@ -282,9 +284,9 @@ export default function Dashboard() {
 
   // Get upcoming appointments (from now onwards)
   const now = new Date().toISOString();
-  const upcomingAppointments = todayAppointments.filter(
-    (apt) => apt.start_time >= now && (apt.status === "pending" || apt.status === "confirmed")
-  ).slice(0, 5);
+  const upcomingAppointments = todayAppointments
+    .filter((apt) => apt.start_time >= now && (apt.status === "pending" || apt.status === "confirmed"))
+    .slice(0, 5);
 
   // Next client (first upcoming appointment)
   const nextClient = upcomingAppointments[0] || null;
@@ -292,15 +294,15 @@ export default function Dashboard() {
   // Build weekly chart data
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const date = subDays(today, 6 - i);
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const count = weekAppointments.filter(apt => {
-      const aptDate = format(new Date(apt.start_time), 'yyyy-MM-dd');
+    const dateStr = format(date, "yyyy-MM-dd");
+    const count = weekAppointments.filter((apt) => {
+      const aptDate = format(new Date(apt.start_time), "yyyy-MM-dd");
       return aptDate === dateStr;
     }).length;
-    
+
     return {
-      day: format(date, 'EEE', { locale: ptBR }),
-      fullDate: format(date, 'dd/MM'),
+      day: format(date, "EEE", { locale: ptBR }),
+      fullDate: format(date, "dd/MM"),
       count,
       isToday: isToday(date),
     };
@@ -329,42 +331,37 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <Header
-        title="Dashboard"
-        subtitle="Visão geral da sua barbearia"
-        onMenuClick={onMenuClick}
-      />
+      <Header title="Dashboard" subtitle="Visão geral da sua barbearia" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6 space-y-6">
-        
-
         {/* Financial Activation Card - Hidden for now, keeping code for future reactivation */}
         {false && !hasAsaasApiKey && (
           <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 shadow-lg">
             {/* Decorative elements */}
             <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
             <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-primary/5 blur-2xl" />
-            
+
             <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
                 <Rocket className="w-7 h-7 text-primary-foreground" />
               </div>
-              
+
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-bold text-foreground mb-1">
                   Potencialize seu faturamento com o Clube de Assinaturas 🚀
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Chega de cobrar clientes manualmente! Ative recebimentos automáticos via Cartão e Pix e profissionalize sua barbearia.
+                  Chega de cobrar clientes manualmente! Ative recebimentos automáticos via Cartão e Pix e
+                  profissionalize sua barbearia.
                 </p>
               </div>
-              
-              <Button 
+
+              <Button
                 onClick={() => {
                   navigate("/settings");
                   // Use setTimeout to ensure navigation completes before setting tab
                   setTimeout(() => {
-                    const event = new CustomEvent('navigate-settings-tab', { detail: 'banking' });
+                    const event = new CustomEvent("navigate-settings-tab", { detail: "banking" });
                     window.dispatchEvent(event);
                   }, 100);
                 }}
@@ -380,26 +377,15 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="flex flex-wrap gap-2">
-          <Button 
-            onClick={() => setBookingModalOpen(true)}
-            className="gap-2"
-          >
+          <Button onClick={() => setBookingModalOpen(true)} className="gap-2">
             <Plus className="w-4 h-4" />
             Novo Agendamento
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/clients")}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={() => navigate("/clients")} className="gap-2">
             <UserPlus className="w-4 h-4" />
             Cadastrar Cliente
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/billing")}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={() => navigate("/billing")} className="gap-2">
             <Receipt className="w-4 h-4" />
             Ver Financeiro
           </Button>
@@ -483,11 +469,11 @@ export default function Dashboard() {
                   upcomingAppointments.map((apt, index) => (
                     <div
                       key={apt.id_agendamento}
-                      className={`flex items-center gap-4 p-4 transition-colors hover:bg-muted/30 ${index === 0 ? 'bg-primary/5' : ''}`}
+                      className={`flex items-center gap-4 p-4 transition-colors hover:bg-muted/30 ${index === 0 ? "bg-primary/5" : ""}`}
                     >
                       {/* Time */}
                       <div className="w-16 text-center flex-shrink-0">
-                        <p className={`text-lg font-semibold ${index === 0 ? 'text-primary' : 'text-foreground'}`}>
+                        <p className={`text-lg font-semibold ${index === 0 ? "text-primary" : "text-foreground"}`}>
                           {formatTimeFromISO(apt.start_time)}
                         </p>
                         {index === 0 && (
@@ -497,20 +483,18 @@ export default function Dashboard() {
 
                       {/* Divider line */}
                       <div className="w-px h-12 bg-border relative">
-                        <div className={`absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rounded-full border-2 ${index === 0 ? 'bg-primary border-primary' : 'bg-background border-muted-foreground/30'}`} />
+                        <div
+                          className={`absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rounded-full border-2 ${index === 0 ? "bg-primary border-primary" : "bg-background border-muted-foreground/30"}`}
+                        />
                       </div>
 
                       {/* Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground truncate">
-                            {apt.nome_cliente || "Cliente"}
-                          </p>
+                          <p className="font-medium text-foreground truncate">{apt.nome_cliente || "Cliente"}</p>
                           <StatusBadge status={getStatusForBadge(apt.status)} />
                         </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {getServiceName(apt.service_id)}
-                        </p>
+                        <p className="text-sm text-muted-foreground truncate">{getServiceName(apt.service_id)}</p>
                       </div>
 
                       {/* Professional Avatar */}
@@ -538,16 +522,16 @@ export default function Dashboard() {
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <XAxis 
-                      dataKey="day" 
-                      axisLine={false} 
+                    <XAxis
+                      dataKey="day"
+                      axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                     />
-                    <YAxis 
-                      axisLine={false} 
+                    <YAxis
+                      axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
                       allowDecimals={false}
                     />
                     <Tooltip
@@ -558,7 +542,7 @@ export default function Dashboard() {
                           <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg">
                             <p className="text-sm font-medium">{data.fullDate}</p>
                             <p className="text-xs text-muted-foreground">
-                              {data.count} agendamento{data.count !== 1 ? 's' : ''}
+                              {data.count} agendamento{data.count !== 1 ? "s" : ""}
                             </p>
                           </div>
                         );
@@ -566,9 +550,9 @@ export default function Dashboard() {
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                       {chartData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.isToday ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground) / 0.3)'}
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.3)"}
                         />
                       ))}
                     </Bar>
@@ -584,19 +568,19 @@ export default function Dashboard() {
 
             {/* Agent Status */}
             <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Status do Agente IA
-              </h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Status do Agente IA</h3>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl ${agent ? "bg-success/10" : "bg-muted"} flex items-center justify-center`}>
-                    <div className={`w-3 h-3 rounded-full ${agent ? "bg-success animate-pulse" : "bg-muted-foreground"}`} />
+                  <div
+                    className={`w-10 h-10 rounded-xl ${agent ? "bg-success/10" : "bg-muted"} flex items-center justify-center`}
+                  >
+                    <div
+                      className={`w-3 h-3 rounded-full ${agent ? "bg-success animate-pulse" : "bg-muted-foreground"}`}
+                    />
                   </div>
                   <div>
                     <p className="font-medium text-foreground">{agent ? "Ativo" : "Inativo"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {agent?.nome || "Nenhum agente"}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{agent?.nome || "Nenhum agente"}</p>
                   </div>
                 </div>
                 <StatusBadge status={agent ? "online" : "offline"} />
@@ -605,26 +589,24 @@ export default function Dashboard() {
 
             {/* Today's Summary */}
             <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-              <h3 className="text-sm font-medium text-muted-foreground mb-4">
-                Resumo do Dia
-              </h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-4">Resumo do Dia</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Confirmados</span>
                   <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'confirmed').length}
+                    {todayAppointments.filter((a) => a.status === "confirmed").length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Pendentes</span>
                   <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'pending').length}
+                    {todayAppointments.filter((a) => a.status === "pending").length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Concluídos</span>
                   <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'completed').length}
+                    {todayAppointments.filter((a) => a.status === "completed").length}
                   </span>
                 </div>
                 <div className="border-t border-border pt-3 mt-3">
@@ -639,11 +621,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <SmartBookingModal
-        open={bookingModalOpen}
-        onOpenChange={setBookingModalOpen}
-        onSuccess={handleBookingSuccess}
-      />
+      <SmartBookingModal open={bookingModalOpen} onOpenChange={setBookingModalOpen} onSuccess={handleBookingSuccess} />
     </div>
   );
 }
