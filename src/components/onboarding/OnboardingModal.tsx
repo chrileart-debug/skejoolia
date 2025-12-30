@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { sendNewUserWebhook } from "@/lib/webhook";
-
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 interface OnboardingModalProps {
   isOpen: boolean;
   barbershopId: string;
@@ -35,7 +35,7 @@ export function OnboardingModal({
     barbershopName: "",
     phone: currentPhone || "",
   });
-
+  const { trackCompleteRegistration } = useFacebookPixel();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -86,6 +86,26 @@ export function OnboardingModal({
         origem: "google",
         barbershop_id: barbershopId,
       }).catch((err) => console.error("Erro ao disparar webhook de cadastro:", err));
+
+      // BACKUP: Dispara CompleteRegistration se ainda não foi disparado
+      const alreadyTracked = localStorage.getItem(`fb_tracked_${userId}`);
+      if (!alreadyTracked) {
+        const eventId = localStorage.getItem("pending_fb_event_id") || generateEventId(userId);
+        
+        await trackCompleteRegistration({
+          eventId,
+          userRole: "owner",
+          email: user?.email,
+          phone: formData.phone.trim(),
+          name: userSettings?.nome || user?.user_metadata?.full_name,
+          userId,
+        });
+        
+        localStorage.setItem(`fb_tracked_${userId}`, "true");
+        localStorage.removeItem("pending_fb_event_id");
+        localStorage.removeItem("pending_plan_slug");
+        console.log("[OnboardingModal] CompleteRegistration fired as backup");
+      }
 
       toast.success("Dados salvos com sucesso!");
       onComplete();

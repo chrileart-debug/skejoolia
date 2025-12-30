@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFacebookPixel } from "@/hooks/useFacebookPixel";
+import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
 import {
   Calendar,
@@ -114,42 +114,66 @@ export default function Dashboard() {
       
       const pendingPlan = localStorage.getItem("pending_plan_slug");
       const pendingEventId = localStorage.getItem("pending_fb_event_id");
+      const alreadyTracked = localStorage.getItem(`fb_tracked_${user.id}`);
       
-      if (!pendingPlan || !pendingEventId) return;
-      
-      // Mark as handled immediately to prevent race conditions
-      hasHandledOAuthRef.current = true;
-      
-      // Update subscription with selected plan
-      const { error } = await supabase
-        .from("subscriptions")
-        .update({ plan_slug: pendingPlan })
-        .eq("user_id", user.id);
-      
-      if (error) {
-        console.error("Error updating subscription:", error);
-        hasHandledOAuthRef.current = false; // Allow retry on error
+      // CASE 1: Has pending localStorage data (normal OAuth flow)
+      if (pendingPlan && pendingEventId) {
+        hasHandledOAuthRef.current = true;
+        
+        // Update subscription with selected plan
+        const { error } = await supabase
+          .from("subscriptions")
+          .update({ plan_slug: pendingPlan })
+          .eq("user_id", user.id);
+        
+        if (error) {
+          console.error("Error updating subscription:", error);
+          hasHandledOAuthRef.current = false;
+          return;
+        }
+        
+        // Clear localStorage BEFORE firing events
+        localStorage.removeItem("pending_plan_slug");
+        localStorage.removeItem("pending_fb_event_id");
+        
+        // DISPARO HÍBRIDO: Browser + CAPI
+        await trackCompleteRegistration({
+          eventId: pendingEventId,
+          userRole: "owner",
+          email: user.email,
+          userId: user.id,
+        });
+        
+        localStorage.setItem(`fb_tracked_${user.id}`, "true");
+        queryClient.invalidateQueries({ queryKey: ["subscription"] });
+        console.log("[Dashboard] OAuth registration handled, FB events fired");
         return;
       }
       
-      // Clear localStorage BEFORE firing events to prevent duplicates on refresh
-      localStorage.removeItem("pending_plan_slug");
-      localStorage.removeItem("pending_fb_event_id");
-      
-      // DISPARO HÍBRIDO: Browser + CAPI com deduplicação via event_id
-      await trackCompleteRegistration({
-        eventId: pendingEventId,
-        userRole: "owner",
-        email: user.email,
-        userId: user.id,
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ["subscription"] });
-      console.log("[Dashboard] OAuth registration handled, FB events fired");
+      // CASE 2: FALLBACK - User is new (created < 2 min ago) but localStorage was lost
+      if (!alreadyTracked && user.created_at) {
+        const userCreatedAt = new Date(user.created_at);
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+        
+        if (userCreatedAt > twoMinutesAgo) {
+          hasHandledOAuthRef.current = true;
+          const newEventId = generateEventId(user.id);
+          
+          await trackCompleteRegistration({
+            eventId: newEventId,
+            userRole: "owner",
+            email: user.email,
+            userId: user.id,
+          });
+          
+          localStorage.setItem(`fb_tracked_${user.id}`, "true");
+          console.log("[Dashboard] New user detected (fallback), FB events fired");
+        }
+      }
     };
     
     handleOAuthRegistration();
-  }, [user?.id, user?.email, queryClient, trackCompleteRegistration]);
+  }, [user?.id, user?.email, user?.created_at, queryClient, trackCompleteRegistration]);
 
   // Fetch services for price lookup
   const { data: servicesMap = {} } = useQuery({
