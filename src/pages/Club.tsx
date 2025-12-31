@@ -10,7 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FAB } from "@/components/shared/FAB";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw, XCircle } from "lucide-react";
+import { Plus, Crown, Users, Package, Edit, Trash2, AlertTriangle, Sparkles, Rocket, Loader2, UserPlus, RefreshCw, XCircle, Ban } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { ClubPlanModal } from "@/components/club/ClubPlanModal";
@@ -740,64 +746,58 @@ export default function Club() {
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {subscriberCount?.active && subscriberCount.active > 0 
-                ? "Não é possível excluir este plano"
-                : "Excluir plano?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Gerenciar plano</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                {subscriberCount?.active && subscriberCount.active > 0 ? (
-                  <>
-                    <p>
-                      O plano "<strong>{planToDelete?.name}</strong>" possui{" "}
-                      <strong>{subscriberCount.active} assinante(s) ativo(s)</strong>.
-                    </p>
-                    <p className="mt-2">
-                      Para excluir este plano, primeiro cancele todas as assinaturas ativas.
-                    </p>
-                    <p className="mt-2 text-muted-foreground italic">
-                      Alternativa: Você pode desativar o plano para impedir novas assinaturas, 
-                      mantendo os assinantes atuais.
-                    </p>
-                  </>
-                ) : subscriberCount?.total && subscriberCount.total > 0 ? (
-                  <>
-                    <p>
-                      O plano "<strong>{planToDelete?.name}</strong>" possui{" "}
-                      <strong>{subscriberCount.total} assinatura(s) no histórico</strong> (já canceladas).
-                    </p>
-                    <p className="mt-2">
-                      Deseja realmente excluir? As assinaturas canceladas serão desvinculadas deste plano.
-                    </p>
-                  </>
-                ) : (
-                  <p>
-                    Tem certeza que deseja excluir o plano "<strong>{planToDelete?.name}</strong>"? 
-                    Esta ação não pode ser desfeita.
+                <p>
+                  O que deseja fazer com o plano "<strong>{planToDelete?.name}</strong>"?
+                </p>
+                {subscriberCount?.active !== undefined && subscriberCount.active > 0 && (
+                  <p className="mt-2 text-amber-500">
+                    Este plano possui <strong>{subscriberCount.active} assinante(s) ativo(s)</strong>.
+                  </p>
+                )}
+                {subscriberCount?.total !== undefined && subscriberCount.total > 0 && subscriberCount.active === 0 && (
+                  <p className="mt-2 text-muted-foreground">
+                    Este plano possui {subscriberCount.total} assinatura(s) cancelada(s) no histórico.
                   </p>
                 )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
             
-            {subscriberCount?.active && subscriberCount.active > 0 ? (
-              <AlertDialogAction
-                onClick={handleDeactivatePlan}
-                className="bg-amber-500 hover:bg-amber-600"
-              >
-                Desativar Plano
-              </AlertDialogAction>
-            ) : (
-              <AlertDialogAction
-                onClick={handleDeleteConfirm}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Excluir
-              </AlertDialogAction>
-            )}
+            <Button
+              variant="outline"
+              onClick={handleDeactivatePlan}
+              className="border-amber-500 text-amber-500 hover:bg-amber-500/10"
+            >
+              <Ban className="h-4 w-4 mr-2" />
+              Desativar
+            </Button>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteConfirm}
+                      disabled={subscriberCount?.active !== undefined && subscriberCount.active > 0}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {subscriberCount?.active !== undefined && subscriberCount.active > 0 && (
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p>Para excluir, cancele primeiro as assinaturas ativas na aba "Assinantes".</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
