@@ -95,6 +95,7 @@ export default function Club() {
   const [editingPlan, setEditingPlan] = useState<BarberPlan | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<BarberPlan | null>(null);
+  const [subscriberCount, setSubscriberCount] = useState<{ active: number; total: number } | null>(null);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishingPlanId, setPublishingPlanId] = useState<string | null>(null);
   
@@ -219,22 +220,76 @@ export default function Club() {
     setModalOpen(true);
   };
 
-  const handleDeleteClick = (plan: BarberPlan) => {
+  const handleDeleteClick = async (plan: BarberPlan) => {
+    // Verificar se há assinantes (ativos ou histórico)
+    const { data: subscriptions, error } = await supabase
+      .from("client_club_subscriptions")
+      .select("id, status")
+      .eq("plan_id", plan.id);
+
+    if (error) {
+      toast.error("Erro ao verificar assinantes");
+      return;
+    }
+
+    const activeSubscriptions = subscriptions?.filter(s => s.status !== 'canceled') || [];
+    const totalSubscriptions = subscriptions?.length || 0;
+
     setPlanToDelete(plan);
+    setSubscriberCount({
+      active: activeSubscriptions.length,
+      total: totalSubscriptions
+    });
     setDeleteDialogOpen(true);
+  };
+
+  const handleDeactivatePlan = async () => {
+    if (!planToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("barber_plans")
+        .update({ is_active: false, is_published: false })
+        .eq("id", planToDelete.id);
+
+      if (error) throw error;
+
+      toast.success("Plano desativado com sucesso");
+      fetchPlans();
+    } catch (error) {
+      console.error("Error deactivating plan:", error);
+      toast.error("Erro ao desativar plano");
+    } finally {
+      setDeleteDialogOpen(false);
+      setPlanToDelete(null);
+      setSubscriberCount(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
     if (!planToDelete) return;
 
     try {
-      // Delete plan items first
+      // 1. Excluir assinaturas canceladas vinculadas ao plano
+      await supabase
+        .from("client_club_subscriptions")
+        .delete()
+        .eq("plan_id", planToDelete.id)
+        .eq("status", "canceled");
+
+      // 2. Excluir itens do plano
       await supabase
         .from("barber_plan_items")
         .delete()
         .eq("plan_id", planToDelete.id);
 
-      // Delete the plan
+      // 3. Excluir checkout sessions pendentes
+      await supabase
+        .from("client_checkout_sessions")
+        .delete()
+        .eq("plan_id", planToDelete.id);
+
+      // 4. Excluir o plano
       const { error } = await supabase
         .from("barber_plans")
         .delete()
@@ -246,10 +301,11 @@ export default function Club() {
       fetchPlans();
     } catch (error) {
       console.error("Error deleting plan:", error);
-      toast.error("Erro ao excluir plano");
+      toast.error("Erro ao excluir plano. Verifique se não há dados vinculados.");
     } finally {
       setDeleteDialogOpen(false);
       setPlanToDelete(null);
+      setSubscriberCount(null);
     }
   };
 
@@ -675,23 +731,73 @@ export default function Club() {
         barbershopId={barbershop?.id || ""}
       />
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open);
+        if (!open) {
+          setPlanToDelete(null);
+          setSubscriberCount(null);
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir plano?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o plano "{planToDelete?.name}"? Esta
-              ação não pode ser desfeita.
+            <AlertDialogTitle>
+              {subscriberCount?.active && subscriberCount.active > 0 
+                ? "Não é possível excluir este plano"
+                : "Excluir plano?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {subscriberCount?.active && subscriberCount.active > 0 ? (
+                  <>
+                    <p>
+                      O plano "<strong>{planToDelete?.name}</strong>" possui{" "}
+                      <strong>{subscriberCount.active} assinante(s) ativo(s)</strong>.
+                    </p>
+                    <p className="mt-2">
+                      Para excluir este plano, primeiro cancele todas as assinaturas ativas.
+                    </p>
+                    <p className="mt-2 text-muted-foreground italic">
+                      Alternativa: Você pode desativar o plano para impedir novas assinaturas, 
+                      mantendo os assinantes atuais.
+                    </p>
+                  </>
+                ) : subscriberCount?.total && subscriberCount.total > 0 ? (
+                  <>
+                    <p>
+                      O plano "<strong>{planToDelete?.name}</strong>" possui{" "}
+                      <strong>{subscriberCount.total} assinatura(s) no histórico</strong> (já canceladas).
+                    </p>
+                    <p className="mt-2">
+                      Deseja realmente excluir? As assinaturas canceladas serão desvinculadas deste plano.
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    Tem certeza que deseja excluir o plano "<strong>{planToDelete?.name}</strong>"? 
+                    Esta ação não pode ser desfeita.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
+            
+            {subscriberCount?.active && subscriberCount.active > 0 ? (
+              <AlertDialogAction
+                onClick={handleDeactivatePlan}
+                className="bg-amber-500 hover:bg-amber-600"
+              >
+                Desativar Plano
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Excluir
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
