@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { createCheckoutSession } from "@/lib/webhook";
+import { useFacebookPixel } from "@/hooks/useFacebookPixel";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -22,6 +23,7 @@ const Plans = () => {
   const { subscription, plan, plans, isTrialing, daysRemaining, loading } = useSubscription();
   const { onMenuClick, barbershopSlug } = useOutletContext<OutletContextType>();
   const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const { trackInitiateCheckoutWithCAPI, generateEventId } = useFacebookPixel();
 
   const currentPlanSlug = subscription?.plan_slug || "basico";
   
@@ -93,6 +95,18 @@ const Plans = () => {
       return;
     }
 
+    // Gerar event_id para deduplicação do Facebook Pixel
+    const eventId = generateEventId(user.id);
+    console.log("Event ID gerado:", eventId);
+
+    // Disparar InitiateCheckout com o event_id
+    await trackInitiateCheckoutWithCAPI({
+      value: corporativoPlan?.price || 79.9,
+      currency: "BRL",
+      contentName: "corporativo",
+      eventId: eventId,
+    });
+
     const payload = {
       action: "upgrade",
       user_id: user.id,
@@ -100,6 +114,7 @@ const Plans = () => {
       price: corporativoPlan?.price || 79.9,
       subscription_id: subscription.id,
       barbershop_id: barbershop.id,
+      event_id: eventId, // Incluir event_id para o N8N usar na successUrl
     };
 
     setUpgradeLoading(true);

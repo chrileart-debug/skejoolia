@@ -110,6 +110,7 @@ export async function createCheckoutSession(payload: {
   price: number;
   subscription_id: string;
   barbershop_id: string;
+  event_id?: string;
   churn_survey?: Record<string, unknown>;
 }): Promise<WebhookResponse<CheckoutResponse>> {
   return webhookRequest<CheckoutResponse>(WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT, {
