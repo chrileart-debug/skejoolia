@@ -53,6 +53,7 @@ export default function Settings() {
   const { isOwner } = useBarbershop();
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [barbershopId, setBarbershopId] = useState<string | null>(null);
@@ -186,70 +187,74 @@ export default function Settings() {
   const loadData = async () => {
     if (!user) return;
     
-    // Load user profile from user_settings
-    const { data: userSettings } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (userSettings) {
-      setProfileData({
-        name: userSettings.nome || "",
-        phone: userSettings.numero || "",
-        email: userSettings.email || user.email || "",
-      });
-    } else {
-      setProfileData(prev => ({ ...prev, email: user.email || "" }));
-    }
-
-    // Load business data from barbershops (via user_barbershop_roles)
-    const { data: roleData } = await supabase
-      .from("user_barbershop_roles")
-      .select("barbershop_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (roleData?.barbershop_id) {
-      setBarbershopId(roleData.barbershop_id);
-      
-      const { data: barbershop } = await supabase
-        .from("barbershops")
+    try {
+      // Load user profile from user_settings
+      const { data: userSettings } = await supabase
+        .from("user_settings")
         .select("*")
-        .eq("id", roleData.barbershop_id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
-      if (barbershop) {
-        setBusinessData({
-          company: barbershop.name || "",
-          publicPhone: barbershop.phone || "",
-          logoUrl: barbershop.logo_url || "",
-          niche: barbershop.nicho || "",
-          subNiche: barbershop.subnicho || "",
-          cpfCnpj: barbershop.cpf_cnpj || "",
-          birthDate: (barbershop as any).bank_owner_birth_date || "",
-          cep: barbershop.cep || "",
-          address: barbershop.address || "",
-          addressNumber: barbershop.address_number || "",
-          bairro: barbershop.bairro || "",
-          city: barbershop.city || "",
-          state: barbershop.state || "",
+      if (userSettings) {
+        setProfileData({
+          name: userSettings.nome || "",
+          phone: userSettings.numero || "",
+          email: userSettings.email || user.email || "",
         });
-
-        // Check if asaas_api_key exists
-        setHasAsaasApiKey(!!(barbershop as any).asaas_api_key);
-
-        // Load banking data
-        setBankingData({
-          operationType: ((barbershop as any).bank_operation_type as "PIX" | "TED") || "PIX",
-          pixKeyType: ((barbershop as any).bank_pix_key_type as "" | "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "EVP") || "",
-          pixKey: (barbershop as any).bank_pix_key || "",
-          bankCode: (barbershop as any).bank_code || "",
-          bankBranch: (barbershop as any).bank_branch || "",
-          bankAccountNumber: (barbershop as any).bank_account_number || "",
-          bankAccountDigit: (barbershop as any).bank_account_digit || "",
-        });
+      } else {
+        setProfileData(prev => ({ ...prev, email: user.email || "" }));
       }
+
+      // Load business data from barbershops (via user_barbershop_roles)
+      const { data: roleData } = await supabase
+        .from("user_barbershop_roles")
+        .select("barbershop_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (roleData?.barbershop_id) {
+        setBarbershopId(roleData.barbershop_id);
+        
+        const { data: barbershop } = await supabase
+          .from("barbershops")
+          .select("*")
+          .eq("id", roleData.barbershop_id)
+          .maybeSingle();
+
+        if (barbershop) {
+          setBusinessData({
+            company: barbershop.name || "",
+            publicPhone: barbershop.phone || "",
+            logoUrl: barbershop.logo_url || "",
+            niche: barbershop.nicho || "",
+            subNiche: barbershop.subnicho || "",
+            cpfCnpj: barbershop.cpf_cnpj || "",
+            birthDate: (barbershop as any).bank_owner_birth_date || "",
+            cep: barbershop.cep || "",
+            address: barbershop.address || "",
+            addressNumber: barbershop.address_number || "",
+            bairro: barbershop.bairro || "",
+            city: barbershop.city || "",
+            state: barbershop.state || "",
+          });
+
+          // Check if asaas_api_key exists
+          setHasAsaasApiKey(!!(barbershop as any).asaas_api_key);
+
+          // Load banking data
+          setBankingData({
+            operationType: ((barbershop as any).bank_operation_type as "PIX" | "TED") || "PIX",
+            pixKeyType: ((barbershop as any).bank_pix_key_type as "" | "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "EVP") || "",
+            pixKey: (barbershop as any).bank_pix_key || "",
+            bankCode: (barbershop as any).bank_code || "",
+            bankBranch: (barbershop as any).bank_branch || "",
+            bankAccountNumber: (barbershop as any).bank_account_number || "",
+            bankAccountDigit: (barbershop as any).bank_account_digit || "",
+          });
+        }
+      }
+    } finally {
+      setIsInitialLoading(false);
     }
   };
 
@@ -481,7 +486,25 @@ export default function Settings() {
       <Header title="Configurações" subtitle="Gerencie sua conta" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
-        {isOwner && barbershopId ? (
+        {isInitialLoading ? (
+          // Skeleton loader to prevent layout shift
+          <div className="space-y-6">
+            <div className="grid w-full grid-cols-2 h-10 bg-muted rounded-md animate-pulse" />
+            <div className="rounded-lg border bg-card p-6 space-y-4">
+              <div className="h-6 w-40 bg-muted rounded animate-pulse" />
+              <div className="h-4 w-60 bg-muted rounded animate-pulse" />
+              <div className="space-y-4 mt-4">
+                <div className="h-10 bg-muted rounded animate-pulse" />
+                <div className="h-10 bg-muted rounded animate-pulse" />
+                <div className="h-10 bg-muted rounded animate-pulse" />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="h-12 flex-1 bg-muted rounded animate-pulse" />
+              <div className="h-12 flex-1 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
+        ) : isOwner && barbershopId ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="profile" className="flex items-center gap-2">
