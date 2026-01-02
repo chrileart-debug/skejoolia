@@ -11,7 +11,7 @@ export function HelpFAB() {
       <Button
         onClick={() => setOpen(true)}
         size="icon"
-        className="fixed bottom-24 right-4 z-50 h-12 w-12 rounded-full shadow-lg lg:bottom-6"
+        className="fixed bottom-40 right-4 z-50 h-12 w-12 rounded-full shadow-lg lg:bottom-20 lg:right-6"
         aria-label="Abrir central de ajuda"
       >
         <HelpCircle className="h-6 w-6" />
