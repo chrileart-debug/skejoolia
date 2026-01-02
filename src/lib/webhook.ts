@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 export const WEBHOOK_ENDPOINTS = {
   WHATSAPP_INTEGRATION: "https://webhook.lernow.com/webhook/integracao_whatsapp",
   WHATSAPP_STATUS: "https://webhook.lernow.com/webhook/integracao_whatsapp_status",
-  ASAAS_CHECKOUT: "https://webhook.lernow.com/webhook/asaas-checkout-skejool",
   CRIAR_AGENTE_IA: "https://webhook.lernow.com/webhook/criar-agente-skejool",
   NEW_USER_REGISTRATION: "https://webhook.lernow.com/webhook/novo-usuario-skejool",
 } as const;
@@ -82,6 +81,9 @@ export async function webhookRequest<T = unknown>(
 export interface CheckoutResponse {
   link?: string;
   checkout_url?: string;
+  checkout_id?: string;
+  session_id?: string;
+  is_existing?: boolean;
   error?: string;
 }
 
@@ -103,6 +105,10 @@ export interface WhatsAppStatusResponse {
   error?: string;
 }
 
+/**
+ * Create checkout session via Supabase Edge Function (NOT N8N)
+ * This calls the asaas-checkout edge function directly
+ */
 export async function createCheckoutSession(payload: {
   action: string;
   user_id: string;
@@ -113,9 +119,41 @@ export async function createCheckoutSession(payload: {
   event_id?: string;
   churn_survey?: Record<string, unknown>;
 }): Promise<WebhookResponse<CheckoutResponse>> {
-  return webhookRequest<CheckoutResponse>(WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT, {
-    body: payload,
-  });
+  try {
+    // Map old action names to checkout_type
+    const checkoutType = payload.action === "subscribe" ? "subscribe" : 
+                         payload.action === "upgrade" ? "upgrade" : 
+                         payload.action === "renew" ? "renew" : "subscribe";
+
+    const { data, error } = await supabase.functions.invoke("asaas-checkout", {
+      body: {
+        action: "create_checkout",
+        user_id: payload.user_id,
+        barbershop_id: payload.barbershop_id,
+        plan_slug: payload.plan_slug,
+        subscription_id: payload.subscription_id,
+        event_id: payload.event_id,
+        checkout_type: checkoutType,
+      },
+    });
+
+    if (error) {
+      console.error("Edge function error:", error);
+      return { data: null, error: error.message || "Erro ao criar checkout" };
+    }
+
+    if (data?.error) {
+      return { data: null, error: data.error };
+    }
+
+    return { data: data as CheckoutResponse, error: null };
+  } catch (error) {
+    console.error("Checkout session error:", error);
+    return { 
+      data: null, 
+      error: error instanceof Error ? error.message : "Erro de conexão" 
+    };
+  }
 }
 
 export async function createWhatsAppInstance(payload: {
@@ -195,4 +233,40 @@ export async function sendNewUserWebhook(
     body: payload as unknown as Record<string, unknown>,
     requireAuth: false, // Não requer auth pois pode ser chamado no momento do signup
   });
+}
+
+/**
+ * Cancel subscription via Supabase Edge Function
+ */
+export async function cancelSubscription(payload: {
+  user_id: string;
+  subscription_id: string;
+  asaas_subscription_id?: string | null;
+  churn_survey?: Record<string, unknown>;
+}): Promise<WebhookResponse<{ success: boolean }>> {
+  try {
+    const { data, error } = await supabase.functions.invoke("asaas-subscription-actions", {
+      body: {
+        action: "cancel",
+        ...payload,
+      },
+    });
+
+    if (error) {
+      console.error("Cancel subscription error:", error);
+      return { data: null, error: error.message || "Erro ao cancelar assinatura" };
+    }
+
+    if (data?.error) {
+      return { data: null, error: data.error };
+    }
+
+    return { data: { success: true }, error: null };
+  } catch (error) {
+    console.error("Cancel subscription error:", error);
+    return { 
+      data: null, 
+      error: error instanceof Error ? error.message : "Erro de conexão" 
+    };
+  }
 }
