@@ -4,6 +4,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,9 @@ interface Barbershop {
 }
 
 interface OutletContextType {
+  onMenuClick: () => void;
   barbershop: Barbershop | null;
+  barbershopSlug: string | null;
 }
 
 interface BarberPlan {
@@ -90,7 +93,7 @@ interface Subscriber {
 }
 
 export default function Club() {
-  const { barbershop } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop, barbershopSlug } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { isActive } = useSubscription();
   const navigate = useNavigate();
@@ -445,22 +448,14 @@ export default function Club() {
   }
 
   return (
-    <div className="container mx-auto p-4 pb-24 md:pb-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Crown className="h-6 w-6 text-primary" />
-            Meu Clube
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie seus planos de assinatura para clientes
-          </p>
-        </div>
-        <Button onClick={handleCreatePlan} className="hidden md:flex">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Plano
-        </Button>
-      </div>
+    <>
+      <Header 
+        title="Meu Clube" 
+        subtitle="Gerencie seus planos de assinatura para clientes" 
+        onMenuClick={onMenuClick}
+        barbershopSlug={barbershopSlug}
+      />
+      <div className="container mx-auto p-4 pb-24 md:pb-8 space-y-6">
 
       {/* Draft Plans CTA Banner */}
       {hasDraftPlans && !isActive && (
@@ -874,5 +869,6 @@ export default function Club() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </>
   );
 }

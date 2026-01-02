@@ -3,16 +3,24 @@ import { Check, Crown, Zap, ArrowRight, Loader2 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useOutletContext } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { createCheckoutSession } from "@/lib/webhook";
 
+interface OutletContextType {
+  onMenuClick: () => void;
+  barbershopSlug: string | null;
+}
+
 const Plans = () => {
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
   const { subscription, plan, plans, isTrialing, daysRemaining, loading } = useSubscription();
+  const { onMenuClick, barbershopSlug } = useOutletContext<OutletContextType>();
   const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   const currentPlanSlug = subscription?.plan_slug || "basico";
@@ -120,28 +128,26 @@ const Plans = () => {
     );
   }
 
+  const getSubtitle = () => {
+    if (isTrialing) {
+      const trialText = `Plano ${plan?.name || "Básico"} em período de teste`;
+      if (daysRemaining !== null) {
+        return `${trialText} — ${daysRemaining} ${daysRemaining === 1 ? "dia restante" : "dias restantes"}`;
+      }
+      return trialText;
+    }
+    return `Seu plano atual: ${plan?.name || "Básico"}`;
+  };
+
   return (
-    <div className="p-4 md:p-6 space-y-6 pb-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Planos</h1>
-        <p className="text-muted-foreground mt-1">
-          {isTrialing ? (
-            <>
-              Você está no plano <span className="font-medium text-primary">{plan?.name || "Básico"}</span> em período de teste
-              {daysRemaining !== null && (
-                <span className="ml-1">
-                  — <span className="font-medium">{daysRemaining} {daysRemaining === 1 ? "dia restante" : "dias restantes"}</span>
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              Seu plano atual: <span className="font-medium text-primary">{plan?.name || "Básico"}</span>
-            </>
-          )}
-        </p>
-      </div>
+    <>
+      <Header 
+        title="Planos" 
+        subtitle={getSubtitle()} 
+        onMenuClick={onMenuClick}
+        barbershopSlug={barbershopSlug}
+      />
+      <div className="p-4 md:p-6 space-y-6 pb-8">
 
       {/* Plans Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
@@ -256,6 +262,7 @@ const Plans = () => {
         </Card>
       </div>
     </div>
+    </>
   );
 };
 
