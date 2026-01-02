@@ -40,9 +40,7 @@ export default function UpdatePassword() {
       const refreshToken = hashParams.get('refresh_token');
       const type = hashParams.get('type');
 
-      // If we have tokens in the URL, set the session
       if (accessToken && refreshToken && type === 'recovery') {
-        console.log('Recovery tokens found in URL, setting session...');
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -82,7 +80,6 @@ export default function UpdatePassword() {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event:', event);
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         setSessionReady(true);
         setCheckingSession(false);

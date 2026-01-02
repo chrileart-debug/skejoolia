@@ -20,22 +20,14 @@ export function FacebookPixel() {
   const location = useLocation();
   const isFirstRender = useRef(true);
 
-  // Track PageView on route changes (including initial load)
   useEffect(() => {
     if (!window.fbq) {
       console.warn("[FB Pixel] fbq not available");
       return;
     }
 
-    // Track PageView for all route changes including first render
     window.fbq("track", "PageView");
-    
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      console.log(`[FB Pixel] Initial PageView: ${location.pathname}`);
-    } else {
-      console.log(`[FB Pixel] SPA PageView: ${location.pathname}`);
-    }
+    isFirstRender.current = false;
   }, [location.pathname]);
 
   return null;

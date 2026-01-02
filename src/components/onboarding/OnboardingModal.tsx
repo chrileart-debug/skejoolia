@@ -104,7 +104,6 @@ export function OnboardingModal({
         localStorage.setItem(`fb_tracked_${userId}`, "true");
         localStorage.removeItem("pending_fb_event_id");
         localStorage.removeItem("pending_plan_slug");
-        console.log("[OnboardingModal] CompleteRegistration fired as backup");
       }
 
       toast.success("Dados salvos com sucesso!");

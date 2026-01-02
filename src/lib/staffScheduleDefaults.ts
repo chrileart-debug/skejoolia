@@ -29,9 +29,7 @@ export async function createDefaultStaffSchedules(
 
     if (checkError) throw checkError;
 
-    // If schedules already exist, skip creation
     if (existingSchedules && existingSchedules.length > 0) {
-      console.log("Staff schedules already exist for user:", userId);
       return { success: true };
     }
 
@@ -53,14 +51,11 @@ export async function createDefaultStaffSchedules(
       });
     }
 
-    // Insert all schedules at once
     const { error: insertError } = await supabase
       .from("staff_schedules")
       .insert(defaultSchedules);
 
     if (insertError) throw insertError;
-
-    console.log("Default staff schedules created for user:", userId);
     return { success: true };
   } catch (error) {
     console.error("Error creating default staff schedules:", error);

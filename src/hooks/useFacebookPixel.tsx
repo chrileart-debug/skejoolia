@@ -39,34 +39,26 @@ export function useFacebookPixel() {
    */
   const trackCompleteRegistration = useCallback(
     async (params: CompleteRegistrationParams) => {
-      // Prevent duplicate firing (e.g., from re-renders or double-clicks)
       if (hasFiredRegistration.current) {
-        console.log("[FB Pixel] CompleteRegistration already fired, skipping duplicate");
         return;
       }
       hasFiredRegistration.current = true;
 
       const { eventId, userRole = "owner", email, phone, name, userId } = params;
 
-      // 1. BROWSER EVENT (fbq)
       if (typeof window !== "undefined" && window.fbq) {
         window.fbq("track", "CompleteRegistration", {
           content_name: userRole,
-          eventID: eventId, // eventID is the browser key for dedup
+          eventID: eventId,
         });
-        console.log("[FB Pixel] CompleteRegistration tracked browser-side:", { eventId, userRole });
-      } else {
-        console.warn("[FB Pixel] fbq not available for CompleteRegistration");
       }
 
-      // 2. CAPI EVENT (Edge Function)
       try {
-        const { data, error } = await supabase.functions.invoke("fb-conversions", {
+        const { error } = await supabase.functions.invoke("fb-conversions", {
           body: {
-            event_id: eventId, // event_id is the CAPI key for dedup
+            event_id: eventId,
             role: userRole,
             user_id: userId,
-            // Optional user data for better matching
             email: email,
             phone: phone,
             name: name,
@@ -75,8 +67,6 @@ export function useFacebookPixel() {
 
         if (error) {
           console.error("[FB Pixel] CAPI CompleteRegistration error:", error);
-        } else {
-          console.log("[FB Pixel] CompleteRegistration tracked CAPI-side:", data);
         }
       } catch (err) {
         console.error("[FB Pixel] CAPI CompleteRegistration exception:", err);
@@ -92,7 +82,6 @@ export function useFacebookPixel() {
     hasFiredRegistration.current = false;
   }, []);
 
-  // Evento Purchase com event_id para deduplicação
   const trackPurchase = useCallback(
     (params: {
       value: number;
@@ -109,15 +98,11 @@ export function useFacebookPixel() {
           content_type: params.contentType || "subscription",
           eventID: params.eventId,
         });
-        console.log("[FB Pixel] Purchase tracked client-side:", params);
-      } else {
-        console.warn("[FB Pixel] fbq not available for Purchase");
       }
     },
     []
   );
 
-  // Evento InitiateCheckout (início do checkout)
   const trackInitiateCheckout = useCallback(
     (params: {
       value?: number;
@@ -135,13 +120,11 @@ export function useFacebookPixel() {
           eventParams.eventID = params.eventId;
         }
         window.fbq("track", "InitiateCheckout", eventParams);
-        console.log("[FB Pixel] InitiateCheckout tracked client-side:", eventParams);
       }
     },
     []
   );
 
-  // Evento Lead (captura de lead)
   const trackLead = useCallback(
     (params?: { contentName?: string; eventId?: string }) => {
       if (typeof window !== "undefined" && window.fbq) {
@@ -150,19 +133,16 @@ export function useFacebookPixel() {
         if (params?.eventId) eventParams.eventID = params.eventId;
         
         window.fbq("track", "Lead", eventParams);
-        console.log("[FB Pixel] Lead tracked client-side:", eventParams);
       }
     },
     []
   );
 
-  // Evento customizado genérico
   const trackCustomEvent = useCallback(
     (eventName: string, params?: Record<string, unknown>, eventId?: string) => {
       if (typeof window !== "undefined" && window.fbq) {
         const eventParams = eventId ? { ...params, eventID: eventId } : params;
         window.fbq("track", eventName, eventParams);
-        console.log(`[FB Pixel] ${eventName} tracked client-side:`, eventParams);
       }
     },
     []
