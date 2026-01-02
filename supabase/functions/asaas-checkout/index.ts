@@ -6,80 +6,33 @@ const corsHeaders = {
 };
 
 const CHECKOUT_EXPIRY_MINUTES = 10;
+const ASAAS_API_URL = "https://www.asaas.com/api/v3";
 
 function formatDateForAsaas(date: Date): string {
-  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+  return date.toISOString().split('T')[0];
 }
 
-// Call N8N Proxy (proven to work!)
-async function callAsaasProxy(method: string, endpoint: string, body: unknown | null): Promise<Response> {
-  const proxyUrl = Deno.env.get("ASAAS_PROXY_URL");
-  const proxyToken = Deno.env.get("ASAAS_PROXY_TOKEN");
-
-  if (!proxyUrl || !proxyToken) {
-    throw new Error("PROXY_NOT_CONFIGURED");
-  }
-
-  const url = `${proxyUrl}${endpoint}`;
-  console.log(`Calling Asaas via PROXY: ${method} ${url}`);
-
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${proxyToken}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  return response;
-}
-
-// Call Asaas API DIRECTLY (fallback)
-async function callAsaasDirect(method: string, endpoint: string, body: unknown | null): Promise<Response> {
+// Chamada direta à API do Asaas (sem N8N)
+async function callAsaas(method: string, endpoint: string, body: unknown | null): Promise<Response> {
   const apiKey = Deno.env.get("ASAAS_API_KEY");
   
   if (!apiKey) {
     throw new Error("ASAAS_API_KEY não configurada");
   }
 
-  // Try both possible base URLs
-  const baseUrls = [
-    "https://api.asaas.com/v3",
-    "https://www.asaas.com/api/v3"
-  ];
+  const url = `${ASAAS_API_URL}${endpoint}`;
+  console.log(`Asaas API: ${method} ${url}`);
 
-  let lastResponse: Response | null = null;
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "access_token": apiKey,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-  for (const baseUrl of baseUrls) {
-    const url = `${baseUrl}${endpoint}`;
-    console.log(`Trying Asaas DIRECT: ${method} ${url}`);
-    
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "access_token": apiKey,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      // If not 404, use this response
-      if (response.status !== 404) {
-        return response;
-      }
-      
-      lastResponse = response;
-      console.log(`Got 404 from ${url}, trying next...`);
-    } catch (e) {
-      console.error(`Error calling ${url}:`, e);
-    }
-  }
-
-  // Return last response or throw
-  if (lastResponse) return lastResponse;
-  throw new Error("All Asaas endpoints failed");
+  return response;
 }
 
 interface CheckoutRequest {
@@ -89,11 +42,10 @@ interface CheckoutRequest {
   plan_slug: string;
   event_id?: string;
   subscription_id?: string;
-  checkout_type?: string; // "subscribe" | "upgrade" | "renew"
+  checkout_type?: string;
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -104,7 +56,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: CheckoutRequest = await req.json();
-    console.log("Checkout request received:", JSON.stringify(body));
+    console.log("Checkout request:", JSON.stringify(body));
 
     const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id, checkout_type } = body;
 
@@ -116,7 +68,7 @@ Deno.serve(async (req) => {
       throw new Error("Dados obrigatórios faltando: user_id, barbershop_id, plan_slug");
     }
 
-    // 1. Get plan details FIRST to filter sessions by plan
+    // 1. Buscar plano
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
@@ -125,13 +77,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (planError || !plan) {
-      console.error("Plan not found:", planError);
+      console.error("Plano não encontrado:", planError);
       throw new Error(`Plano não encontrado: ${plan_slug}`);
     }
 
-    console.log("Plan found:", plan.name, "price:", plan.price);
+    console.log("Plano:", plan.name, "preço:", plan.price);
 
-    // 2. Check for existing valid session_checkout for THIS SPECIFIC PLAN
+    // 2. Verificar sessão existente válida (< 10 minutos)
     const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
     
     const { data: existingSession } = await supabase
@@ -140,16 +92,14 @@ Deno.serve(async (req) => {
       .eq("user_id", user_id)
       .eq("barbershop_id", barbershop_id)
       .eq("plan_name", plan.name)
-      .not("status", "in", '("EXPIRED","COMPLETED","CANCELED")')
+      .eq("status", "pending")
       .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    console.log("Session lookup for plan:", plan.name, "found:", existingSession?.id || "none");
-
     if (existingSession?.asaas_checkout_link) {
-      console.log("Reusing existing valid session:", existingSession.id);
+      console.log("Reutilizando sessão existente:", existingSession.id);
       return new Response(
         JSON.stringify({
           checkout_url: existingSession.asaas_checkout_link,
@@ -161,7 +111,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Mark old pending sessions for THIS PLAN ONLY as expired
+    // 3. Marcar sessões antigas como EXPIRED
     await supabase
       .from("session_checkout")
       .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
@@ -170,7 +120,7 @@ Deno.serve(async (req) => {
       .eq("plan_name", plan.name)
       .eq("status", "pending");
 
-    // 4. Get barbershop details
+    // 4. Buscar dados da barbearia
     const { data: barbershop, error: barbershopError } = await supabase
       .from("barbershops")
       .select("id, name, asaas_customer_id")
@@ -178,11 +128,11 @@ Deno.serve(async (req) => {
       .single();
 
     if (barbershopError || !barbershop) {
-      console.error("Barbershop not found:", barbershopError);
+      console.error("Barbearia não encontrada:", barbershopError);
       throw new Error("Empresa não encontrada");
     }
 
-    // 5. Build successUrl with event_id for Facebook Pixel deduplication
+    // 5. URLs de callback
     const baseSuccessUrl = "https://app.skejool.com.br/obrigado";
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
@@ -193,9 +143,8 @@ Deno.serve(async (req) => {
     const successUrl = `${baseSuccessUrl}?${successParams.toString()}`;
     const cancelUrl = "https://app.skejool.com.br/dashboard";
     const expiredUrl = "https://app.skejool.com.br/dashboard";
-    console.log("Success URL:", successUrl);
 
-    // 6. Build external reference for webhook identification
+    // 6. External reference para webhook
     const externalReference = JSON.stringify({
       user_id,
       barbershop_id,
@@ -205,10 +154,7 @@ Deno.serve(async (req) => {
       checkout_type: checkout_type || "subscribe",
     });
 
-    // 7. Calculate next due date
-    const nextDueDate = formatDateForAsaas(new Date());
-
-    // 8. Build the checkout payload
+    // 7. Payload do checkout
     const asaasPayload = {
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
@@ -227,152 +173,56 @@ Deno.serve(async (req) => {
       }],
       subscription: {
         cycle: "MONTHLY",
-        nextDueDate,
+        nextDueDate: formatDateForAsaas(new Date()),
       },
       externalReference,
     };
 
-    console.log("Creating Asaas checkout with payload:", JSON.stringify(asaasPayload));
+    console.log("Criando checkout no Asaas:", JSON.stringify(asaasPayload));
 
-    // 9. Try PROXY first (N8N - proven to work), fallback to DIRECT
-    let asaasData: { id?: string; link?: string; url?: string; errors?: Array<{ description: string }>; message?: string } | null = null;
-    let provider = "proxy";
-    let responseOk = false;
+    // 8. Chamar API do Asaas diretamente
+    const asaasResponse = await callAsaas("POST", "/checkouts", asaasPayload);
+    const asaasText = await asaasResponse.text();
+    
+    console.log("Asaas status:", asaasResponse.status);
+    console.log("Asaas response:", asaasText.substring(0, 500));
 
-    // Try N8N Proxy first
-    try {
-      console.log("Attempting N8N PROXY...");
-      const proxyResponse = await callAsaasProxy("POST", "/checkouts", asaasPayload);
-      const proxyText = await proxyResponse.text();
-      console.log("Proxy response status:", proxyResponse.status);
-      console.log("Proxy response body:", proxyText.substring(0, 500));
-
-      if (proxyResponse.ok && !proxyText.includes("<!doctype") && !proxyText.includes("<html")) {
-        try {
-          asaasData = JSON.parse(proxyText);
-          if (asaasData?.id) {
-            responseOk = true;
-            console.log("PROXY succeeded with id:", asaasData.id);
-          }
-        } catch {
-          console.error("Failed to parse proxy response");
-        }
-      }
-    } catch (proxyError) {
-      console.error("Proxy failed:", proxyError);
+    if (!asaasResponse.ok) {
+      console.error("Erro Asaas:", asaasText);
+      throw new Error(`Erro ao criar checkout: ${asaasResponse.status}`);
     }
 
-    // If proxy failed, try DIRECT
-    if (!responseOk) {
-      console.log("Proxy failed or returned error, trying DIRECT...");
-      provider = "direct";
+    const asaasData = JSON.parse(asaasText);
 
-      // Try multiple endpoints
-      const endpoints = ["/checkouts", "/checkoutSessions"];
-      
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying direct endpoint: ${endpoint}`);
-          const directResponse = await callAsaasDirect("POST", endpoint, asaasPayload);
-          const directText = await directResponse.text();
-          console.log(`Direct ${endpoint} status:`, directResponse.status);
-          console.log(`Direct ${endpoint} body:`, directText.substring(0, 500));
-
-          // Skip if HTML response
-          if (directText.includes("<!doctype") || directText.includes("<html")) {
-            console.log(`Endpoint ${endpoint} returned HTML, trying next...`);
-            continue;
-          }
-
-          if (directResponse.ok) {
-            try {
-              asaasData = JSON.parse(directText);
-              if (asaasData?.id) {
-                responseOk = true;
-                console.log(`DIRECT ${endpoint} succeeded with id:`, asaasData.id);
-                break;
-              }
-            } catch {
-              console.error("Failed to parse direct response");
-            }
-          }
-        } catch (e) {
-          console.error(`Direct ${endpoint} failed:`, e);
-        }
-      }
+    if (!asaasData.id) {
+      console.error("Resposta Asaas sem ID:", asaasData);
+      throw new Error("Resposta inválida do Asaas");
     }
 
-    // If both failed, throw error
-    if (!responseOk || !asaasData?.id) {
-      console.error("All checkout attempts failed");
-      throw new Error("Falha ao criar checkout - tente novamente em alguns minutos");
-    }
-
-    console.log(`Checkout created via ${provider}:`, asaasData.id);
-
-    // 10. Build checkout URL
+    // 9. Montar URL do checkout
     const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
-    console.log("Final checkout URL:", checkoutUrl);
+    console.log("Checkout URL:", checkoutUrl);
 
-    // 11. Save or update session in database
-    const { data: expiredSession } = await supabase
+    // 10. Salvar sessão no banco
+    const { data: newSession, error: dbError } = await supabase
       .from("session_checkout")
-      .select("id")
-      .eq("user_id", user_id)
-      .eq("barbershop_id", barbershop_id)
-      .eq("plan_name", plan.name)
-      .eq("status", "EXPIRED")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let newSession;
-    let dbError;
-
-    if (expiredSession) {
-      console.log("Updating expired session:", expiredSession.id);
-      const result = await supabase
-        .from("session_checkout")
-        .update({
-          asaas_checkout_id: asaasData.id,
-          asaas_checkout_link: checkoutUrl,
-          plan_price: plan.price,
-          status: "pending",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", expiredSession.id)
-        .select()
-        .single();
-      
-      newSession = result.data;
-      dbError = result.error;
-    } else {
-      console.log("Creating new checkout session for plan:", plan.name);
-      const result = await supabase
-        .from("session_checkout")
-        .insert({
-          user_id,
-          barbershop_id,
-          asaas_checkout_id: asaasData.id,
-          asaas_checkout_link: checkoutUrl,
-          plan_name: plan.name,
-          plan_price: plan.price,
-          status: "pending",
-        })
-        .select()
-        .single();
-      
-      newSession = result.data;
-      dbError = result.error;
-    }
+      .insert({
+        user_id,
+        barbershop_id,
+        asaas_checkout_id: asaasData.id,
+        asaas_checkout_link: checkoutUrl,
+        plan_name: plan.name,
+        plan_price: plan.price,
+        status: "pending",
+      })
+      .select()
+      .single();
 
     if (dbError) {
-      console.error("Error saving session:", dbError);
-      // Continue anyway - we have the URL
+      console.error("Erro ao salvar sessão:", dbError);
     }
 
-    console.log("Session saved:", newSession?.id, "provider:", provider);
+    console.log("Sessão criada:", newSession?.id);
 
     return new Response(
       JSON.stringify({
@@ -381,12 +231,11 @@ Deno.serve(async (req) => {
         checkout_id: asaasData.id,
         session_id: newSession?.id,
         is_existing: false,
-        provider,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Checkout error:", error);
+    console.error("Erro no checkout:", error);
     const message = error instanceof Error ? error.message : "Erro interno";
     return new Response(
       JSON.stringify({ error: message }),
