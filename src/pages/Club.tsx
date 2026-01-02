@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +97,9 @@ export default function Club() {
   const { user } = useAuth();
   const { isActive } = useSubscription();
   const navigate = useNavigate();
+  
+  useSetPageHeader("Meu Clube", "Gerencie seus planos de assinatura para clientes");
+  
   const [plans, setPlans] = useState<BarberPlan[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
@@ -449,12 +452,6 @@ export default function Club() {
 
   return (
     <>
-      <Header 
-        title="Meu Clube" 
-        subtitle="Gerencie seus planos de assinatura para clientes" 
-        onMenuClick={onMenuClick}
-        barbershopSlug={barbershopSlug}
-      />
       <div className="container mx-auto p-4 pb-24 md:pb-8 space-y-6">
 
       {/* Draft Plans CTA Banner */}

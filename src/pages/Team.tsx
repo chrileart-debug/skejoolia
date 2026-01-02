@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2 } from "lucide-react";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { StaffConfigSheet } from "@/components/staff/StaffConfigSheet";
 import { Button } from "@/components/ui/button";
 import type { Json } from "@/integrations/supabase/types";
@@ -82,6 +82,8 @@ export default function Team() {
   const { onMenuClick, barbershop, barbershopSlug, isOwner } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { subscription } = useSubscription();
+  
+  useSetPageHeader("Equipe", "Gerencie os membros da sua barbearia");
   
   // Check if user is on basico plan (solo barber mode)
   const isBasicoPlan = subscription?.plan_slug === "basico";
@@ -363,33 +365,18 @@ export default function Team() {
 
   if (!isOwner) {
     return (
-      <>
-        <Header 
-          title="Equipe" 
-          subtitle="Gerencie os membros da sua barbearia" 
-          onMenuClick={onMenuClick}
-          barbershopSlug={barbershopSlug}
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+        <EmptyState
+          icon={<Users className="w-10 h-10 text-muted-foreground" />}
+          title="Acesso Restrito"
+          description="Apenas proprietários podem gerenciar a equipe."
         />
-        <div className="container mx-auto px-4 py-6 max-w-4xl">
-          <EmptyState
-            icon={<Users className="w-10 h-10 text-muted-foreground" />}
-            title="Acesso Restrito"
-            description="Apenas proprietários podem gerenciar a equipe."
-          />
-        </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <Header 
-        title="Equipe" 
-        subtitle="Gerencie os membros da sua barbearia" 
-        onMenuClick={onMenuClick}
-        barbershopSlug={barbershopSlug}
-      />
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="container mx-auto px-4 py-6 max-w-4xl">
 
       {/* Team Members List */}
       {loading ? (

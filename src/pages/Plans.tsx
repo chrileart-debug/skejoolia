@@ -4,8 +4,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useOutletContext } from "react-router-dom";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -27,6 +27,19 @@ const Plans = () => {
   
   const basicoPlan = plans.find(p => p.slug === "basico");
   const corporativoPlan = plans.find(p => p.slug === "corporativo");
+
+  const getSubtitle = () => {
+    if (isTrialing) {
+      const trialText = `Plano ${plan?.name || "Básico"} em período de teste`;
+      if (daysRemaining !== null) {
+        return `${trialText} — ${daysRemaining} ${daysRemaining === 1 ? "dia restante" : "dias restantes"}`;
+      }
+      return trialText;
+    }
+    return `Seu plano atual: ${plan?.name || "Básico"}`;
+  };
+
+  useSetPageHeader("Planos", getSubtitle());
 
   const formatLimit = (value: number | null) => {
     if (value === null || value >= 9999) return "Ilimitados";
@@ -128,27 +141,8 @@ const Plans = () => {
     );
   }
 
-  const getSubtitle = () => {
-    if (isTrialing) {
-      const trialText = `Plano ${plan?.name || "Básico"} em período de teste`;
-      if (daysRemaining !== null) {
-        return `${trialText} — ${daysRemaining} ${daysRemaining === 1 ? "dia restante" : "dias restantes"}`;
-      }
-      return trialText;
-    }
-    return `Seu plano atual: ${plan?.name || "Básico"}`;
-  };
-
   return (
-    <>
-      <Header 
-        title="Planos" 
-        subtitle={getSubtitle()} 
-        onMenuClick={onMenuClick}
-        barbershopSlug={barbershopSlug}
-      />
-      <div className="p-4 md:p-6 space-y-6 pb-8">
-
+    <div className="p-4 md:p-6 space-y-6 pb-8">
       {/* Plans Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto">
         {/* Plano Básico */}
@@ -262,7 +256,6 @@ const Plans = () => {
         </Card>
       </div>
     </div>
-    </>
   );
 };
 
