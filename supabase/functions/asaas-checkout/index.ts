@@ -203,7 +203,9 @@ Deno.serve(async (req) => {
 
     let asaasData;
     try {
-      asaasData = JSON.parse(responseText);
+      const parsed = JSON.parse(responseText);
+      // Handle array response from N8N proxy
+      asaasData = Array.isArray(parsed) ? parsed[0] : parsed;
     } catch {
       console.error("Failed to parse Asaas response as JSON:", responseText.substring(0, 200));
       throw new Error("Resposta inválida do Asaas - verifique a API key e configuração");
@@ -216,8 +218,9 @@ Deno.serve(async (req) => {
 
     console.log("Asaas checkout created:", JSON.stringify(asaasData));
 
-    // Build checkout URL - Asaas checkouts use this format
-    const checkoutUrl = asaasData.url || `https://asaas.com/checkoutSession/show?id=${asaasData.id}`;
+    // Use the link property from Asaas response (not url)
+    const checkoutUrl = asaasData.link || `https://www.asaas.com/checkoutSession/show/${asaasData.id}`;
+    console.log("Checkout URL:", checkoutUrl);
 
     // 7. Save session to database
     const { data: newSession, error: insertError } = await supabase
