@@ -5,7 +5,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ASAAS_API_URL = "https://api.asaas.com/v3";
+// Helper function to call Asaas via N8N proxy
+async function callAsaasProxy(method: string, endpoint: string, body: unknown | null): Promise<Response> {
+  const proxyUrl = Deno.env.get("ASAAS_PROXY_URL");
+  const proxyToken = Deno.env.get("ASAAS_PROXY_TOKEN");
+  
+  if (!proxyUrl || !proxyToken) {
+    throw new Error("ASAAS_PROXY_URL ou ASAAS_PROXY_TOKEN não configurados");
+  }
+
+  console.log(`Calling Asaas proxy: ${method} ${endpoint}`);
+  
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-proxy-token": proxyToken,
+    },
+    body: JSON.stringify({
+      method,
+      endpoint,
+      body,
+    }),
+  });
+
+  return response;
+}
 
 interface ActionRequest {
   action: string;
@@ -22,12 +47,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
-    if (!ASAAS_API_KEY) {
-      console.error("ASAAS_API_KEY not configured");
-      throw new Error("ASAAS_API_KEY não configurada");
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -45,17 +64,11 @@ Deno.serve(async (req) => {
       case "cancel": {
         console.log("Processing subscription cancellation");
 
-        // 1. If we have Asaas subscription ID, cancel on Asaas first
+        // 1. If we have Asaas subscription ID, cancel on Asaas first via proxy
         if (asaas_subscription_id) {
-          console.log("Canceling on Asaas:", asaas_subscription_id);
+          console.log("Canceling on Asaas via proxy:", asaas_subscription_id);
           
-          const asaasResponse = await fetch(`${ASAAS_API_URL}/subscriptions/${asaas_subscription_id}`, {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-              "access_token": ASAAS_API_KEY,
-            },
-          });
+          const asaasResponse = await callAsaasProxy("DELETE", `/subscriptions/${asaas_subscription_id}`, null);
 
           const responseText = await asaasResponse.text();
           console.log("Asaas cancel response status:", asaasResponse.status);

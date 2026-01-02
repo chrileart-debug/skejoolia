@@ -5,11 +5,37 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ASAAS_API_URL = "https://api.asaas.com/v3";
 const CHECKOUT_EXPIRY_MINUTES = 10;
 
 function formatDateForAsaas(date: Date): string {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+// Helper function to call Asaas via N8N proxy
+async function callAsaasProxy(method: string, endpoint: string, body: unknown | null): Promise<Response> {
+  const proxyUrl = Deno.env.get("ASAAS_PROXY_URL");
+  const proxyToken = Deno.env.get("ASAAS_PROXY_TOKEN");
+  
+  if (!proxyUrl || !proxyToken) {
+    throw new Error("ASAAS_PROXY_URL ou ASAAS_PROXY_TOKEN não configurados");
+  }
+
+  console.log(`Calling Asaas proxy: ${method} ${endpoint}`);
+  
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-proxy-token": proxyToken,
+    },
+    body: JSON.stringify({
+      method,
+      endpoint,
+      body,
+    }),
+  });
+
+  return response;
 }
 
 interface CheckoutRequest {
@@ -29,12 +55,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
-    if (!ASAAS_API_KEY) {
-      console.error("ASAAS_API_KEY not configured");
-      throw new Error("ASAAS_API_KEY não configurada");
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -140,7 +160,7 @@ Deno.serve(async (req) => {
     // 6. Calculate next due date (today or tomorrow depending on business rules)
     const nextDueDate = formatDateForAsaas(new Date());
 
-    // 7. Create Asaas Checkout Session using correct endpoint: POST /v3/checkouts
+    // 7. Create Asaas Checkout Session using proxy via N8N
     const asaasPayload = {
       billingTypes: ["CREDIT_CARD", "PIX"],
       chargeTypes: ["RECURRENT"],
@@ -164,16 +184,9 @@ Deno.serve(async (req) => {
       externalReference,
     };
 
-    console.log("Creating Asaas checkout with payload:", JSON.stringify(asaasPayload));
+    console.log("Creating Asaas checkout via proxy with payload:", JSON.stringify(asaasPayload));
 
-    const asaasResponse = await fetch(`${ASAAS_API_URL}/checkouts`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "access_token": ASAAS_API_KEY,
-      },
-      body: JSON.stringify(asaasPayload),
-    });
+    const asaasResponse = await callAsaasProxy("POST", "/checkouts", asaasPayload);
 
     // Handle response - check content type first
     const contentType = asaasResponse.headers.get("content-type") || "";
