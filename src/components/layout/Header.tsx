@@ -69,7 +69,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const initials = getInitials(userName);
 
   return (
-    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border">
+    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border lg:relative">
       <div className="flex items-center justify-between h-16 px-4 lg:px-6">
         <div className="flex items-center gap-3">
           <Button

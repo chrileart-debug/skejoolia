@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2 } from "lucide-react";
+import { Header } from "@/components/layout/Header";
 import { StaffConfigSheet } from "@/components/staff/StaffConfigSheet";
 import { Button } from "@/components/ui/button";
 import type { Json } from "@/integrations/supabase/types";
@@ -66,6 +67,7 @@ interface TeamMember {
 type OutletContextType = {
   onMenuClick: () => void;
   barbershop: Barbershop | null;
+  barbershopSlug: string | null;
   isOwner: boolean;
 };
 
@@ -77,7 +79,7 @@ const DEFAULT_PERMISSIONS: Permissions = {
 };
 
 export default function Team() {
-  const { onMenuClick, barbershop, isOwner } = useOutletContext<OutletContextType>();
+  const { onMenuClick, barbershop, barbershopSlug, isOwner } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { subscription } = useSubscription();
   
@@ -361,25 +363,33 @@ export default function Team() {
 
   if (!isOwner) {
     return (
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
-        <EmptyState
-          icon={<Users className="w-10 h-10 text-muted-foreground" />}
-          title="Acesso Restrito"
-          description="Apenas proprietários podem gerenciar a equipe."
+      <>
+        <Header 
+          title="Equipe" 
+          subtitle="Gerencie os membros da sua barbearia" 
+          onMenuClick={onMenuClick}
+          barbershopSlug={barbershopSlug}
         />
-      </div>
+        <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <EmptyState
+            icon={<Users className="w-10 h-10 text-muted-foreground" />}
+            title="Acesso Restrito"
+            description="Apenas proprietários podem gerenciar a equipe."
+          />
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Equipe</h1>
-        <p className="text-muted-foreground">
-          Gerencie os membros da sua barbearia
-        </p>
-      </div>
+    <>
+      <Header 
+        title="Equipe" 
+        subtitle="Gerencie os membros da sua barbearia" 
+        onMenuClick={onMenuClick}
+        barbershopSlug={barbershopSlug}
+      />
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
 
       {/* Team Members List */}
       {loading ? (
@@ -724,5 +734,6 @@ export default function Team() {
         isBasicoPlan={isBasicoPlan}
       />
     </div>
+    </>
   );
 }
