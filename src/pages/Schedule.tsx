@@ -709,7 +709,7 @@ export default function Schedule() {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
+    <div className="min-h-screen min-w-0">
       <Header title="Agenda" subtitle="Gerencie seus agendamentos" onMenuClick={onMenuClick} />
 
       <div className="p-4 lg:p-6">
