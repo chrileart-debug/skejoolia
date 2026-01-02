@@ -108,6 +108,9 @@ export default function Services() {
   const { onMenuClick, barbershop, categories, refreshCategories } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { checkLimit } = useSubscription();
+  
+  // Set page header
+  useSetPageHeader("Serviços", "Gerencie seu cardápio");
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

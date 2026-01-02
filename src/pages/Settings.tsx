@@ -52,6 +52,9 @@ export default function Settings() {
   const { user, signOut } = useAuth();
   const { isOwner } = useBarbershop();
   
+  // Set page header
+  useSetPageHeader("Configurações", "Gerencie sua conta");
+  
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
