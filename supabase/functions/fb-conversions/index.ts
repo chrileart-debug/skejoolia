@@ -15,6 +15,23 @@ async function sha256Hash(value: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Supported event types
+type EventName = 'CompleteRegistration' | 'Purchase' | 'Lead' | 'InitiateCheckout';
+
+interface EventPayload {
+  event_name?: EventName;
+  event_id: string;
+  role?: string;
+  user_id?: string;
+  email?: string;
+  phone?: string;
+  name?: string;
+  value?: number;
+  currency?: string;
+  content_name?: string;
+  content_type?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -38,18 +55,27 @@ serve(async (req) => {
       || 'unknown';
     const clientUserAgent = req.headers.get('user-agent') || 'unknown';
 
-    const payload = await req.json();
+    const payload: EventPayload = await req.json();
     const { 
+      event_name = 'CompleteRegistration', // Default for backwards compatibility
       event_id, 
       role, 
       user_id,
-      // Optional user data passed directly from client for better matching
       email: directEmail,
       phone: directPhone,
       name: directName,
+      value,
+      currency = 'BRL',
+      content_name,
+      content_type,
     } = payload;
 
-    console.log('[FB CAPI] Triggered with:', { event_id, role, user_id: user_id ? 'present' : 'null' });
+    console.log('[FB CAPI] Triggered with:', { 
+      event_name, 
+      event_id, 
+      user_id: user_id ? 'present' : 'null',
+      value,
+    });
 
     // event_id is REQUIRED for proper deduplication
     if (!event_id) {
@@ -60,7 +86,7 @@ serve(async (req) => {
       );
     }
 
-    // Try to get user data from database if user_id provided, otherwise use direct data
+    // Try to get user data from database if user_id provided
     let email = directEmail;
     let phone = directPhone;
     let name = directName;
@@ -112,28 +138,58 @@ serve(async (req) => {
     if (hashedName) userData.fn = [hashedName];
     if (hashedExternalId) userData.external_id = [hashedExternalId];
 
+    // Build event data based on event type
+    const eventData: Record<string, unknown> = {
+      event_name,
+      event_time: eventTime,
+      action_source: 'website',
+      event_id, // CRITICAL: same as eventID on browser for dedup
+      user_data: userData,
+    };
+
+    // Add custom_data based on event type
+    const customData: Record<string, unknown> = {};
+
+    switch (event_name) {
+      case 'CompleteRegistration':
+        customData.user_role = role || 'owner';
+        if (content_name) customData.content_name = content_name;
+        break;
+
+      case 'Purchase':
+        if (value !== undefined) customData.value = value;
+        customData.currency = currency;
+        if (content_name) customData.content_name = content_name;
+        if (content_type) customData.content_type = content_type;
+        break;
+
+      case 'Lead':
+        if (content_name) customData.content_name = content_name;
+        break;
+
+      case 'InitiateCheckout':
+        if (value !== undefined) customData.value = value;
+        customData.currency = currency;
+        if (content_name) customData.content_name = content_name;
+        break;
+    }
+
+    if (Object.keys(customData).length > 0) {
+      eventData.custom_data = customData;
+    }
+
     const eventPayload = {
-      data: [
-        {
-          event_name: 'CompleteRegistration',
-          event_time: eventTime,
-          action_source: 'website',
-          event_id: event_id, // CRITICAL: same as eventID on browser for dedup
-          user_data: userData,
-          custom_data: {
-            user_role: role || 'owner',
-          },
-        },
-      ],
+      data: [eventData],
     };
 
     console.log('[FB CAPI] Sending event to Facebook:', JSON.stringify({
       event_id,
-      event_name: 'CompleteRegistration',
+      event_name,
       has_email: !!hashedEmail,
       has_phone: !!hashedPhone,
       has_name: !!hashedName,
       has_external_id: !!hashedExternalId,
+      value,
     }));
 
     // Enviar para Facebook Conversions API
@@ -156,13 +212,13 @@ serve(async (req) => {
       );
     }
 
-    console.log('[FB CAPI] CompleteRegistration sent successfully:', {
+    console.log(`[FB CAPI] ${event_name} sent successfully:`, {
       event_id,
       events_received: fbResult.events_received,
     });
 
     return new Response(
-      JSON.stringify({ success: true, event_id, facebook_response: fbResult }),
+      JSON.stringify({ success: true, event_id, event_name, facebook_response: fbResult }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
