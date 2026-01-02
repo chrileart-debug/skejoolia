@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
 import { Button } from "@/components/ui/button";
@@ -105,10 +105,11 @@ interface OutletContextType {
 }
 
 export default function Services() {
-  const { onMenuClick, barbershop, categories, refreshCategories } = useOutletContext<OutletContextType>();
+  const { barbershop, categories, refreshCategories } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { checkLimit } = useSubscription();
   
+  useSetPageHeader("Serviços", "Gerencie seu cardápio");
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -692,7 +693,6 @@ export default function Services() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Serviços" subtitle="Gerencie seu cardápio" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -781,8 +781,6 @@ export default function Services() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Serviços" subtitle="Gerencie seu cardápio" onMenuClick={onMenuClick} />
-
       <div className="p-4 lg:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 max-w-md">

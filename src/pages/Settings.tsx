@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,11 +47,12 @@ interface OutletContextType {
 }
 
 export default function Settings() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  useOutletContext<OutletContextType>();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { isOwner } = useBarbershop();
   
+  useSetPageHeader("Configurações", "Gerencie sua conta");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isSubmittingWebhook, setIsSubmittingWebhook] = useState(false);
@@ -483,8 +484,6 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Configurações" subtitle="Gerencie sua conta" onMenuClick={onMenuClick} />
-
       <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
         {isInitialLoading ? (
           // Skeleton loader to prevent layout shift

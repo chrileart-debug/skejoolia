@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,9 +25,11 @@ interface OutletContextType {
 }
 
 export default function Help() {
-  const { onMenuClick } = useOutletContext<OutletContextType>();
+  useOutletContext<OutletContextType>();
   const { data: tutorials = [], isLoading } = useTutorials();
   const [search, setSearch] = useState("");
+  
+  useSetPageHeader("Central de Ajuda", "Tutoriais, perguntas frequentes e suporte");
   
   const filteredTutorials = useMemo(() => {
     if (!search.trim()) return tutorials;
@@ -73,8 +75,6 @@ export default function Help() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Central de Ajuda" subtitle="Tutoriais, perguntas frequentes e suporte" onMenuClick={onMenuClick} />
-
       <div className="p-4 lg:p-6 space-y-6">
         {/* Contact Cards */}
         <div className="grid gap-4 md:grid-cols-2">
