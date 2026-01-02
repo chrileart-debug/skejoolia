@@ -11,7 +11,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "next-themes";
 import { SplashScreen } from "@/components/pwa/SplashScreen";
 import { FacebookPixel } from "@/components/tracking/FacebookPixel";
+import { installFbqDebugger } from "@/lib/fbqDebugger";
 import Login from "./pages/Login";
+
+// Install FB Pixel debugger in dev mode
+installFbqDebugger();
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
