@@ -1,11 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-
-declare global {
-  interface Window {
-    fbq: (...args: unknown[]) => void;
-  }
-}
+import { initFacebookPixelOnce, isInIframe } from "@/lib/facebookPixelInit";
 
 // Cross-remount + cross-effect dedupe keys
 const SESSION_KEY_NAV = "fb_last_pageview_nav";
@@ -18,25 +13,46 @@ const SAME_PATH_TIMEOUT_MS = 5000;
 /**
  * FacebookPixel component - handles SPA PageView tracking with robust deduplication.
  *
- * WHY THIS EXISTS:
- * - In some environments (dev tooling, iframe preview, hot reload), effects/components can remount
- *   and fire PageView more than once for the *same* navigation.
+ * INITIALIZATION:
+ * - Uses singleton pattern via initFacebookPixelOnce() to ensure pixel is loaded exactly once
+ * - Safe across remounts, hot reloads, and iframe environments
  *
  * DEDUPE STRATEGY:
  * 1) Primary: dedupe by react-router `location.key` (1 per navigation)
  * 2) Secondary: dedupe by `pathname` within a short window (fallback)
+ * 3) Optional: Skip PageView entirely in iframe (for dev previews)
  */
 export function FacebookPixel() {
   const location = useLocation();
   const lastTrackedNavRef = useRef<string | null>(null);
+  const isPixelInitialized = useRef(false);
+
+  // Initialize pixel once on first render
+  useEffect(() => {
+    if (!isPixelInitialized.current) {
+      initFacebookPixelOnce();
+      isPixelInitialized.current = true;
+    }
+  }, []);
 
   useEffect(() => {
-    if (!window.fbq) {
-      console.warn("[FB Pixel] fbq not available");
+    // Skip PageView in iframe environments (Lovable preview, etc.)
+    // This prevents the "activated 3 times" warning in dev
+    if (isInIframe() && import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.log("[FB Pixel] Skipping PageView in iframe (dev mode)");
+      }
       return;
     }
 
-    const navKey = String((location as any).key ?? "no-key");
+    if (!window.fbq) {
+      if (import.meta.env.DEV) {
+        console.warn("[FB Pixel] fbq not available yet");
+      }
+      return;
+    }
+
+    const navKey = String((location as { key?: string }).key ?? "no-key");
     const currentPath = location.pathname;
     const now = Date.now();
 
@@ -94,7 +110,7 @@ export function FacebookPixel() {
         console.log(`[FB Pixel] PageView tracked (no session): ${navKey} ${currentPath}`);
       }
     }
-  }, [(location as any).key, location.pathname]);
+  }, [(location as { key?: string }).key, location.pathname]);
 
   return null;
 }

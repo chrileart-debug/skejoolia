@@ -13,9 +13,12 @@ import { SplashScreen } from "@/components/pwa/SplashScreen";
 import { FacebookPixel } from "@/components/tracking/FacebookPixel";
 import { installFbqDebugger } from "@/lib/fbqDebugger";
 import Login from "./pages/Login";
+import ThankYou from "./pages/ThankYou";
 
-// Install FB Pixel debugger in dev mode
-installFbqDebugger();
+// Install FB Pixel debugger in dev mode (remove in production if needed)
+if (import.meta.env.DEV) {
+  installFbqDebugger();
+}
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -81,6 +84,7 @@ const App = () => {
                   <Route path="/suporte" element={<Support />} />
                   <Route path="/privacidade" element={<Privacy />} />
                   <Route path="/termos" element={<Terms />} />
+                  <Route path="/obrigado" element={<ThankYou />} />
                   
                   <Route path="/a/:slug" element={<PublicBooking />} />
                   
