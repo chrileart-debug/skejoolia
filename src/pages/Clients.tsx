@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,9 +109,10 @@ interface ServiceCredit {
 }
 
 export default function Clients() {
-  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
+  const { barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   
+  useSetPageHeader("Clientes", "Gerencie seus clientes");
   const [clients, setClients] = useState<Cliente[]>([]);
   const [agents, setAgents] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -519,12 +520,6 @@ export default function Clients() {
 
   return (
     <div className="flex flex-col min-h-screen min-w-0 pb-20 lg:pb-0">
-      <Header
-        title="Clientes"
-        subtitle="Gerencie seus clientes"
-        onMenuClick={onMenuClick}
-      />
-
       <main className="flex-1 min-w-0 p-4 lg:p-6 space-y-6">
         {/* Search */}
         <div className="relative">

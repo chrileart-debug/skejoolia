@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext, Link } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -68,10 +68,11 @@ interface OutletContextType {
 }
 
 export default function Agents() {
-  const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
+  const { barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { checkLimit } = useSubscription();
   
+  useSetPageHeader("Agentes", "Gerencie seus agentes de IA");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
   const [hasActiveServices, setHasActiveServices] = useState(false);
@@ -374,7 +375,6 @@ export default function Agents() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header title="Agentes" subtitle="Gerencie seus agentes de IA" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
@@ -384,8 +384,6 @@ export default function Agents() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Agentes" subtitle="Gerencie seus agentes de IA" onMenuClick={onMenuClick} />
-
       <div className="p-4 lg:p-6">
         {agents.length === 0 ? (
           <EmptyState

@@ -721,6 +721,5 @@ export default function Team() {
         isBasicoPlan={isBasicoPlan}
       />
     </div>
-    </>
   );
 }
