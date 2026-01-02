@@ -4,6 +4,7 @@ import {
   Bot,
   Scissors,
   Calendar,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -20,6 +21,7 @@ const allNavItems: NavItem[] = [
   { title: "Agenda", icon: Calendar, href: "/schedule", permissionKey: "can_manage_schedule" },
   { title: "Serviços", icon: Scissors, href: "/services" },
   { title: "Agentes", icon: Bot, href: "/agents", permissionKey: "can_manage_agents" },
+  { title: "Ajuda", icon: HelpCircle, href: "/help" },
 ];
 
 export function BottomNav() {
