@@ -109,15 +109,30 @@ const Plans = () => {
 
     setUpgradeLoading(true);
     try {
-      // Chamar Edge Function diretamente (sem N8N)
+      // Determinar próximo plano dinamicamente
+      const nextPlanSlug = currentPlanSlug === "basico" ? "corporativo" : null;
+      
+      if (!nextPlanSlug) {
+        toast({
+          title: "Você já está no plano máximo",
+          description: "Não há upgrade disponível para seu plano atual.",
+        });
+        setUpgradeLoading(false);
+        return;
+      }
+
+      console.log("Upgrading to plan:", nextPlanSlug);
+
+      // Chamar Edge Function diretamente (API Asaas direto, sem N8N)
       const { data, error } = await supabase.functions.invoke("asaas-checkout", {
         body: {
           action: "create_checkout",
           user_id: user.id,
           barbershop_id: barbershop.id,
-          plan_slug: "corporativo",
+          plan_slug: nextPlanSlug,
           event_id: eventId,
           subscription_id: subscription.id,
+          checkout_type: "upgrade",
         },
       });
 
