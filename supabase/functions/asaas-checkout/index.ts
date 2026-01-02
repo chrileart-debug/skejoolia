@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
 
     // 7. Create Asaas Checkout Session using proxy via N8N
     const asaasPayload = {
-      billingTypes: ["CREDIT_CARD", "PIX"],
+      billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
       minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
       callback: {
