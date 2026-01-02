@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
@@ -34,6 +34,26 @@ function AppLayoutContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [userPhone, setUserPhone] = useState<string | null>(null);
+  const headerWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Measure fixed header height and set CSS variable
+  useLayoutEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerWrapperRef.current) {
+        const height = headerWrapperRef.current.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--app-header-height', `${height}px`);
+      }
+    };
+
+    updateHeaderHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeaderHeight);
+    if (headerWrapperRef.current) {
+      resizeObserver.observe(headerWrapperRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Check if onboarding is needed (barbershop has default name)
   useEffect(() => {
@@ -113,15 +133,25 @@ function AppLayoutContent() {
         "flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300",
         sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
       )}>
-        <TrialBanner />
-        <Header
-          title={header.title}
-          subtitle={header.subtitle}
-          onMenuClick={handleMobileMenuToggle}
-          showCopyLink={header.showCopyLink}
-          barbershopSlug={barbershop?.slug}
-        />
-        <main className="flex-1 pb-20 lg:pb-0 min-w-0">
+        {/* Fixed header wrapper */}
+        <div
+          ref={headerWrapperRef}
+          className={cn(
+            "fixed top-0 right-0 z-40 bg-background/95 backdrop-blur-lg",
+            sidebarCollapsed ? "lg:left-[72px]" : "lg:left-64",
+            "left-0 transition-all duration-300"
+          )}
+        >
+          <TrialBanner />
+          <Header
+            title={header.title}
+            subtitle={header.subtitle}
+            onMenuClick={handleMobileMenuToggle}
+            showCopyLink={header.showCopyLink}
+            barbershopSlug={barbershop?.slug}
+          />
+        </div>
+        <main className="flex-1 pb-20 lg:pb-0 min-w-0 pt-[var(--app-header-height)]">
           <Outlet context={{ 
             onMenuClick: handleMobileMenuToggle, 
             barbershop,
