@@ -7,23 +7,28 @@ declare global {
   }
 }
 
-const DEDUPE_TIMEOUT_MS = 500; // Ignore duplicate PageView for same path within this window
+// Cross-remount + cross-effect dedupe keys
+const SESSION_KEY_NAV = "fb_last_pageview_nav";
 const SESSION_KEY_PATH = "fb_last_pageview_path";
 const SESSION_KEY_TS = "fb_last_pageview_ts";
 
+// Fallback protection if a given navigation somehow reuses the same key
+const SAME_PATH_TIMEOUT_MS = 5000;
+
 /**
  * FacebookPixel component - handles SPA PageView tracking with robust deduplication.
- * 
- * ARCHITECTURE:
- * - Pixel init happens ONCE in index.html (never here)
- * - This component tracks PageView for SPA route changes
- * - Deduplication uses 2 layers:
- *   1. In-memory ref (prevents duplicate within same mount)
- *   2. sessionStorage (prevents duplicate across rapid remounts)
+ *
+ * WHY THIS EXISTS:
+ * - In some environments (dev tooling, iframe preview, hot reload), effects/components can remount
+ *   and fire PageView more than once for the *same* navigation.
+ *
+ * DEDUPE STRATEGY:
+ * 1) Primary: dedupe by react-router `location.key` (1 per navigation)
+ * 2) Secondary: dedupe by `pathname` within a short window (fallback)
  */
 export function FacebookPixel() {
   const location = useLocation();
-  const lastTrackedPathRef = useRef<string | null>(null);
+  const lastTrackedNavRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!window.fbq) {
@@ -31,56 +36,65 @@ export function FacebookPixel() {
       return;
     }
 
+    const navKey = String((location as any).key ?? "no-key");
     const currentPath = location.pathname;
     const now = Date.now();
 
-    // Layer 1: In-memory check (same mount)
-    if (lastTrackedPathRef.current === currentPath) {
+    // 1) In-memory nav dedupe (same mount)
+    if (lastTrackedNavRef.current === navKey) {
       if (import.meta.env.DEV) {
-        console.log(`[FB Pixel] Blocked duplicate PageView (ref): ${currentPath}`);
+        console.log(`[FB Pixel] Blocked duplicate PageView (ref navKey): ${navKey} ${currentPath}`);
       }
       return;
     }
 
-    // Layer 2: sessionStorage check (cross-remount protection)
+    // 2) sessionStorage nav dedupe (cross-remount)
     try {
+      const storedNav = sessionStorage.getItem(SESSION_KEY_NAV);
+      if (storedNav === navKey) {
+        if (import.meta.env.DEV) {
+          console.log(`[FB Pixel] Blocked duplicate PageView (session navKey): ${navKey} ${currentPath}`);
+        }
+        lastTrackedNavRef.current = navKey;
+        return;
+      }
+
+      // Fallback: same path within a small window
       const storedPath = sessionStorage.getItem(SESSION_KEY_PATH);
       const storedTs = sessionStorage.getItem(SESSION_KEY_TS);
-
       if (storedPath === currentPath && storedTs) {
         const elapsed = now - parseInt(storedTs, 10);
-        if (elapsed < DEDUPE_TIMEOUT_MS) {
+        if (elapsed < SAME_PATH_TIMEOUT_MS) {
           if (import.meta.env.DEV) {
-            console.log(`[FB Pixel] Blocked duplicate PageView (session, ${elapsed}ms ago): ${currentPath}`);
+            console.log(`[FB Pixel] Blocked duplicate PageView (session path, ${elapsed}ms): ${currentPath}`);
           }
-          // Still update ref to prevent future in-memory duplicates
-          lastTrackedPathRef.current = currentPath;
+          lastTrackedNavRef.current = navKey;
           return;
         }
       }
 
-      // Track PageView
+      // Track PageView once per navigation
       window.fbq("track", "PageView");
-      
-      // Update both layers
-      lastTrackedPathRef.current = currentPath;
+
+      // Persist dedupe state
+      lastTrackedNavRef.current = navKey;
+      sessionStorage.setItem(SESSION_KEY_NAV, navKey);
       sessionStorage.setItem(SESSION_KEY_PATH, currentPath);
       sessionStorage.setItem(SESSION_KEY_TS, now.toString());
 
       if (import.meta.env.DEV) {
-        console.log(`[FB Pixel] PageView tracked: ${currentPath}`);
+        console.log(`[FB Pixel] PageView tracked: ${navKey} ${currentPath}`);
       }
-    } catch (e) {
-      // sessionStorage might be blocked in some browsers/modes
-      // Fall back to ref-only deduplication
+    } catch {
+      // sessionStorage might be blocked; best-effort ref-only dedupe
       window.fbq("track", "PageView");
-      lastTrackedPathRef.current = currentPath;
-      
+      lastTrackedNavRef.current = navKey;
+
       if (import.meta.env.DEV) {
-        console.log(`[FB Pixel] PageView tracked (no session): ${currentPath}`);
+        console.log(`[FB Pixel] PageView tracked (no session): ${navKey} ${currentPath}`);
       }
     }
-  }, [location.pathname]);
+  }, [(location as any).key, location.pathname]);
 
   return null;
 }
