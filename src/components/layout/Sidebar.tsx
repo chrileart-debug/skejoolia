@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -22,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
-import { TutorialsModal } from "@/components/help/TutorialsModal";
 
 interface NavItem {
   title: string;
@@ -59,7 +57,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { isOwner, permissions } = useBarbershop();
-  const [helpOpen, setHelpOpen] = useState(false);
 
   // Filter nav items based on role and permissions
   const navItems = allNavItems.filter(item => {
@@ -149,16 +146,19 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
         {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-1">
-          <button
-            onClick={() => setHelpOpen(true)}
+          <NavLink
+            to="/help"
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full text-sidebar-foreground hover:bg-sidebar-accent",
-              collapsed && "justify-center px-2"
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
+              collapsed && "justify-center px-2",
+              location.pathname === "/help"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-sidebar-foreground hover:bg-sidebar-accent"
             )}
           >
             <HelpCircle className="w-5 h-5 shrink-0" />
             {!collapsed && <span>Ajuda</span>}
-          </button>
+          </NavLink>
           <Button
             variant="ghost"
             className={cn(
@@ -238,16 +238,19 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
         {/* Mobile Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-1">
-          <button
-            onClick={() => {
-              setHelpOpen(true);
-              if (onMobileClose) onMobileClose();
-            }}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full text-sidebar-foreground hover:bg-sidebar-accent"
+          <NavLink
+            to="/help"
+            onClick={handleNavClick}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
+              location.pathname === "/help"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-sidebar-foreground hover:bg-sidebar-accent"
+            )}
           >
             <HelpCircle className="w-5 h-5 shrink-0" />
             <span>Ajuda</span>
-          </button>
+          </NavLink>
           <Button
             variant="ghost"
             className="w-full justify-start text-muted-foreground hover:text-destructive"
@@ -258,8 +261,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           </Button>
         </div>
       </aside>
-
-      <TutorialsModal open={helpOpen} onOpenChange={setHelpOpen} />
     </>
   );
 }
