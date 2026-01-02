@@ -111,6 +111,10 @@ interface ServiceCredit {
 export default function Clients() {
   const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  
+  // Set page header
+  useSetPageHeader("Clientes", "Gerencie seus clientes");
+  
   const [clients, setClients] = useState<Cliente[]>([]);
   const [agents, setAgents] = useState<Agente[]>([]);
   const [loading, setLoading] = useState(true);
