@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
+import { HelpFAB } from "@/components/help/HelpFAB";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -124,6 +125,7 @@ export function AppLayout() {
       </div>
 
       <BottomNav />
+      <HelpFAB />
     </div>
   );
 }

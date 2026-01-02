@@ -1478,6 +1478,42 @@ export type Database = {
           },
         ]
       }
+      tutorials: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
+          video_url: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
+          video_url: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
+          video_url?: string
+        }
+        Relationships: []
+      }
       user_barbershop_roles: {
         Row: {
           barbershop_id: string
