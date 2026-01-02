@@ -517,14 +517,14 @@ export default function Clients() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen pb-20 lg:pb-0 overflow-x-hidden">
+    <div className="flex flex-col min-h-screen min-w-0 pb-20 lg:pb-0">
       <Header
         title="Clientes"
         subtitle="Gerencie seus clientes"
         onMenuClick={onMenuClick}
       />
 
-      <main className="flex-1 p-4 lg:p-6 space-y-6 overflow-x-hidden">
+      <main className="flex-1 min-w-0 p-4 lg:p-6 space-y-6">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
