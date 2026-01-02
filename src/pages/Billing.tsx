@@ -104,9 +104,6 @@ export default function Billing() {
     additionalComment: "",
   });
   
-  // Set page header
-  useSetPageHeader("Faturas", "Gerencie sua assinatura");
-
   useEffect(() => {
     if (user) {
       fetchPayments();

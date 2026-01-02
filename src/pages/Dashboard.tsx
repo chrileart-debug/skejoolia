@@ -79,8 +79,6 @@ export default function Dashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
-  // Set page header
-  useSetPageHeader("Dashboard", "Visão geral da sua barbearia");
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const { trackCompleteRegistration } = useFacebookPixel();
   const hasHandledOAuthRef = useRef(false);
