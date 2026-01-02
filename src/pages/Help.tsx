@@ -90,10 +90,10 @@ export default function Help() {
                 Envie suas dúvidas ou sugestões
               </p>
               <a
-                href="mailto:contato@agzap.com.br"
+                href="mailto:suporte@skejool.com.br"
                 className="text-primary hover:underline font-medium"
               >
-                contato@agzap.com.br
+                suporte@skejool.com.br
               </a>
             </CardContent>
           </Card>
@@ -110,12 +110,12 @@ export default function Help() {
                 Atendimento rápido via WhatsApp
               </p>
               <a
-                href="https://wa.me/5511999999999"
+                href="https://wa.me/5516997982485"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline font-medium"
               >
-                (11) 99999-9999
+                (16) 99798-2485
               </a>
             </CardContent>
           </Card>
