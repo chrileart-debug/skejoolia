@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { createCheckoutSession } from "@/lib/webhook";
 import { useFacebookPixel } from "@/hooks/useFacebookPixel";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -107,40 +107,40 @@ const Plans = () => {
       eventId: eventId,
     });
 
-    const payload = {
-      action: "upgrade",
-      user_id: user.id,
-      plan_slug: "corporativo",
-      price: corporativoPlan?.price || 79.9,
-      subscription_id: subscription.id,
-      barbershop_id: barbershop.id,
-      event_id: eventId, // Incluir event_id para o N8N usar na successUrl
-    };
-
     setUpgradeLoading(true);
     try {
-      const { data, error } = await createCheckoutSession(payload);
-      
-      console.log("Resposta webhook - data:", data);
-      console.log("Resposta webhook - error:", error);
+      // Chamar Edge Function diretamente (sem N8N)
+      const { data, error } = await supabase.functions.invoke("asaas-checkout", {
+        body: {
+          action: "create_checkout",
+          user_id: user.id,
+          barbershop_id: barbershop.id,
+          plan_slug: "corporativo",
+          event_id: eventId,
+          subscription_id: subscription.id,
+        },
+      });
+
+      console.log("Resposta Edge Function - data:", data);
+      console.log("Resposta Edge Function - error:", error);
 
       if (error) {
-        throw new Error(error);
+        throw new Error(error.message || "Erro ao criar checkout");
       }
 
-      const checkoutUrl = data?.link || data?.checkout_url;
+      const checkoutUrl = data?.checkout_url;
       console.log("Checkout URL:", checkoutUrl);
 
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
       } else {
-        throw new Error("Link de checkout não encontrado");
+        throw new Error(data?.error || "Link de checkout não encontrado");
       }
     } catch (error) {
       console.error("Erro no upgrade:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível iniciar o upgrade. Tente novamente.",
+        description: error instanceof Error ? error.message : "Não foi possível iniciar o upgrade. Tente novamente.",
         variant: "destructive",
       });
     } finally {
