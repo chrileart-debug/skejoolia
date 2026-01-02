@@ -71,9 +71,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   const createFallbackSubscription = async (userId: string, fetchedPlans: Plan[]) => {
-    // Fallback subscription creation is now handled by the database trigger
-    // This function is kept for backwards compatibility but should rarely be called
-    console.log("Fallback subscription not needed - database trigger handles creation");
     return null;
   };
 
@@ -120,8 +117,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         const now = new Date();
         
         if (trialExpires < now) {
-          // Trial expired - update status to 'expired'
-          console.log("Trial expired, updating status to expired...");
           const { data: updatedData, error: updateError } = await supabase
             .from("subscriptions")
             .update({ status: "expired", updated_at: new Date().toISOString() })

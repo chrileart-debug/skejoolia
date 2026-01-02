@@ -43,42 +43,30 @@ export async function webhookRequest<T = unknown>(
 ): Promise<WebhookResponse<T>> {
   const { method = "POST", body, requireAuth = true } = options;
 
-  console.log("=== webhookRequest iniciado ===");
-  console.log("URL:", url);
-  console.log("Body:", body);
-
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    // Add authentication header if required
     if (requireAuth) {
       const token = await getAuthToken();
-      console.log("Token obtido:", token ? "Sim" : "Não");
       if (!token) {
         return { data: null, error: "Usuário não autenticado" };
       }
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    console.log("Enviando requisição fetch...");
     const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    console.log("Response status:", response.status);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Webhook error response:", errorText);
       return { data: null, error: `Erro na requisição: ${response.status}` };
     }
 
     const data = await response.json();
-    console.log("Response data:", data);
     return { data: data as T, error: null };
   } catch (error) {
     console.error("Webhook request error:", error);

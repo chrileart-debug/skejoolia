@@ -351,8 +351,6 @@ export function WhatsAppIntegrationManager({
       if (webhookError) {
         throw new Error(webhookError);
       }
-
-      console.log("Webhook create response:", webhookData);
       
       const { instanceId, instanceName } = extractInstanceData(webhookData);
       const finalInstancia = instanceName || instancia;
@@ -412,8 +410,6 @@ export function WhatsAppIntegrationManager({
       if (webhookError) {
         throw new Error(webhookError);
       }
-
-      console.log("Webhook connect response:", data);
 
       const qrCode = extractQRCode(data);
       
@@ -475,8 +471,6 @@ export function WhatsAppIntegrationManager({
           event: "whatsapp.integration.status",
           instancia: integration.instancia || "",
         });
-
-        console.log("Polling response:", data);
 
         if (!pollError && isConnected(data)) {
           clearTimeout(pollingRef.current!);
