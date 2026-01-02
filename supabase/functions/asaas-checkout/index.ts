@@ -143,8 +143,8 @@ Deno.serve(async (req) => {
     successParams.set("type", checkout_type || "subscribe");
     
     const successUrl = `${baseSuccessUrl}?${successParams.toString()}`;
-    const cancelUrl = "https://app.skejool.com.br/planos";
-    const expiredUrl = "https://app.skejool.com.br/planos";
+    const cancelUrl = "https://app.skejool.com.br/dashboard";
+    const expiredUrl = "https://app.skejool.com.br/dashboard";
     console.log("Success URL:", successUrl);
 
     // 5. Build external reference for webhook identification
