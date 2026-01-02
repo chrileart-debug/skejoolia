@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { createCheckoutSession, webhookRequest, WEBHOOK_ENDPOINTS } from "@/lib/webhook";
+import { createCheckoutSession, cancelSubscription } from "@/lib/webhook";
 import {
   CreditCard,
   CheckCircle,
@@ -169,18 +169,15 @@ export default function Billing() {
     
     setCanceling(true);
     try {
-      const { error } = await webhookRequest(WEBHOOK_ENDPOINTS.ASAAS_CHECKOUT, {
-        body: {
-          action: "cancel",
-          user_id: user.id,
-          subscription_id: subscription.id,
-          asaas_subscription_id: subscription.asaas_subscription_id,
-          churn_survey: {
-            main_reason: churnSurvey.mainReason,
-            most_used_feature: churnSurvey.mostUsedFeature,
-            would_return: churnSurvey.wouldReturn,
-            additional_comment: churnSurvey.additionalComment,
-          },
+      const { error } = await cancelSubscription({
+        user_id: user.id,
+        subscription_id: subscription.id,
+        asaas_subscription_id: subscription.asaas_subscription_id,
+        churn_survey: {
+          main_reason: churnSurvey.mainReason,
+          most_used_feature: churnSurvey.mostUsedFeature,
+          would_return: churnSurvey.wouldReturn,
+          additional_comment: churnSurvey.additionalComment,
         },
       });
 
@@ -190,10 +187,6 @@ export default function Billing() {
       }
 
       toast.success("Assinatura cancelada com sucesso");
-      await supabase
-        .from("subscriptions")
-        .update({ status: "canceled" })
-        .eq("id", subscription.id);
       setShowChurnSurvey(false);
       window.location.reload();
     } catch (error) {

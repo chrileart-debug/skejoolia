@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const ASAAS_API_URL = "https://api.asaas.com/v3";
+const CHECKOUT_EXPIRY_MINUTES = 10;
 
 interface CheckoutRequest {
   action: string;
@@ -14,25 +15,7 @@ interface CheckoutRequest {
   plan_slug: string;
   event_id?: string;
   subscription_id?: string;
-}
-
-interface Plan {
-  id: string;
-  name: string;
-  slug: string;
-  price: number;
-}
-
-interface Barbershop {
-  id: string;
-  name: string;
-  asaas_customer_id: string | null;
-}
-
-interface UserSettings {
-  nome: string | null;
-  email: string | null;
-  numero: string | null;
+  checkout_type?: string; // "subscribe" | "upgrade" | "renew"
 }
 
 Deno.serve(async (req) => {
@@ -55,7 +38,7 @@ Deno.serve(async (req) => {
     const body: CheckoutRequest = await req.json();
     console.log("Checkout request received:", JSON.stringify(body));
 
-    const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id } = body;
+    const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id, checkout_type } = body;
 
     if (action !== "create_checkout") {
       throw new Error("Ação inválida");
@@ -65,19 +48,21 @@ Deno.serve(async (req) => {
       throw new Error("Dados obrigatórios faltando: user_id, barbershop_id, plan_slug");
     }
 
-    // 1. Check for existing valid session_checkout
-    const { data: existingSession, error: sessionError } = await supabase
+    // 1. Check for existing valid session_checkout (within 10 minutes)
+    const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
+    
+    const { data: existingSession } = await supabase
       .from("session_checkout")
       .select("*")
       .eq("user_id", user_id)
       .eq("barbershop_id", barbershop_id)
-      .neq("status", "EXPIRED")
-      .neq("status", "COMPLETED")
+      .not("status", "in", '("EXPIRED","COMPLETED","CANCELED")')
+      .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (existingSession && !sessionError) {
+    if (existingSession?.asaas_checkout_link) {
       console.log("Existing valid session found:", existingSession.id);
       return new Response(
         JSON.stringify({
@@ -89,6 +74,14 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Mark old pending sessions as expired
+    await supabase
+      .from("session_checkout")
+      .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
+      .eq("user_id", user_id)
+      .eq("barbershop_id", barbershop_id)
+      .eq("status", "pending");
 
     // 2. Get plan details
     const { data: plan, error: planError } = await supabase
@@ -108,7 +101,7 @@ Deno.serve(async (req) => {
     // 3. Get barbershop details
     const { data: barbershop, error: barbershopError } = await supabase
       .from("barbershops")
-      .select("*")
+      .select("id, name, asaas_customer_id")
       .eq("id", barbershop_id)
       .single();
 
@@ -117,42 +110,34 @@ Deno.serve(async (req) => {
       throw new Error("Empresa não encontrada");
     }
 
-    // 4. Get user settings
-    const { data: userSettings } = await supabase
-      .from("user_settings")
-      .select("nome, email, numero")
-      .eq("user_id", user_id)
-      .single();
-
-    // 5. Build successUrl with event_id for Facebook Pixel deduplication
+    // 4. Build successUrl with event_id for Facebook Pixel deduplication
     const baseSuccessUrl = "https://app.skejool.com.br/obrigado";
-    const successParams = new URLSearchParams({
-      ...(event_id && { event_id }),
-      plan: plan_slug,
-      value: plan.price.toString(),
-      type: "upgrade",
-    });
+    const successParams = new URLSearchParams();
+    if (event_id) successParams.set("event_id", event_id);
+    successParams.set("plan", plan_slug);
+    successParams.set("value", plan.price.toString());
+    successParams.set("type", checkout_type || "subscribe");
+    
     const successUrl = `${baseSuccessUrl}?${successParams.toString()}`;
-
     console.log("Success URL:", successUrl);
 
-    // 6. Build external reference for webhook identification
+    // 5. Build external reference for webhook identification
     const externalReference = JSON.stringify({
       user_id,
       barbershop_id,
       plan_slug,
       subscription_id,
       event_id,
+      checkout_type: checkout_type || "subscribe",
     });
 
-    // 7. Create Asaas Checkout Session
+    // 6. Create Asaas Checkout Session
     const asaasPayload = {
       name: `Assinatura ${plan.name}`,
-      billingType: "UNDEFINED", // Let user choose payment method
-      chargeType: "RECURRING",
-      cycle: "MONTHLY",
+      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
+      chargeTypes: ["RECURRENT"],
+      subscriptionCycle: "MONTHLY",
       value: plan.price,
-      endDate: null,
       maxInstallmentCount: 1,
       dueDateLimitDays: 3,
       notificationEnabled: true,
@@ -165,7 +150,7 @@ Deno.serve(async (req) => {
 
     console.log("Creating Asaas checkout with payload:", JSON.stringify(asaasPayload));
 
-    const asaasResponse = await fetch(`${ASAAS_API_URL}/checkoutSessions`, {
+    const asaasResponse = await fetch(`${ASAAS_API_URL}/paymentCheckoutConfigs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -174,23 +159,37 @@ Deno.serve(async (req) => {
       body: JSON.stringify(asaasPayload),
     });
 
-    const asaasData = await asaasResponse.json();
+    // Handle non-JSON responses
+    const responseText = await asaasResponse.text();
+    console.log("Asaas response status:", asaasResponse.status);
+    console.log("Asaas response body (first 500 chars):", responseText.substring(0, 500));
+
+    let asaasData;
+    try {
+      asaasData = JSON.parse(responseText);
+    } catch {
+      console.error("Failed to parse Asaas response as JSON:", responseText.substring(0, 200));
+      throw new Error("Resposta inválida do Asaas - verifique a API key e configuração");
+    }
 
     if (!asaasResponse.ok) {
       console.error("Asaas API error:", JSON.stringify(asaasData));
-      throw new Error(asaasData.errors?.[0]?.description || "Erro ao criar checkout no Asaas");
+      throw new Error(asaasData.errors?.[0]?.description || `Erro ao criar checkout no Asaas: ${asaasResponse.status}`);
     }
 
     console.log("Asaas checkout created:", JSON.stringify(asaasData));
 
-    // 8. Save session to database
+    // Build checkout URL - Asaas returns id, we construct the URL
+    const checkoutUrl = asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
+
+    // 7. Save session to database
     const { data: newSession, error: insertError } = await supabase
       .from("session_checkout")
       .insert({
         user_id,
         barbershop_id,
         asaas_checkout_id: asaasData.id,
-        asaas_checkout_link: asaasData.url,
+        asaas_checkout_link: checkoutUrl,
         plan_name: plan.name,
         plan_price: plan.price,
         status: "pending",
@@ -207,7 +206,8 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        checkout_url: asaasData.url,
+        checkout_url: checkoutUrl,
+        link: checkoutUrl, // For backward compatibility
         checkout_id: asaasData.id,
         session_id: newSession?.id,
         is_existing: false,
