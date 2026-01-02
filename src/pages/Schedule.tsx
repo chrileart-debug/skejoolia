@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { FAB } from "@/components/shared/FAB";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
@@ -710,8 +710,6 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen min-w-0">
-      <Header title="Agenda" subtitle="Gerencie seus agendamentos" onMenuClick={onMenuClick} />
-
       <div className="p-4 lg:p-6">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">

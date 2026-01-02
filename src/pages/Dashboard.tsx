@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
 
@@ -79,6 +79,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
+  useSetPageHeader("Dashboard", "Visão geral da sua barbearia");
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const { trackCompleteRegistration } = useFacebookPixel();
   const hasHandledOAuthRef = useRef(false);
@@ -330,12 +331,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <Header
-        title="Dashboard"
-        subtitle="Visão geral da sua barbearia"
-        onMenuClick={onMenuClick}
-      />
-
       <div className="p-4 lg:p-6 space-y-6">
         
 

@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
+import { Header } from "./Header";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
+import { PageHeaderProvider, usePageHeader } from "@/contexts/PageHeaderContext";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -17,7 +19,7 @@ interface Category {
   is_active: boolean;
 }
 
-export function AppLayout() {
+function AppLayoutContent() {
   const { user } = useAuth();
   const { 
     barbershop, 
@@ -27,6 +29,7 @@ export function AppLayout() {
     refreshBarbershop, 
     refreshCategories 
   } = useBarbershop();
+  const { header } = usePageHeader();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -111,6 +114,13 @@ export function AppLayout() {
         sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
       )}>
         <TrialBanner />
+        <Header
+          title={header.title}
+          subtitle={header.subtitle}
+          onMenuClick={handleMobileMenuToggle}
+          showCopyLink={header.showCopyLink}
+          barbershopSlug={barbershop?.slug}
+        />
         <main className="flex-1 pb-20 lg:pb-0 min-w-0">
           <Outlet context={{ 
             onMenuClick: handleMobileMenuToggle, 
@@ -125,5 +135,13 @@ export function AppLayout() {
 
       <BottomNav />
     </div>
+  );
+}
+
+export function AppLayout() {
+  return (
+    <PageHeaderProvider>
+      <AppLayoutContent />
+    </PageHeaderProvider>
   );
 }

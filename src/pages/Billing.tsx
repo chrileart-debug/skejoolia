@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Header } from "@/components/layout/Header";
+import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Button } from "@/components/ui/button";
 import { useOutletContext } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -104,6 +104,7 @@ export default function Billing() {
     additionalComment: "",
   });
   
+  useSetPageHeader("Faturas", "Gerencie sua assinatura");
   useEffect(() => {
     if (user) {
       fetchPayments();
@@ -284,7 +285,6 @@ export default function Billing() {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -296,7 +296,6 @@ export default function Billing() {
   if (!subscription && !loading) {
     return (
       <div className="h-full flex flex-col overflow-hidden">
-        <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center max-w-md space-y-4">
             <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
@@ -317,8 +316,6 @@ export default function Billing() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
-
       <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-2xl mx-auto w-full flex flex-col gap-3 sm:gap-4 lg:gap-6">
         {/* Main Subscription Card - Banking App Style */}
         <div className="bg-gradient-to-br from-card via-card to-muted/30 rounded-2xl sm:rounded-3xl shadow-card overflow-hidden animate-fade-in flex-shrink-0">
