@@ -6,13 +6,36 @@ const corsHeaders = {
 };
 
 const CHECKOUT_EXPIRY_MINUTES = 10;
-const ASAAS_API_URL = "https://api.asaas.com/v3";
 
 function formatDateForAsaas(date: Date): string {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
-// Call Asaas API DIRECTLY (no N8N proxy)
+// Call N8N Proxy (proven to work!)
+async function callAsaasProxy(method: string, endpoint: string, body: unknown | null): Promise<Response> {
+  const proxyUrl = Deno.env.get("ASAAS_PROXY_URL");
+  const proxyToken = Deno.env.get("ASAAS_PROXY_TOKEN");
+
+  if (!proxyUrl || !proxyToken) {
+    throw new Error("PROXY_NOT_CONFIGURED");
+  }
+
+  const url = `${proxyUrl}${endpoint}`;
+  console.log(`Calling Asaas via PROXY: ${method} ${url}`);
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${proxyToken}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  return response;
+}
+
+// Call Asaas API DIRECTLY (fallback)
 async function callAsaasDirect(method: string, endpoint: string, body: unknown | null): Promise<Response> {
   const apiKey = Deno.env.get("ASAAS_API_KEY");
   
@@ -20,19 +43,43 @@ async function callAsaasDirect(method: string, endpoint: string, body: unknown |
     throw new Error("ASAAS_API_KEY não configurada");
   }
 
-  const url = `${ASAAS_API_URL}${endpoint}`;
-  console.log(`Calling Asaas DIRECT: ${method} ${url}`);
-  
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "access_token": apiKey,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // Try both possible base URLs
+  const baseUrls = [
+    "https://api.asaas.com/v3",
+    "https://www.asaas.com/api/v3"
+  ];
 
-  return response;
+  let lastResponse: Response | null = null;
+
+  for (const baseUrl of baseUrls) {
+    const url = `${baseUrl}${endpoint}`;
+    console.log(`Trying Asaas DIRECT: ${method} ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "access_token": apiKey,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      // If not 404, use this response
+      if (response.status !== 404) {
+        return response;
+      }
+      
+      lastResponse = response;
+      console.log(`Got 404 from ${url}, trying next...`);
+    } catch (e) {
+      console.error(`Error calling ${url}:`, e);
+    }
+  }
+
+  // Return last response or throw
+  if (lastResponse) return lastResponse;
+  throw new Error("All Asaas endpoints failed");
 }
 
 interface CheckoutRequest {
@@ -161,7 +208,7 @@ Deno.serve(async (req) => {
     // 7. Calculate next due date
     const nextDueDate = formatDateForAsaas(new Date());
 
-    // 8. Create Asaas Checkout Session DIRECTLY (no N8N proxy!)
+    // 8. Build the checkout payload
     const asaasPayload = {
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
@@ -185,41 +232,89 @@ Deno.serve(async (req) => {
       externalReference,
     };
 
-    console.log("Creating Asaas checkout DIRECT with payload:", JSON.stringify(asaasPayload));
+    console.log("Creating Asaas checkout with payload:", JSON.stringify(asaasPayload));
 
-    const asaasResponse = await callAsaasDirect("POST", "/checkoutSessions", asaasPayload);
+    // 9. Try PROXY first (N8N - proven to work), fallback to DIRECT
+    let asaasData: { id?: string; link?: string; url?: string; errors?: Array<{ description: string }>; message?: string } | null = null;
+    let provider = "proxy";
+    let responseOk = false;
 
-    const responseText = await asaasResponse.text();
-    console.log("Asaas response status:", asaasResponse.status);
-    console.log("Asaas response body:", responseText.substring(0, 500));
-
-    // Check if response is HTML (error page)
-    if (responseText.trim().startsWith("<!") || responseText.trim().startsWith("<html")) {
-      console.error("Asaas returned HTML instead of JSON");
-      throw new Error("Erro de comunicação com Asaas - verifique a API key");
-    }
-
-    let asaasData;
+    // Try N8N Proxy first
     try {
-      asaasData = JSON.parse(responseText);
-    } catch {
-      console.error("Failed to parse Asaas response:", responseText.substring(0, 200));
-      throw new Error("Resposta inválida do Asaas");
+      console.log("Attempting N8N PROXY...");
+      const proxyResponse = await callAsaasProxy("POST", "/checkouts", asaasPayload);
+      const proxyText = await proxyResponse.text();
+      console.log("Proxy response status:", proxyResponse.status);
+      console.log("Proxy response body:", proxyText.substring(0, 500));
+
+      if (proxyResponse.ok && !proxyText.includes("<!doctype") && !proxyText.includes("<html")) {
+        try {
+          asaasData = JSON.parse(proxyText);
+          if (asaasData?.id) {
+            responseOk = true;
+            console.log("PROXY succeeded with id:", asaasData.id);
+          }
+        } catch {
+          console.error("Failed to parse proxy response");
+        }
+      }
+    } catch (proxyError) {
+      console.error("Proxy failed:", proxyError);
     }
 
-    if (!asaasResponse.ok) {
-      console.error("Asaas API error:", JSON.stringify(asaasData));
-      const errorMsg = asaasData.errors?.[0]?.description || asaasData.message || `Erro Asaas: ${asaasResponse.status}`;
-      throw new Error(errorMsg);
+    // If proxy failed, try DIRECT
+    if (!responseOk) {
+      console.log("Proxy failed or returned error, trying DIRECT...");
+      provider = "direct";
+
+      // Try multiple endpoints
+      const endpoints = ["/checkouts", "/checkoutSessions"];
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying direct endpoint: ${endpoint}`);
+          const directResponse = await callAsaasDirect("POST", endpoint, asaasPayload);
+          const directText = await directResponse.text();
+          console.log(`Direct ${endpoint} status:`, directResponse.status);
+          console.log(`Direct ${endpoint} body:`, directText.substring(0, 500));
+
+          // Skip if HTML response
+          if (directText.includes("<!doctype") || directText.includes("<html")) {
+            console.log(`Endpoint ${endpoint} returned HTML, trying next...`);
+            continue;
+          }
+
+          if (directResponse.ok) {
+            try {
+              asaasData = JSON.parse(directText);
+              if (asaasData?.id) {
+                responseOk = true;
+                console.log(`DIRECT ${endpoint} succeeded with id:`, asaasData.id);
+                break;
+              }
+            } catch {
+              console.error("Failed to parse direct response");
+            }
+          }
+        } catch (e) {
+          console.error(`Direct ${endpoint} failed:`, e);
+        }
+      }
     }
 
-    console.log("Asaas checkout created successfully:", asaasData.id);
+    // If both failed, throw error
+    if (!responseOk || !asaasData?.id) {
+      console.error("All checkout attempts failed");
+      throw new Error("Falha ao criar checkout - tente novamente em alguns minutos");
+    }
 
-    // Use the link or url property from Asaas response
-    const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/checkoutSession/show/${asaasData.id}`;
-    console.log("Checkout URL:", checkoutUrl);
+    console.log(`Checkout created via ${provider}:`, asaasData.id);
 
-    // 9. Save or update session in database
+    // 10. Build checkout URL
+    const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
+    console.log("Final checkout URL:", checkoutUrl);
+
+    // 11. Save or update session in database
     const { data: expiredSession } = await supabase
       .from("session_checkout")
       .select("id")
@@ -277,7 +372,7 @@ Deno.serve(async (req) => {
       // Continue anyway - we have the URL
     }
 
-    console.log("Session saved:", newSession?.id);
+    console.log("Session saved:", newSession?.id, "provider:", provider);
 
     return new Response(
       JSON.stringify({
@@ -286,6 +381,7 @@ Deno.serve(async (req) => {
         checkout_id: asaasData.id,
         session_id: newSession?.id,
         is_existing: false,
+        provider,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
