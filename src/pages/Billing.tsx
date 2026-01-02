@@ -316,10 +316,10 @@ export default function Billing() {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col">
       <Header title="Faturas" subtitle="Gerencie sua assinatura" onMenuClick={onMenuClick} />
 
-      <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-2xl mx-auto w-full flex flex-col gap-3 sm:gap-4 lg:gap-6 overflow-y-auto lg:overflow-visible">
+      <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-2xl mx-auto w-full flex flex-col gap-3 sm:gap-4 lg:gap-6">
         {/* Main Subscription Card - Banking App Style */}
         <div className="bg-gradient-to-br from-card via-card to-muted/30 rounded-2xl sm:rounded-3xl shadow-card overflow-hidden animate-fade-in flex-shrink-0">
           {/* Card Header with gradient accent */}

@@ -111,7 +111,7 @@ export function AppLayout() {
         sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"
       )}>
         <TrialBanner />
-        <main className="flex-1 pb-20 lg:pb-0 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 pb-20 lg:pb-0 overflow-x-hidden overflow-y-visible lg:overflow-y-auto">
           <Outlet context={{ 
             onMenuClick: handleMobileMenuToggle, 
             barbershop,
