@@ -57,15 +57,17 @@ export function TutorialsModal({ open, onOpenChange }: TutorialsModalProps) {
                         {tutorial.description}
                       </p>
                     )}
-                    <div className="aspect-video rounded-lg overflow-hidden bg-muted">
-                      <iframe
-                        src={getEmbedUrl(tutorial.video_url) || ""}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        title={tutorial.title}
-                      />
-                    </div>
+                    {tutorial.video_url && getEmbedUrl(tutorial.video_url) && (
+                      <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                        <iframe
+                          src={getEmbedUrl(tutorial.video_url) || ""}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          title={tutorial.title}
+                        />
+                      </div>
+                    )}
                   </AccordionContent>
                 </AccordionItem>
               ))}
