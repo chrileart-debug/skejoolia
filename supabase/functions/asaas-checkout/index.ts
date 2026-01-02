@@ -8,6 +8,10 @@ const corsHeaders = {
 const ASAAS_API_URL = "https://api.asaas.com/v3";
 const CHECKOUT_EXPIRY_MINUTES = 10;
 
+function formatDateForAsaas(date: Date): string {
+  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
 interface CheckoutRequest {
   action: string;
   user_id: string;
@@ -119,6 +123,8 @@ Deno.serve(async (req) => {
     successParams.set("type", checkout_type || "subscribe");
     
     const successUrl = `${baseSuccessUrl}?${successParams.toString()}`;
+    const cancelUrl = "https://app.skejool.com.br/planos";
+    const expiredUrl = "https://app.skejool.com.br/planos";
     console.log("Success URL:", successUrl);
 
     // 5. Build external reference for webhook identification
@@ -131,26 +137,36 @@ Deno.serve(async (req) => {
       checkout_type: checkout_type || "subscribe",
     });
 
-    // 6. Create Asaas Checkout Session
+    // 6. Calculate next due date (today or tomorrow depending on business rules)
+    const nextDueDate = formatDateForAsaas(new Date());
+
+    // 7. Create Asaas Checkout Session using correct endpoint: POST /v3/checkouts
     const asaasPayload = {
-      name: `Assinatura ${plan.name}`,
-      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
+      billingTypes: ["CREDIT_CARD", "PIX"],
       chargeTypes: ["RECURRENT"],
-      subscriptionCycle: "MONTHLY",
-      value: plan.price,
-      maxInstallmentCount: 1,
-      dueDateLimitDays: 3,
-      notificationEnabled: true,
-      externalReference,
+      minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
       callback: {
         successUrl,
+        cancelUrl,
+        expiredUrl,
         autoRedirect: true,
       },
+      items: [{
+        name: `Assinatura ${plan.name}`,
+        description: `Plano ${plan.name} - Mensal`,
+        quantity: 1,
+        value: plan.price,
+      }],
+      subscription: {
+        cycle: "MONTHLY",
+        nextDueDate,
+      },
+      externalReference,
     };
 
     console.log("Creating Asaas checkout with payload:", JSON.stringify(asaasPayload));
 
-    const asaasResponse = await fetch(`${ASAAS_API_URL}/paymentCheckoutConfigs`, {
+    const asaasResponse = await fetch(`${ASAAS_API_URL}/checkouts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -159,10 +175,18 @@ Deno.serve(async (req) => {
       body: JSON.stringify(asaasPayload),
     });
 
-    // Handle non-JSON responses
+    // Handle response - check content type first
+    const contentType = asaasResponse.headers.get("content-type") || "";
     const responseText = await asaasResponse.text();
     console.log("Asaas response status:", asaasResponse.status);
+    console.log("Asaas response content-type:", contentType);
     console.log("Asaas response body (first 500 chars):", responseText.substring(0, 500));
+
+    // Check if response is HTML (error page)
+    if (contentType.includes("text/html") || responseText.trim().startsWith("<!")) {
+      console.error("Asaas returned HTML instead of JSON - likely wrong endpoint or auth error");
+      throw new Error("Erro de comunicação com Asaas - verifique a configuração da API");
+    }
 
     let asaasData;
     try {
@@ -179,8 +203,8 @@ Deno.serve(async (req) => {
 
     console.log("Asaas checkout created:", JSON.stringify(asaasData));
 
-    // Build checkout URL - Asaas returns id, we construct the URL
-    const checkoutUrl = asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
+    // Build checkout URL - Asaas checkouts use this format
+    const checkoutUrl = asaasData.url || `https://asaas.com/checkoutSession/show?id=${asaasData.id}`;
 
     // 7. Save session to database
     const { data: newSession, error: insertError } = await supabase
