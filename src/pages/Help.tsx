@@ -29,9 +29,6 @@ export default function Help() {
   const { data: tutorials = [], isLoading } = useTutorials();
   const [search, setSearch] = useState("");
   
-  // Set page header
-  useSetPageHeader("Central de Ajuda", "Tutoriais, perguntas frequentes e suporte");
-
   const filteredTutorials = useMemo(() => {
     if (!search.trim()) return tutorials;
     const searchLower = search.toLowerCase();

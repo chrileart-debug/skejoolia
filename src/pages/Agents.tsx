@@ -72,8 +72,6 @@ export default function Agents() {
   const { user } = useAuth();
   const { checkLimit } = useSubscription();
   
-  // Set page header
-  useSetPageHeader("Agentes", "Gerencie seus agentes de IA");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [whatsappIntegrations, setWhatsappIntegrations] = useState<Integration[]>([]);
   const [hasActiveServices, setHasActiveServices] = useState(false);
