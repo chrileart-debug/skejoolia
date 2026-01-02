@@ -72,42 +72,7 @@ Deno.serve(async (req) => {
       throw new Error("Dados obrigatórios faltando: user_id, barbershop_id, plan_slug");
     }
 
-    // 1. Check for existing valid session_checkout (within 10 minutes)
-    const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
-    
-    const { data: existingSession } = await supabase
-      .from("session_checkout")
-      .select("*")
-      .eq("user_id", user_id)
-      .eq("barbershop_id", barbershop_id)
-      .not("status", "in", '("EXPIRED","COMPLETED","CANCELED")')
-      .gte("created_at", tenMinutesAgo)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingSession?.asaas_checkout_link) {
-      console.log("Existing valid session found:", existingSession.id);
-      return new Response(
-        JSON.stringify({
-          checkout_url: existingSession.asaas_checkout_link,
-          checkout_id: existingSession.asaas_checkout_id,
-          session_id: existingSession.id,
-          is_existing: true,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Mark old pending sessions as expired
-    await supabase
-      .from("session_checkout")
-      .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
-      .eq("user_id", user_id)
-      .eq("barbershop_id", barbershop_id)
-      .eq("status", "pending");
-
-    // 2. Get plan details
+    // 1. Get plan details FIRST to filter sessions by plan
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
@@ -122,7 +87,46 @@ Deno.serve(async (req) => {
 
     console.log("Plan found:", plan.name, plan.price);
 
-    // 3. Get barbershop details
+    // 2. Check for existing valid session_checkout for THIS SPECIFIC PLAN
+    const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
+    
+    const { data: existingSession } = await supabase
+      .from("session_checkout")
+      .select("*")
+      .eq("user_id", user_id)
+      .eq("barbershop_id", barbershop_id)
+      .eq("plan_name", plan.name) // FILTRO POR PLANO!
+      .not("status", "in", '("EXPIRED","COMPLETED","CANCELED")')
+      .gte("created_at", tenMinutesAgo)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    console.log("Session lookup for plan:", plan.name, "found:", existingSession?.id || "none");
+
+    if (existingSession?.asaas_checkout_link) {
+      console.log("Existing valid session found for plan:", plan.name, "session:", existingSession.id);
+      return new Response(
+        JSON.stringify({
+          checkout_url: existingSession.asaas_checkout_link,
+          checkout_id: existingSession.asaas_checkout_id,
+          session_id: existingSession.id,
+          is_existing: true,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Mark old pending sessions for THIS PLAN ONLY as expired
+    await supabase
+      .from("session_checkout")
+      .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
+      .eq("user_id", user_id)
+      .eq("barbershop_id", barbershop_id)
+      .eq("plan_name", plan.name) // APENAS DO MESMO PLANO
+      .eq("status", "pending");
+
+    // 4. Get barbershop details
     const { data: barbershop, error: barbershopError } = await supabase
       .from("barbershops")
       .select("id, name, asaas_customer_id")
@@ -134,7 +138,7 @@ Deno.serve(async (req) => {
       throw new Error("Empresa não encontrada");
     }
 
-    // 4. Build successUrl with event_id for Facebook Pixel deduplication
+    // 5. Build successUrl with event_id for Facebook Pixel deduplication
     const baseSuccessUrl = "https://app.skejool.com.br/obrigado";
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
@@ -147,7 +151,7 @@ Deno.serve(async (req) => {
     const expiredUrl = "https://app.skejool.com.br/dashboard";
     console.log("Success URL:", successUrl);
 
-    // 5. Build external reference for webhook identification
+    // 6. Build external reference for webhook identification
     const externalReference = JSON.stringify({
       user_id,
       barbershop_id,
@@ -157,10 +161,10 @@ Deno.serve(async (req) => {
       checkout_type: checkout_type || "subscribe",
     });
 
-    // 6. Calculate next due date (today or tomorrow depending on business rules)
+    // 7. Calculate next due date
     const nextDueDate = formatDateForAsaas(new Date());
 
-    // 7. Create Asaas Checkout Session using proxy via N8N
+    // 8. Create Asaas Checkout Session using proxy via N8N
     const asaasPayload = {
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
@@ -222,27 +226,67 @@ Deno.serve(async (req) => {
     const checkoutUrl = asaasData.link || `https://www.asaas.com/checkoutSession/show/${asaasData.id}`;
     console.log("Checkout URL:", checkoutUrl);
 
-    // 7. Save session to database
-    const { data: newSession, error: insertError } = await supabase
+    // 9. Check if there's an expired session for this plan to UPDATE instead of INSERT
+    const { data: expiredSession } = await supabase
       .from("session_checkout")
-      .insert({
-        user_id,
-        barbershop_id,
-        asaas_checkout_id: asaasData.id,
-        asaas_checkout_link: checkoutUrl,
-        plan_name: plan.name,
-        plan_price: plan.price,
-        status: "pending",
-      })
-      .select()
-      .single();
+      .select("id")
+      .eq("user_id", user_id)
+      .eq("barbershop_id", barbershop_id)
+      .eq("plan_name", plan.name)
+      .eq("status", "EXPIRED")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (insertError) {
-      console.error("Error saving session:", insertError);
+    let newSession;
+    let dbError;
+
+    if (expiredSession) {
+      // UPDATE existing expired session
+      console.log("Updating expired session:", expiredSession.id);
+      const result = await supabase
+        .from("session_checkout")
+        .update({
+          asaas_checkout_id: asaasData.id,
+          asaas_checkout_link: checkoutUrl,
+          plan_price: plan.price,
+          status: "pending",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", expiredSession.id)
+        .select()
+        .single();
+      
+      newSession = result.data;
+      dbError = result.error;
+    } else {
+      // INSERT new session
+      console.log("Creating new checkout session for plan:", plan.name);
+      const result = await supabase
+        .from("session_checkout")
+        .insert({
+          user_id,
+          barbershop_id,
+          asaas_checkout_id: asaasData.id,
+          asaas_checkout_link: checkoutUrl,
+          plan_name: plan.name,
+          plan_price: plan.price,
+          status: "pending",
+        })
+        .select()
+        .single();
+      
+      newSession = result.data;
+      dbError = result.error;
+    }
+
+    if (dbError) {
+      console.error("Error saving session:", dbError);
       // Don't throw - we still have the checkout URL
     }
 
-    console.log("Session saved successfully:", newSession?.id);
+    console.log("Session saved successfully:", newSession?.id, "for plan:", plan.name);
 
     return new Response(
       JSON.stringify({
