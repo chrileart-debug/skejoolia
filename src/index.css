@@ -141,9 +141,9 @@
     max-width: 100vw;
   }
 
-  /* CSS variable for fixed header height */
+  /* CSS variable for fixed header height - default includes TrialBanner */
   :root {
-    --app-header-height: 64px;
+    --app-header-height: 116px;
   }
 }
 
