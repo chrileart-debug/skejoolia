@@ -118,12 +118,16 @@ export async function createCheckoutSession(payload: {
   barbershop_id: string;
   event_id?: string;
   churn_survey?: Record<string, unknown>;
+  origin?: string;
 }): Promise<WebhookResponse<CheckoutResponse>> {
   try {
     // Map old action names to checkout_type
     const checkoutType = payload.action === "subscribe" ? "subscribe" : 
                          payload.action === "upgrade" ? "upgrade" : 
                          payload.action === "renew" ? "renew" : "subscribe";
+
+    // Usa origin do payload ou detecta automaticamente do browser
+    const origin = payload.origin || (typeof window !== "undefined" ? window.location.origin : undefined);
 
     const { data, error } = await supabase.functions.invoke("asaas-checkout", {
       body: {
@@ -134,6 +138,7 @@ export async function createCheckoutSession(payload: {
         subscription_id: payload.subscription_id,
         event_id: payload.event_id,
         checkout_type: checkoutType,
+        origin,
       },
     });
 
