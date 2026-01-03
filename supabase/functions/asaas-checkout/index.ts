@@ -12,7 +12,17 @@ function formatDateForAsaas(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
-// Chamada direta à API do Asaas (sem N8N)
+function formatTimestamp(): string {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${day}/${month}/${year}-${hours}:${minutes}:${seconds}`;
+}
+
 async function callAsaas(method: string, endpoint: string, body: unknown | null): Promise<Response> {
   const apiKey = Deno.env.get("ASAAS_API_KEY");
   
@@ -68,7 +78,7 @@ Deno.serve(async (req) => {
       throw new Error("Dados obrigatórios faltando: user_id, barbershop_id, plan_slug");
     }
 
-    // 1. Buscar plano
+    // 1. Buscar plano no banco de dados
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
@@ -81,9 +91,9 @@ Deno.serve(async (req) => {
       throw new Error(`Plano não encontrado: ${plan_slug}`);
     }
 
-    console.log("Plano:", plan.name, "preço:", plan.price);
+    console.log("Plano encontrado:", plan.name, "- Preço:", plan.price);
 
-    // 2. Verificar sessão existente válida (< 10 minutos)
+    // 2. Verificar se existe sessão pendente válida (< 10 minutos)
     const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
     
     const { data: existingSession } = await supabase
@@ -111,28 +121,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Marcar sessões antigas como EXPIRED
+    // 3. Marcar sessões antigas/expiradas como EXPIRED
     await supabase
       .from("session_checkout")
       .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
       .eq("user_id", user_id)
       .eq("barbershop_id", barbershop_id)
-      .eq("plan_name", plan.name)
-      .eq("status", "pending");
+      .in("status", ["pending", "EXPIRED"]);
 
-    // 4. Buscar dados da barbearia
-    const { data: barbershop, error: barbershopError } = await supabase
-      .from("barbershops")
-      .select("id, name, asaas_customer_id")
-      .eq("id", barbershop_id)
-      .single();
-
-    if (barbershopError || !barbershop) {
-      console.error("Barbearia não encontrada:", barbershopError);
-      throw new Error("Empresa não encontrada");
-    }
-
-    // 5. URLs de callback
+    // 4. URLs de callback
     const baseSuccessUrl = "https://app.skejool.com.br/obrigado";
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
@@ -144,43 +141,37 @@ Deno.serve(async (req) => {
     const cancelUrl = "https://app.skejool.com.br/dashboard";
     const expiredUrl = "https://app.skejool.com.br/dashboard";
 
-    // 6. External reference para webhook
-    const externalReference = JSON.stringify({
-      user_id,
-      barbershop_id,
-      plan_slug,
-      subscription_id,
-      event_id,
-      checkout_type: checkout_type || "subscribe",
-    });
+    // 5. External reference no formato simples (pipe-separated para parsing no webhook)
+    const timestamp = formatTimestamp();
+    const externalReference = `skejool_${user_id}_${barbershop_id}_${plan_slug}_${subscription_id || 'new'}_${event_id || 'none'}_${checkout_type || 'subscribe'}_${timestamp}`;
 
-    // 7. Payload do checkout
+    // 6. Payload do checkout (seguindo o formato que funciona)
     const asaasPayload = {
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
       minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
-      callback: {
-        successUrl,
-        cancelUrl,
-        expiredUrl,
-        autoRedirect: true,
-      },
+      externalReference,
       items: [{
-        name: `Assinatura ${plan.name}`,
-        description: `Plano ${plan.name} - Mensal`,
+        name: plan_slug,
+        description: `Assinatura mensal Skejool`,
         quantity: 1,
         value: plan.price,
       }],
       subscription: {
         cycle: "MONTHLY",
         nextDueDate: formatDateForAsaas(new Date()),
+        description: `Assinatura ${plan.name} - Skejool`,
       },
-      externalReference,
+      callback: {
+        successUrl,
+        cancelUrl,
+        expiredUrl,
+      },
     };
 
-    console.log("Criando checkout no Asaas:", JSON.stringify(asaasPayload));
+    console.log("Payload Asaas:", JSON.stringify(asaasPayload));
 
-    // 8. Chamar API do Asaas diretamente
+    // 7. Chamar API do Asaas diretamente
     const asaasResponse = await callAsaas("POST", "/checkouts", asaasPayload);
     const asaasText = await asaasResponse.text();
     
@@ -189,7 +180,7 @@ Deno.serve(async (req) => {
 
     if (!asaasResponse.ok) {
       console.error("Erro Asaas:", asaasText);
-      throw new Error(`Erro ao criar checkout: ${asaasResponse.status}`);
+      throw new Error(`Erro ao criar checkout: ${asaasResponse.status} - ${asaasText}`);
     }
 
     const asaasData = JSON.parse(asaasText);
@@ -199,11 +190,11 @@ Deno.serve(async (req) => {
       throw new Error("Resposta inválida do Asaas");
     }
 
-    // 9. Montar URL do checkout
+    // 8. Montar URL do checkout
     const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
     console.log("Checkout URL:", checkoutUrl);
 
-    // 10. Salvar sessão no banco
+    // 9. Salvar sessão no banco
     const { data: newSession, error: dbError } = await supabase
       .from("session_checkout")
       .insert({

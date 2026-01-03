@@ -39,20 +39,42 @@ interface ExternalReference {
   plan_slug: string;
   subscription_id?: string;
   event_id?: string;
+  checkout_type?: string;
 }
 
+// Parse externalReference no formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_timestamp
 function parseExternalReference(ref: string | undefined): ExternalReference | null {
   if (!ref) return null;
+
+  // Primeiro tenta JSON (compatibilidade com formato antigo)
   try {
-    return JSON.parse(ref);
+    const parsed = JSON.parse(ref);
+    if (parsed.user_id) return parsed;
   } catch {
-    console.error("Failed to parse externalReference:", ref);
-    return null;
+    // Não é JSON, continua para formato pipe
   }
+
+  // Formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_timestamp
+  if (ref.startsWith("skejool_")) {
+    const parts = ref.split("_");
+    // skejool[0]_userId[1]_barbershopId[2]_planSlug[3]_subscriptionId[4]_eventId[5]_checkoutType[6]_timestamp[7+]
+    if (parts.length >= 7) {
+      return {
+        user_id: parts[1],
+        barbershop_id: parts[2],
+        plan_slug: parts[3],
+        subscription_id: parts[4] !== 'new' ? parts[4] : undefined,
+        event_id: parts[5] !== 'none' ? parts[5] : undefined,
+        checkout_type: parts[6],
+      };
+    }
+  }
+
+  console.error("Failed to parse externalReference:", ref);
+  return null;
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -348,7 +370,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
