@@ -133,6 +133,7 @@ const Plans = () => {
           event_id: eventId,
           subscription_id: subscription.id,
           checkout_type: "upgrade",
+          origin: window.location.origin,
         },
       });
 
