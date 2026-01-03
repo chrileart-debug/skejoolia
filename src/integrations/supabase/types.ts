@@ -17,6 +17,7 @@ export type Database = {
       agendamentos: {
         Row: {
           barbershop_id: string
+          block_reason: string | null
           client_id: string | null
           created_at: string
           end_time: string | null
@@ -33,6 +34,7 @@ export type Database = {
         }
         Insert: {
           barbershop_id: string
+          block_reason?: string | null
           client_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -49,6 +51,7 @@ export type Database = {
         }
         Update: {
           barbershop_id?: string
+          block_reason?: string | null
           client_id?: string | null
           created_at?: string
           end_time?: string | null
