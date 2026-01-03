@@ -9,6 +9,7 @@ import { PageHeaderProvider, usePageHeader } from "@/contexts/PageHeaderContext"
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Category {
@@ -29,6 +30,7 @@ function AppLayoutContent() {
     refreshBarbershop, 
     refreshCategories 
   } = useBarbershop();
+  const { isTrialing } = useSubscription();
   const { header } = usePageHeader();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -45,15 +47,22 @@ function AppLayoutContent() {
       }
     };
 
+    // Update immediately
     updateHeaderHeight();
+    
+    // Update again after a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(updateHeaderHeight, 100);
 
     const resizeObserver = new ResizeObserver(updateHeaderHeight);
     if (headerWrapperRef.current) {
       resizeObserver.observe(headerWrapperRef.current);
     }
 
-    return () => resizeObserver.disconnect();
-  }, []);
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, [isTrialing]);
 
   // Check if onboarding is needed (barbershop has default name)
   useEffect(() => {
