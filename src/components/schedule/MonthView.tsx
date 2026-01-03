@@ -111,27 +111,43 @@ export function MonthView({
                         key={apt.id_agendamento}
                         className={cn(
                           "text-[10px] sm:text-xs px-1 py-0.5 rounded truncate flex items-center gap-0.5 transition-all duration-200",
-                          apt.status === "completed" &&
-                            "bg-green-500/20 text-green-700 dark:text-green-400",
-                          apt.status === "pending" &&
-                            "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-                          apt.status === "confirmed" &&
-                            "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-                          apt.status === "cancelled" &&
-                            "bg-red-500/20 text-red-700 dark:text-red-400"
+                          apt.status === "blocked" || apt.status === "early_leave"
+                            ? "bg-muted/60 border border-dashed border-muted-foreground/50 text-muted-foreground"
+                            : apt.status === "completed"
+                            ? "bg-green-500/20 text-green-700 dark:text-green-400"
+                            : apt.status === "pending"
+                            ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"
+                            : apt.status === "confirmed"
+                            ? "bg-blue-500/20 text-blue-700 dark:text-blue-400"
+                            : apt.status === "cancelled"
+                            ? "bg-red-500/20 text-red-700 dark:text-red-400"
+                            : ""
                         )}
                       >
-                        {apt.subscription_status === "active" && (
-                          <VipCrown
-                            status={apt.subscription_status}
-                            nextDueDate={apt.subscription_next_due_date || null}
-                            className="w-3 h-3 flex-shrink-0"
-                          />
+                        {apt.status === "blocked" || apt.status === "early_leave" ? (
+                          <>
+                            <span className="hidden sm:inline">
+                              {formatTimeFromISO(apt.start_time)} -{" "}
+                            </span>
+                            <span className="truncate">
+                              {apt.status === "early_leave" ? "Saiu cedo" : "Indisponível"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {apt.subscription_status === "active" && (
+                              <VipCrown
+                                status={apt.subscription_status}
+                                nextDueDate={apt.subscription_next_due_date || null}
+                                className="w-3 h-3 flex-shrink-0"
+                              />
+                            )}
+                            <span className="hidden sm:inline">
+                              {formatTimeFromISO(apt.start_time)} -{" "}
+                            </span>
+                            <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
+                          </>
                         )}
-                        <span className="hidden sm:inline">
-                          {formatTimeFromISO(apt.start_time)} -{" "}
-                        </span>
-                        <span className="truncate">{apt.nome_cliente || "Cliente"}</span>
                       </div>
                     ))}
                     {dayAppointments.length > 2 && (
