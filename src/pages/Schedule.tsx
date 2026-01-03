@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { FAB } from "@/components/shared/FAB";
@@ -150,6 +150,7 @@ export default function Schedule() {
   const { onMenuClick, barbershop, barbershopSlug } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Set page header
   useSetPageHeader("Agenda", "Gerencie seus agendamentos", true);
@@ -157,9 +158,20 @@ export default function Schedule() {
   // Use barbershop ID directly from context
   const activeBarbershopId = barbershop?.id || null;
   
+  // Parse URL params for navigation from notifications
+  const urlDate = searchParams.get("date");
+  const highlightId = searchParams.get("highlight");
+  
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (urlDate) {
+      const parsed = new Date(urlDate + "T12:00:00");
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  });
+  const [highlightedAppointmentId, setHighlightedAppointmentId] = useState<string | null>(highlightId);
   const [selectedDayAppointments, setSelectedDayAppointments] = useState<Appointment[]>([]);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -319,6 +331,25 @@ export default function Schedule() {
   });
 
   const appointments = appointmentsData ?? [];
+
+  // Handle navigation from notifications - open day view and clear URL params
+  useEffect(() => {
+    if (urlDate && highlightId && appointmentsData) {
+      // Find appointments for that day
+      const targetDate = urlDate;
+      const dayAppointments = appointmentsData.filter(
+        (a) => getDateFromISO(a.start_time) === targetDate
+      );
+      
+      if (dayAppointments.length > 0) {
+        setSelectedDayAppointments(dayAppointments);
+        setIsDayDialogOpen(true);
+      }
+      
+      // Clear URL params after handling
+      setSearchParams({}, { replace: true });
+    }
+  }, [urlDate, highlightId, appointmentsData, setSearchParams]);
 
   // Simplified loading state: show skeleton only when loading AND no cached data
   const showLoadingState = !activeBarbershopId || (isLoadingAppointments && !appointmentsData);
