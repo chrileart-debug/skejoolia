@@ -14,7 +14,7 @@ import { PublicClubSection } from "@/components/public/PublicClubSection";
 import { ClientLoginModal } from "@/components/public/ClientLoginModal";
 import { ClientPortal } from "@/components/public/ClientPortal";
 import { ExistingAppointmentModal } from "@/components/public/ExistingAppointmentModal";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+
 import {
   ArrowLeft,
   Calendar as CalendarIcon,
@@ -206,7 +206,7 @@ const PublicBooking = () => {
   const [clientSubscription, setClientSubscription] = useState<SubscriptionData | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
 
-  // Wizard states - Now with 4 steps: 0=phone, 1=service, 2=professional+calendar+time, 3=confirm
+  // Wizard states - 5 steps: 0=whatsapp, 1=service, 2=professional, 3=date/time, 4=confirm
   const [activeTab, setActiveTab] = useState<string>("agendar");
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -639,9 +639,14 @@ const PublicBooking = () => {
   // Check if professional is working on a specific date
   const isProfessionalWorkingOnDate = (userId: string, dateStr: string): boolean => {
     const dayOfWeek = getDayOfWeek(dateStr);
-    const schedule = staffSchedules.find(
-      (s) => s.user_id === userId && s.day_of_week === dayOfWeek
-    );
+
+    const schedulesForPro = staffSchedules.filter((s) => s.user_id === userId);
+    if (schedulesForPro.length === 0) {
+      // No schedule defined -> assume available (avoids blocking new staff)
+      return true;
+    }
+
+    const schedule = schedulesForPro.find((s) => s.day_of_week === dayOfWeek);
     return schedule?.is_working ?? false;
   };
 
@@ -685,7 +690,7 @@ const PublicBooking = () => {
     const startMinutes = timeToMinutes(schedule.start_time);
     const endMinutes = timeToMinutes(schedule.end_time);
     const duration = selectedService.duration_minutes || 30;
-    const slotInterval = 30;
+    const slotInterval = Math.max(1, duration);
 
     const breakStartMinutes = schedule.break_start ? timeToMinutes(schedule.break_start) : null;
     const breakEndMinutes = schedule.break_end ? timeToMinutes(schedule.break_end) : null;
@@ -763,24 +768,21 @@ const PublicBooking = () => {
 
   // Navigation
   const handleBack = () => {
-    if (currentStep > 0) {
-      if (currentStep === 1) {
-        setSelectedService(null);
-        // Go back to phone if not logged in
-        if (!loggedInClient) {
-          setCurrentStep(0);
-          return;
-        }
-      }
-      if (currentStep === 2) {
-        setSelectedProfessional(null);
-        setSelectedTime(null);
-      }
-      if (currentStep === 3) {
-        // Nothing to reset
-      }
-      setCurrentStep(currentStep - 1);
+    const firstStep = loggedInClient ? 1 : 0;
+    if (currentStep <= firstStep) return;
+
+    // Leaving step 2 (professional) back to service
+    if (currentStep === 2) {
+      setSelectedProfessional(null);
+      setSelectedTime(null);
     }
+
+    // Leaving step 3 (date/time) back to professional
+    if (currentStep === 3) {
+      setSelectedTime(null);
+    }
+
+    setCurrentStep((s) => s - 1);
   };
 
   // Handlers
@@ -794,19 +796,19 @@ const PublicBooking = () => {
   const handleProfessionalSelect = (pro: StaffMember) => {
     setSelectedProfessional(pro);
     setSelectedTime(null);
-    
+
     // If professional doesn't work on selected date, find next available date
     if (!isProfessionalWorkingOnDate(pro.user_id, selectedDate)) {
       const nextAvailable = findNextAvailableDate(pro.user_id, getTodayInBrasilia());
-      if (nextAvailable) {
-        setSelectedDate(nextAvailable);
-      }
+      if (nextAvailable) setSelectedDate(nextAvailable);
     }
+
+    setCurrentStep(3);
   };
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    setCurrentStep(3);
+    setCurrentStep(4);
   };
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -1064,15 +1066,16 @@ const PublicBooking = () => {
     );
   }
 
-  // Step indicators for booking flow - Updated to 4 steps
+  // Step indicators for booking flow
   const getSteps = () => {
     const baseSteps = [
       { num: 0, label: "WhatsApp", icon: Phone },
       { num: 1, label: "Serviço", icon: Scissors },
-      { num: 2, label: "Horário", icon: Clock },
-      { num: 3, label: "Confirmar", icon: Check },
+      { num: 2, label: "Profissional", icon: Users },
+      { num: 3, label: "Horário", icon: Clock },
+      { num: 4, label: "Confirmar", icon: Check },
     ];
-    
+
     // Skip phone step if logged in
     if (loggedInClient) {
       return baseSteps.slice(1);
@@ -1521,7 +1524,7 @@ const PublicBooking = () => {
               </div>
             )}
 
-            {/* Step 2: Professional + Calendar + Time (UNIFIED) */}
+            {/* Step 2: Professional */}
             {currentStep === 2 && (
               <div className="animate-fade-in space-y-6">
                 {/* Service Summary */}
@@ -1539,173 +1542,137 @@ const PublicBooking = () => {
                   </div>
                 </div>
 
-                {/* Professionals Selector */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-foreground flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary" />
-                    Escolha o profissional
-                  </h3>
-                  
-                  {professionalsForService.length === 0 ? (
-                    <div className="text-center py-6 bg-muted/50 rounded-xl">
-                      <Users className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-muted-foreground">Nenhum profissional disponível</p>
-                    </div>
-                  ) : (
-                    <ScrollArea className="w-full whitespace-nowrap">
-                      <div className="flex gap-3 pb-2">
-                        {professionalsForService.map((pro) => {
-                          const isWorkingToday = isProfessionalWorkingOnDate(pro.user_id, selectedDate);
-                          const isSelected = selectedProfessional?.user_id === pro.user_id;
-                          
-                          return (
-                            <button
-                              key={pro.user_id}
-                              onClick={() => handleProfessionalSelect(pro)}
-                              className={cn(
-                                "flex-shrink-0 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all min-w-[100px]",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary shadow-lg"
-                                  : isWorkingToday
-                                  ? "bg-card hover:bg-accent border-border hover:shadow-md"
-                                  : "bg-card/50 border-border/50 opacity-50"
-                              )}
-                            >
-                              <div className={cn(
-                                "w-14 h-14 rounded-full flex items-center justify-center",
-                                isSelected ? "bg-primary-foreground/20" : "bg-primary/10"
-                              )}>
-                                <User className={cn(
-                                  "w-7 h-7",
-                                  isSelected ? "text-primary-foreground" : "text-primary"
-                                )} />
-                              </div>
-                              <div className="text-center">
-                                <p className={cn(
-                                  "font-medium text-sm",
-                                  isSelected ? "text-primary-foreground" : "text-foreground"
-                                )}>
-                                  {pro.name || "Profissional"}
-                                </p>
-                                {!isWorkingToday && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    Não trabalha hoje
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <ScrollBar orientation="horizontal" />
-                    </ScrollArea>
-                  )}
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Escolha o profissional</h2>
+                  <p className="text-muted-foreground">Selecione quem vai te atender</p>
                 </div>
 
-                {/* Calendar - Always visible after selecting professional */}
-                {selectedProfessional && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-foreground flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-primary" />
-                      Escolha a data
-                    </h3>
-                    <div className="bg-card rounded-xl border border-border p-4">
-                      <Calendar
-                        mode="single"
-                        selected={new Date(selectedDate + "T12:00:00")}
-                        onSelect={handleDateSelect}
-                        disabled={(date) => {
-                          // Disable past dates
-                          if (date < new Date(new Date().setHours(0, 0, 0, 0))) return true;
-                          return false;
-                        }}
-                        modifiers={{
-                          notWorking: (date) => {
-                            if (!selectedProfessional) return false;
-                            const dateStr = date.toLocaleDateString("en-CA", { timeZone: BRASILIA_TIMEZONE });
-                            return !isProfessionalWorkingOnDate(selectedProfessional.user_id, dateStr);
-                          }
-                        }}
-                        modifiersStyles={{
-                          notWorking: { opacity: 0.3 }
-                        }}
-                        className="rounded-md mx-auto"
-                      />
-                    </div>
+                {professionalsForService.length === 0 ? (
+                  <div className="text-center py-8 bg-muted/50 rounded-xl">
+                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum profissional disponível</p>
                   </div>
-                )}
-
-                {/* Time Slots */}
-                {selectedProfessional && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-foreground flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-primary" />
-                      Horários disponíveis - {formatDateDisplay(selectedDate)}
-                    </h3>
-
-                    {!isProfessionalWorkingOnDate(selectedProfessional.user_id, selectedDate) ? (
-                      <div className="text-center py-8 bg-muted/50 rounded-xl">
-                        <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground font-medium">
-                          {selectedProfessional.name} não trabalha neste dia
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Selecione outra data no calendário
-                        </p>
-                      </div>
-                    ) : availableTimeSlots.length === 0 ? (
-                      <div className="text-center py-8 bg-muted/50 rounded-xl">
-                        <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">Nenhum horário disponível</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {availableTimeSlots.map((slot) => (
-                          <button
-                            key={slot.time}
-                            onClick={() => slot.available && handleTimeSelect(slot.time)}
-                            disabled={!slot.available}
-                            className={cn(
-                              "py-3 px-4 rounded-lg text-sm font-medium transition-all relative",
-                              slot.available
-                                ? "bg-card hover:bg-primary hover:text-primary-foreground border border-border"
-                                : "bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50"
-                            )}
-                          >
-                            <span className={cn(!slot.available && "line-through")}>
-                              {slot.time}
-                            </span>
-                            {!slot.available && slot.reason === "booked" && (
-                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full" />
-                            )}
-                            {!slot.available && slot.reason === "break" && (
-                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Legend */}
-                    {availableTimeSlots.some(s => !s.available) && (
-                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground pt-2">
-                        <div className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-destructive rounded-full" />
-                          <span>Ocupado</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-amber-500 rounded-full" />
-                          <span>Intervalo</span>
-                        </div>
-                      </div>
-                    )}
+                ) : (
+                  <div className="grid gap-3">
+                    {professionalsForService.map((pro) => {
+                      const isSelected = selectedProfessional?.user_id === pro.user_id;
+                      return (
+                        <button
+                          key={pro.user_id}
+                          onClick={() => handleProfessionalSelect(pro)}
+                          className={cn(
+                            "w-full bg-card hover:bg-accent rounded-xl border p-4 text-left transition-all hover:shadow-md",
+                            isSelected ? "ring-2 ring-primary" : "border-border"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <User className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-foreground">{pro.name || "Profissional"}</p>
+                              <p className="text-sm text-muted-foreground">Toque para ver datas e horários</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Step 3: Confirmation */}
+            {/* Step 3: Date + Time */}
             {currentStep === 3 && (
+              <div className="animate-fade-in space-y-6">
+                {/* Summary */}
+                <div className="bg-muted/50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Scissors className="w-5 h-5 text-primary" />
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{selectedService?.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-primary" />
+                    <p className="font-medium text-foreground">{selectedProfessional?.name}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Escolha a data e o horário</h2>
+                  <p className="text-muted-foreground">Datas sem trabalho aparecem apagadas</p>
+                </div>
+
+                {/* Calendar */}
+                <div className="bg-card rounded-xl border border-border p-4">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(selectedDate + "T12:00:00")}
+                    onSelect={handleDateSelect}
+                    disabled={(date) => {
+                      // Disable past dates
+                      if (date < new Date(new Date().setHours(0, 0, 0, 0))) return true;
+                      if (!selectedProfessional) return true;
+                      const dateStr = date.toLocaleDateString("en-CA", { timeZone: BRASILIA_TIMEZONE });
+                      return !isProfessionalWorkingOnDate(selectedProfessional.user_id, dateStr);
+                    }}
+                    modifiers={{
+                      notWorking: (date) => {
+                        if (!selectedProfessional) return false;
+                        const dateStr = date.toLocaleDateString("en-CA", { timeZone: BRASILIA_TIMEZONE });
+                        return !isProfessionalWorkingOnDate(selectedProfessional.user_id, dateStr);
+                      },
+                    }}
+                    modifiersStyles={{
+                      notWorking: { opacity: 0.3 },
+                    }}
+                    className="rounded-md mx-auto"
+                  />
+                </div>
+
+                {/* Time Slots */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" />
+                    Horários - {formatDateDisplay(selectedDate)}
+                  </h3>
+
+                  {availableTimeSlots.length === 0 ? (
+                    <div className="text-center py-8 bg-muted/50 rounded-xl">
+                      <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">Nenhum horário disponível</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {availableTimeSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          onClick={() => slot.available && handleTimeSelect(slot.time)}
+                          disabled={!slot.available}
+                          className={cn(
+                            "py-3 px-4 rounded-lg text-sm font-medium transition-all",
+                            slot.available
+                              ? "bg-card hover:bg-accent border border-border"
+                              : "bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50",
+                            selectedTime === slot.time && slot.available && "ring-2 ring-primary"
+                          )}
+                        >
+                          {slot.time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            {/* Step 4: Confirmation */}
+            {currentStep === 4 && (
               <div className="animate-fade-in space-y-6">
                 <div>
                   <h2 className="text-xl font-bold text-foreground">
