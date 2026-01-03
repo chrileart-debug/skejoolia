@@ -43,24 +43,33 @@ function AppLayoutContent() {
     const updateHeaderHeight = () => {
       if (headerWrapperRef.current) {
         const height = headerWrapperRef.current.getBoundingClientRect().height;
-        document.documentElement.style.setProperty('--app-header-height', `${height}px`);
+        // Only update if we get a valid height
+        if (height > 0) {
+          document.documentElement.style.setProperty('--app-header-height', `${height}px`);
+        }
       }
     };
 
     // Update immediately
     updateHeaderHeight();
     
-    // Update again after a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(updateHeaderHeight, 100);
+    // Update after short delays to catch any late renders (fonts, images, etc.)
+    const timeouts = [50, 150, 300].map(delay => 
+      setTimeout(updateHeaderHeight, delay)
+    );
 
     const resizeObserver = new ResizeObserver(updateHeaderHeight);
     if (headerWrapperRef.current) {
       resizeObserver.observe(headerWrapperRef.current);
     }
 
+    // Also update on window resize for responsive changes
+    window.addEventListener('resize', updateHeaderHeight);
+
     return () => {
       resizeObserver.disconnect();
-      clearTimeout(timeoutId);
+      timeouts.forEach(clearTimeout);
+      window.removeEventListener('resize', updateHeaderHeight);
     };
   }, [isTrialing]);
 

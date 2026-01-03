@@ -141,9 +141,24 @@
     max-width: 100vw;
   }
 
-  /* CSS variable for fixed header height - default includes TrialBanner */
+  /* CSS variable for fixed header height - responsive defaults */
   :root {
-    --app-header-height: 116px;
+    /* Default for mobile: Header (64px) + TrialBanner wrapped (~100px) */
+    --app-header-height: 164px;
+  }
+
+  /* Tablet and up: TrialBanner is single line (~52px) */
+  @media (min-width: 640px) {
+    :root {
+      --app-header-height: 116px;
+    }
+  }
+
+  /* Desktop without trial banner */
+  @media (min-width: 1024px) {
+    :root {
+      --app-header-height: 116px;
+    }
   }
 }
 
