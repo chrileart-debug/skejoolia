@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  X,
   Receipt,
   Crown,
   UsersRound,
@@ -48,11 +47,9 @@ const allNavItems: NavItem[] = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
-  mobileOpen?: boolean;
-  onMobileClose?: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
@@ -76,124 +73,26 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
     navigate("/");
   };
 
-  const handleNavClick = () => {
-    if (onMobileClose) {
-      onMobileClose();
-    }
-  };
-
   return (
-    <>
-      {/* Desktop Sidebar */}
-      <aside
-        className={cn(
-          "hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out z-40",
-          collapsed ? "w-[72px]" : "w-64"
-        )}
-      >
-        {/* Logo */}
-        <div className={cn(
-          "flex items-center h-16 px-4 border-b border-sidebar-border",
-          collapsed ? "justify-center" : "gap-3"
-        )}>
-          {collapsed ? (
-            <span className="text-primary">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6v6l4 2"></path>
-                <circle cx="12" cy="12" r="10"></circle>
-              </svg>
-            </span>
-          ) : (
-            <div className="flex items-center font-extrabold tracking-tighter text-sidebar-foreground select-none text-2xl">
-              <span>S</span>
-              <span>K</span>
-              <span>E</span>
-              <span>J</span>
-              <span className="text-primary inline-flex items-center justify-center mx-[2px] hover:rotate-180 transition-transform duration-700 ease-in-out">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 6v6l4 2"></path>
-                  <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-              </span>
-              <span>O</span>
-              <span>L</span>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-hide">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
-            return (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                  collapsed && "justify-center px-2",
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
-                )}
-              >
-                <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
-                {!collapsed && <span>{item.title}</span>}
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="p-3 border-t border-sidebar-border space-y-1">
-          <NavLink
-            to="/help"
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
-              collapsed && "justify-center px-2",
-              location.pathname === "/help"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-sidebar-foreground hover:bg-sidebar-accent"
-            )}
-          >
-            <HelpCircle className="w-5 h-5 shrink-0" />
-            {!collapsed && <span>Ajuda</span>}
-          </NavLink>
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full justify-start text-muted-foreground hover:text-destructive",
-              collapsed && "justify-center px-2"
-            )}
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5" />
-            {!collapsed && <span className="ml-3">Sair</span>}
-          </Button>
-        </div>
-
-        {/* Toggle Button */}
-        <button
-          onClick={onToggle}
-          className="absolute top-20 -right-3 w-6 h-6 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <ChevronLeft className="w-4 h-4 text-muted-foreground" />
-          )}
-        </button>
-      </aside>
-
-      {/* Mobile Sidebar */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transition-transform duration-300 ease-in-out lg:hidden flex flex-col",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        {/* Mobile Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
+    <aside
+      className={cn(
+        "hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out z-40",
+        collapsed ? "w-[72px]" : "w-64"
+      )}
+    >
+      {/* Logo */}
+      <div className={cn(
+        "flex items-center h-16 px-4 border-b border-sidebar-border",
+        collapsed ? "justify-center" : "gap-3"
+      )}>
+        {collapsed ? (
+          <span className="text-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 6v6l4 2"></path>
+              <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+          </span>
+        ) : (
           <div className="flex items-center font-extrabold tracking-tighter text-sidebar-foreground select-none text-2xl">
             <span>S</span>
             <span>K</span>
@@ -208,59 +107,71 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             <span>O</span>
             <span>L</span>
           </div>
-          <Button variant="ghost" size="icon" onClick={onMobileClose}>
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
+        )}
+      </div>
 
-        {/* Mobile Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
-            return (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                onClick={handleNavClick}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
-                )}
-              >
-                <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
-                <span>{item.title}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+      {/* Navigation */}
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-hide">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.href;
+          return (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                collapsed && "justify-center px-2",
+                isActive
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent"
+              )}
+            >
+              <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
+              {!collapsed && <span>{item.title}</span>}
+            </NavLink>
+          );
+        })}
+      </nav>
 
-        {/* Mobile Footer */}
-        <div className="p-3 border-t border-sidebar-border space-y-1">
-          <NavLink
-            to="/help"
-            onClick={handleNavClick}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
-              location.pathname === "/help"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-sidebar-foreground hover:bg-sidebar-accent"
-            )}
-          >
-            <HelpCircle className="w-5 h-5 shrink-0" />
-            <span>Ajuda</span>
-          </NavLink>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-muted-foreground hover:text-destructive"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="ml-3">Sair</span>
-          </Button>
-        </div>
-      </aside>
-    </>
+      {/* Footer */}
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        <NavLink
+          to="/help"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
+            collapsed && "justify-center px-2",
+            location.pathname === "/help"
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-sidebar-foreground hover:bg-sidebar-accent"
+          )}
+        >
+          <HelpCircle className="w-5 h-5 shrink-0" />
+          {!collapsed && <span>Ajuda</span>}
+        </NavLink>
+        <Button
+          variant="ghost"
+          className={cn(
+            "w-full justify-start text-muted-foreground hover:text-destructive",
+            collapsed && "justify-center px-2"
+          )}
+          onClick={handleLogout}
+        >
+          <LogOut className="w-5 h-5" />
+          {!collapsed && <span className="ml-3">Sair</span>}
+        </Button>
+      </div>
+
+      {/* Toggle Button */}
+      <button
+        onClick={onToggle}
+        className="absolute top-20 -right-3 w-6 h-6 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:bg-accent transition-colors"
+      >
+        {collapsed ? (
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        ) : (
+          <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+        )}
+      </button>
+    </aside>
   );
 }
