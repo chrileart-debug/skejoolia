@@ -150,6 +150,9 @@ export default function Schedule() {
   const { onMenuClick, barbershop, barbershopSlug } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  
+  // Set page header
+  useSetPageHeader("Agenda", "Gerencie seus agendamentos", true);
 
   // Use barbershop ID directly from context
   const activeBarbershopId = barbershop?.id || null;
