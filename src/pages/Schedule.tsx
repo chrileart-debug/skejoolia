@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
 import { PublicShopModal } from "@/components/schedule/PublicShopModal";
+import { QuickActionModal } from "@/components/schedule/QuickActionModal";
 import { MonthView } from "@/components/schedule/MonthView";
 import { WeekView } from "@/components/schedule/WeekView";
 import { DayView } from "@/components/schedule/DayView";
@@ -180,6 +181,14 @@ export default function Schedule() {
   });
   const [isProcessingFinish, setIsProcessingFinish] = useState(false);
 
+  // Quick action modal states
+  const [isQuickActionModalOpen, setIsQuickActionModalOpen] = useState(false);
+  const [quickActionData, setQuickActionData] = useState({
+    startTime: "",
+    endTime: "",
+    date: "",
+  });
+  const [isCreatingBlock, setIsCreatingBlock] = useState(false);
   // Sync slug with barbershop when it changes
   useEffect(() => {
     if (barbershopSlug) {
@@ -708,6 +717,72 @@ export default function Schedule() {
     setIsDayDialogOpen(true);
   };
 
+  // Quick action handlers for DayView and WeekView
+  const handleTimeSlotClick = (date: Date, startTime: string, endTime: string) => {
+    setQuickActionData({
+      startTime,
+      endTime,
+      date: formatDateToBrasilia(date),
+    });
+    setIsQuickActionModalOpen(true);
+  };
+
+  const handleTimeSlotDrag = (date: Date, startTime: string, endTime: string) => {
+    setQuickActionData({
+      startTime,
+      endTime,
+      date: formatDateToBrasilia(date),
+    });
+    setIsQuickActionModalOpen(true);
+  };
+
+  const handleDayViewTimeSlotClick = (startTime: string, endTime: string) => {
+    handleTimeSlotClick(selectedDate, startTime, endTime);
+  };
+
+  const handleDayViewTimeSlotDrag = (startTime: string, endTime: string) => {
+    handleTimeSlotDrag(selectedDate, startTime, endTime);
+  };
+
+  const handleCreateBlock = async (type: "blocked" | "early_leave", reason?: string) => {
+    if (!activeBarbershopId || !user?.id) {
+      toast.error("Erro ao identificar barbearia");
+      return;
+    }
+
+    setIsCreatingBlock(true);
+
+    try {
+      const startDateTime = createISODateTime(quickActionData.date, quickActionData.startTime);
+      const endDateTime = createISODateTime(quickActionData.date, quickActionData.endTime);
+
+      const { error } = await supabase.from("agendamentos").insert({
+        barbershop_id: activeBarbershopId,
+        user_id: user.id,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        status: type,
+        block_reason: reason || null,
+        nome_cliente: null,
+        client_id: null,
+      });
+
+      if (error) throw error;
+
+      toast.success(type === "early_leave" ? "Saída antecipada registrada" : "Horário bloqueado");
+      invalidateAppointments();
+    } catch (error) {
+      console.error("Error creating block:", error);
+      toast.error("Erro ao bloquear horário");
+    } finally {
+      setIsCreatingBlock(false);
+    }
+  };
+
+  const handleQuickActionBookAppointment = () => {
+    setIsBookingModalOpen(true);
+  };
+
   return (
     <div className="min-h-screen min-w-0">
       <div className="p-4 lg:p-6">
@@ -784,6 +859,8 @@ export default function Schedule() {
                 getDateFromISO={getDateFromISO}
                 isToday={isToday}
                 getServiceName={getServiceName}
+                onTimeSlotClick={handleTimeSlotClick}
+                onTimeSlotDrag={handleTimeSlotDrag}
               />
             )}
 
@@ -798,6 +875,8 @@ export default function Schedule() {
                 getDateFromISO={getDateFromISO}
                 getServiceName={getServiceName}
                 getStaffName={getStaffName}
+                onTimeSlotClick={handleDayViewTimeSlotClick}
+                onTimeSlotDrag={handleDayViewTimeSlotDrag}
               />
             )}
           </>
@@ -833,6 +912,19 @@ export default function Schedule() {
         barbershopId={activeBarbershopId}
         currentSlug={currentSlug}
         onSlugSaved={setCurrentSlug}
+      />
+
+      {/* Quick Action Modal */}
+      <QuickActionModal
+        open={isQuickActionModalOpen}
+        onOpenChange={setIsQuickActionModalOpen}
+        selectedStartTime={quickActionData.startTime}
+        selectedEndTime={quickActionData.endTime}
+        selectedDate={quickActionData.date}
+        professionalName={user?.user_metadata?.nome || "Você"}
+        onBookAppointment={handleQuickActionBookAppointment}
+        onCreateBlock={handleCreateBlock}
+        isLoading={isCreatingBlock}
       />
 
       {/* Day Detail Dialog */}

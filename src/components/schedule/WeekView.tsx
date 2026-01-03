@@ -1,7 +1,9 @@
+import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VipCrown } from "@/components/club/VipBadge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Ban, LogOut } from "lucide-react";
 
 interface Appointment {
   id_agendamento: string;
@@ -15,6 +17,7 @@ interface Appointment {
   user_id: string;
   subscription_status?: string | null;
   subscription_next_due_date?: string | null;
+  block_reason?: string | null;
 }
 
 interface WeekViewProps {
@@ -27,6 +30,8 @@ interface WeekViewProps {
   getDateFromISO: (isoString: string) => string;
   isToday: (date: Date) => boolean;
   getServiceName: (serviceId: string | null) => string;
+  onTimeSlotClick?: (date: Date, startTime: string, endTime: string) => void;
+  onTimeSlotDrag?: (date: Date, startTime: string, endTime: string) => void;
 }
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -42,7 +47,14 @@ export function WeekView({
   getDateFromISO,
   isToday,
   getServiceName,
+  onTimeSlotClick,
+  onTimeSlotDrag,
 }: WeekViewProps) {
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartCell, setDragStartCell] = useState<{ dayIndex: number; hour: number } | null>(null);
+  const [dragEndCell, setDragEndCell] = useState<{ dayIndex: number; hour: number } | null>(null);
+
   // Calcular os dias da semana baseado na data selecionada
   const getWeekDays = () => {
     const startOfWeek = new Date(selectedDate);
@@ -81,6 +93,58 @@ export function WeekView({
     return { top, height: Math.max(duration, 30) };
   };
 
+  const formatHour = (hour: number) => String(hour).padStart(2, "0") + ":00";
+
+  const handleMouseDown = useCallback((dayIndex: number, hour: number, e: React.MouseEvent) => {
+    // Ignore if clicking on an appointment
+    if ((e.target as HTMLElement).closest('[data-appointment]')) return;
+    
+    setIsDragging(true);
+    setDragStartCell({ dayIndex, hour });
+    setDragEndCell({ dayIndex, hour });
+  }, []);
+
+  const handleMouseMove = useCallback((dayIndex: number, hour: number) => {
+    if (isDragging && dragStartCell !== null) {
+      // Only allow vertical drag within same day
+      if (dayIndex === dragStartCell.dayIndex) {
+        setDragEndCell({ dayIndex, hour });
+      }
+    }
+  }, [isDragging, dragStartCell]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isDragging && dragStartCell !== null && dragEndCell !== null) {
+      const startHour = Math.min(dragStartCell.hour, dragEndCell.hour);
+      const endHour = Math.max(dragStartCell.hour, dragEndCell.hour) + 1;
+      const startTime = formatHour(startHour);
+      const endTime = formatHour(endHour);
+      const date = weekDates[dragStartCell.dayIndex];
+
+      if (dragStartCell.hour === dragEndCell.hour) {
+        // Single click
+        onTimeSlotClick?.(date, startTime, endTime);
+      } else {
+        // Drag selection
+        onTimeSlotDrag?.(date, startTime, endTime);
+      }
+    }
+    setIsDragging(false);
+    setDragStartCell(null);
+    setDragEndCell(null);
+  }, [isDragging, dragStartCell, dragEndCell, weekDates, onTimeSlotClick, onTimeSlotDrag]);
+
+  const isCellInDragRange = (dayIndex: number, hour: number) => {
+    if (!isDragging || dragStartCell === null || dragEndCell === null) return false;
+    if (dayIndex !== dragStartCell.dayIndex) return false;
+    const min = Math.min(dragStartCell.hour, dragEndCell.hour);
+    const max = Math.max(dragStartCell.hour, dragEndCell.hour);
+    return hour >= min && hour <= max;
+  };
+
+  const isBlockedAppointment = (apt: Appointment) => 
+    apt.status === "blocked" || apt.status === "early_leave";
+
   if (isLoading) {
     return (
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -100,7 +164,11 @@ export function WeekView({
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden animate-fade-in">
+    <div 
+      className="bg-card border border-border rounded-xl overflow-hidden animate-fade-in select-none"
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
       {/* Header com dias da semana */}
       <div className="grid grid-cols-8 border-b border-border sticky top-0 bg-card z-10">
         <div className="p-2 border-r border-border text-center text-xs text-muted-foreground">
@@ -134,15 +202,18 @@ export function WeekView({
           {hours.map((hour) => (
             <div key={hour} className="grid grid-cols-8 border-b border-border h-[60px]">
               <div className="p-1 border-r border-border text-xs text-muted-foreground text-center flex items-start justify-center pt-1">
-                {String(hour).padStart(2, "0")}:00
+                {formatHour(hour)}
               </div>
               {weekDates.map((date, dayIndex) => (
                 <div
                   key={dayIndex}
                   className={cn(
-                    "border-r border-border last:border-r-0 relative",
-                    isToday(date) && "bg-primary/5"
+                    "border-r border-border last:border-r-0 relative cursor-pointer hover:bg-muted/30 transition-colors",
+                    isToday(date) && "bg-primary/5",
+                    isCellInDragRange(dayIndex, hour) && "bg-primary/10"
                   )}
+                  onMouseDown={(e) => handleMouseDown(dayIndex, hour, e)}
+                  onMouseEnter={() => handleMouseMove(dayIndex, hour)}
                 />
               ))}
             </div>
@@ -156,10 +227,12 @@ export function WeekView({
               // Calcular posição horizontal
               const left = `calc(${(dayIndex + 1) * 12.5}% + 2px)`;
               const width = `calc(12.5% - 4px)`;
+              const isBlocked = isBlockedAppointment(apt);
 
               return (
                 <button
                   key={apt.id_agendamento}
+                  data-appointment
                   onClick={() => onDayClick(date)}
                   style={{
                     position: "absolute",
@@ -170,31 +243,47 @@ export function WeekView({
                   }}
                   className={cn(
                     "rounded px-1 py-0.5 text-[10px] sm:text-xs overflow-hidden text-left z-10 border transition-all duration-200 hover:shadow-md",
-                    apt.status === "completed" &&
+                    isBlocked && "bg-muted/60 border-dashed border-muted-foreground/50",
+                    !isBlocked && apt.status === "completed" &&
                       "bg-green-500/20 border-green-500/30 text-green-700 dark:text-green-400",
-                    apt.status === "pending" &&
+                    !isBlocked && apt.status === "pending" &&
                       "bg-yellow-500/20 border-yellow-500/30 text-yellow-700 dark:text-yellow-400",
-                    apt.status === "confirmed" &&
+                    !isBlocked && apt.status === "confirmed" &&
                       "bg-blue-500/20 border-blue-500/30 text-blue-700 dark:text-blue-400",
-                    apt.status === "cancelled" &&
+                    !isBlocked && apt.status === "cancelled" &&
                       "bg-red-500/20 border-red-500/30 text-red-700 dark:text-red-400"
                   )}
                 >
-                  <div className="flex items-center gap-0.5 truncate">
-                    {apt.subscription_status === "active" && (
-                      <VipCrown
-                        status={apt.subscription_status}
-                        nextDueDate={apt.subscription_next_due_date || null}
-                        className="w-3 h-3 flex-shrink-0"
-                      />
-                    )}
-                    <span className="font-medium truncate">
-                      {apt.nome_cliente || "Cliente"}
-                    </span>
-                  </div>
-                  <div className="truncate text-[9px] opacity-80">
-                    {formatTimeFromISO(apt.start_time)}
-                  </div>
+                  {isBlocked ? (
+                    <div className="flex items-center gap-0.5 text-muted-foreground truncate">
+                      {apt.status === "early_leave" ? (
+                        <LogOut className="w-3 h-3 flex-shrink-0" />
+                      ) : (
+                        <Ban className="w-3 h-3 flex-shrink-0" />
+                      )}
+                      <span className="font-medium truncate">
+                        {apt.status === "early_leave" ? "Saiu" : "Ausente"}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-0.5 truncate">
+                        {apt.subscription_status === "active" && (
+                          <VipCrown
+                            status={apt.subscription_status}
+                            nextDueDate={apt.subscription_next_due_date || null}
+                            className="w-3 h-3 flex-shrink-0"
+                          />
+                        )}
+                        <span className="font-medium truncate">
+                          {apt.nome_cliente || "Cliente"}
+                        </span>
+                      </div>
+                      <div className="truncate text-[9px] opacity-80">
+                        {formatTimeFromISO(apt.start_time)}
+                      </div>
+                    </>
+                  )}
                 </button>
               );
             });
