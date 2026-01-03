@@ -53,6 +53,7 @@ interface CheckoutRequest {
   event_id?: string;
   subscription_id?: string;
   checkout_type?: string;
+  origin?: string;
 }
 
 Deno.serve(async (req) => {
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
     const body: CheckoutRequest = await req.json();
     console.log("Checkout request:", JSON.stringify(body));
 
-    const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id, checkout_type } = body;
+    const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id, checkout_type, origin } = body;
 
     if (action !== "create_checkout") {
       throw new Error("Ação inválida");
@@ -129,17 +130,17 @@ Deno.serve(async (req) => {
       .eq("barbershop_id", barbershop_id)
       .in("status", ["pending", "EXPIRED"]);
 
-    // 4. URLs de callback
-    const baseSuccessUrl = "https://app.skejool.com.br/obrigado";
+    // 4. URLs de callback (dinâmicas baseadas na origem)
+    const baseUrl = origin || "https://app.skejool.com.br";
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
     successParams.set("plan", plan_slug);
     successParams.set("value", plan.price.toString());
     successParams.set("type", checkout_type || "subscribe");
     
-    const successUrl = `${baseSuccessUrl}?${successParams.toString()}`;
-    const cancelUrl = "https://app.skejool.com.br/dashboard";
-    const expiredUrl = "https://app.skejool.com.br/dashboard";
+    const successUrl = `${baseUrl}/obrigado?${successParams.toString()}`;
+    const cancelUrl = `${baseUrl}/dashboard`;
+    const expiredUrl = `${baseUrl}/dashboard`;
 
     // 5. External reference no formato simples (pipe-separated para parsing no webhook)
     const timestamp = formatTimestamp();
