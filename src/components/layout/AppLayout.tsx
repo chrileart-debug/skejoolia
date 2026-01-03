@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
+import { MobileMenu } from "./MobileMenu";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
 import { PageHeaderProvider, usePageHeader } from "@/contexts/PageHeaderContext";
@@ -93,11 +94,7 @@ function AppLayoutContent() {
   }, [barbershop, barbershopLoading, user]);
 
   const handleMobileMenuToggle = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  };
-
-  const handleMobileMenuClose = () => {
-    setMobileMenuOpen(false);
+    setMobileMenuOpen(prev => !prev);
   };
 
   const handleOnboardingComplete = () => {
@@ -130,20 +127,16 @@ function AppLayoutContent() {
         />
       )}
 
-      {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={handleMobileMenuClose}
-        />
-      )}
+      {/* Mobile Menu Sheet */}
+      <MobileMenu 
+        open={mobileMenuOpen} 
+        onOpenChange={setMobileMenuOpen} 
+      />
 
       <div className="relative">
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-          mobileOpen={mobileMenuOpen}
-          onMobileClose={handleMobileMenuClose}
         />
       </div>
 

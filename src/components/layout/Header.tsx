@@ -1,4 +1,4 @@
-import { Menu, Moon, Sun, Link, Check } from "lucide-react";
+import { Moon, Sun, Link, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { HamburgerMenuButton } from "./HamburgerMenuButton";
 
 interface HeaderProps {
   title: string;
@@ -72,14 +73,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
     <header className="bg-background/95 backdrop-blur-lg border-b border-border">
       <div className="flex items-center justify-between h-16 px-4 lg:px-6">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={onMenuClick}
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+          <HamburgerMenuButton isOpen={false} onClick={onMenuClick || (() => {})} />
           <div>
             <h1 className="text-lg font-semibold text-foreground">{title}</h1>
             {subtitle && (
