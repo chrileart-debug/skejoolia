@@ -94,23 +94,26 @@ Deno.serve(async (req) => {
 
     console.log("Plano encontrado:", plan.name, "- Preço:", plan.price);
 
-    // 2. Verificar se existe sessão pendente válida (< 10 minutos)
-    const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000).toISOString();
-    
+    // 2. Buscar sessão existente para este usuário/barbearia/plano (qualquer status)
     const { data: existingSession } = await supabase
       .from("session_checkout")
       .select("*")
       .eq("user_id", user_id)
       .eq("barbershop_id", barbershop_id)
       .eq("plan_name", plan.name)
-      .eq("status", "pending")
-      .gte("created_at", tenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (existingSession?.asaas_checkout_link) {
-      console.log("Reutilizando sessão existente:", existingSession.id);
+    // 3. Verificar se a sessão existente ainda é válida (pending e < 10 min)
+    const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000);
+    const sessionCreatedAt = existingSession?.created_at ? new Date(existingSession.created_at) : null;
+    const isSessionValid = existingSession?.status === "pending" && 
+                           sessionCreatedAt && 
+                           sessionCreatedAt > tenMinutesAgo;
+
+    if (isSessionValid && existingSession?.asaas_checkout_link) {
+      console.log("Reutilizando sessão válida:", existingSession.id);
       return new Response(
         JSON.stringify({
           checkout_url: existingSession.asaas_checkout_link,
@@ -122,16 +125,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Marcar sessões antigas/expiradas como EXPIRED
-    await supabase
-      .from("session_checkout")
-      .update({ status: "EXPIRED", updated_at: new Date().toISOString() })
-      .eq("user_id", user_id)
-      .eq("barbershop_id", barbershop_id)
-      .in("status", ["pending", "EXPIRED"]);
-
     // 4. URLs de callback (dinâmicas baseadas na origem)
     const baseUrl = origin || "https://app.skejool.com.br";
+    console.log("Origin recebido:", origin, "| baseUrl final:", baseUrl);
+    
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
     successParams.set("plan", plan_slug);
@@ -195,33 +192,58 @@ Deno.serve(async (req) => {
     const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
     console.log("Checkout URL:", checkoutUrl);
 
-    // 9. Salvar sessão no banco
-    const { data: newSession, error: dbError } = await supabase
-      .from("session_checkout")
-      .insert({
-        user_id,
-        barbershop_id,
-        asaas_checkout_id: asaasData.id,
-        asaas_checkout_link: checkoutUrl,
-        plan_name: plan.name,
-        plan_price: plan.price,
-        status: "pending",
-      })
-      .select()
-      .single();
+    // 9. Salvar/Atualizar sessão no banco (UPSERT logic)
+    let sessionId: string | undefined;
 
-    if (dbError) {
-      console.error("Erro ao salvar sessão:", dbError);
+    if (existingSession) {
+      // UPDATE na linha existente (mesmo que esteja EXPIRED)
+      const { data: updatedSession, error: dbError } = await supabase
+        .from("session_checkout")
+        .update({
+          asaas_checkout_id: asaasData.id,
+          asaas_checkout_link: checkoutUrl,
+          plan_price: plan.price,
+          status: "pending",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingSession.id)
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error("Erro ao ATUALIZAR sessão:", dbError);
+      }
+      sessionId = updatedSession?.id || existingSession.id;
+      console.log("Sessão ATUALIZADA:", sessionId);
+    } else {
+      // INSERT nova linha (primeiro checkout deste usuário/plano)
+      const { data: newSession, error: dbError } = await supabase
+        .from("session_checkout")
+        .insert({
+          user_id,
+          barbershop_id,
+          asaas_checkout_id: asaasData.id,
+          asaas_checkout_link: checkoutUrl,
+          plan_name: plan.name,
+          plan_price: plan.price,
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error("Erro ao CRIAR sessão:", dbError);
+      }
+      sessionId = newSession?.id;
+      console.log("Sessão CRIADA:", sessionId);
     }
-
-    console.log("Sessão criada:", newSession?.id);
 
     return new Response(
       JSON.stringify({
         checkout_url: checkoutUrl,
         link: checkoutUrl,
         checkout_id: asaasData.id,
-        session_id: newSession?.id,
+        session_id: sessionId,
         is_existing: false,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
