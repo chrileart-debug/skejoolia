@@ -85,6 +85,7 @@ interface Appointment {
   user_id: string;
   subscription_status?: string | null;
   subscription_next_due_date?: string | null;
+  block_reason?: string | null;
 }
 
 interface Service {
@@ -943,74 +944,114 @@ export default function Schedule() {
               {selectedDayAppointments.map((apt) => (
                 <div
                   key={apt.id_agendamento}
-                  className="p-3 bg-muted/50 rounded-lg space-y-2"
+                  className={cn(
+                    "p-3 rounded-lg space-y-2",
+                    apt.status === "blocked" || apt.status === "early_leave"
+                      ? "bg-muted/60 border border-dashed border-muted-foreground/40"
+                      : "bg-muted/50"
+                  )}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-medium truncate">{apt.nome_cliente || "Cliente não informado"}</p>
-                        {apt.subscription_status === "active" && (
-                          <VipCrown 
-                            status={apt.subscription_status} 
-                            nextDueDate={apt.subscription_next_due_date || null} 
-                          />
+                  {apt.status === "blocked" || apt.status === "early_leave" ? (
+                    // Renderização para bloqueios
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-muted-foreground">
+                          {apt.status === "early_leave" ? "Saiu mais cedo" : "Indisponível"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatTimeFromISO(apt.start_time)} - {apt.end_time ? formatTimeFromISO(apt.end_time) : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                          <User className="w-3 h-3" />
+                          {getStaffName(apt.user_id)}
+                        </p>
+                        {apt.block_reason && (
+                          <p className="text-xs text-muted-foreground mt-1 italic">
+                            {apt.block_reason}
+                          </p>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {formatTimeFromISO(apt.start_time)} - {getServiceName(apt.service_id)}
-                      </p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <User className="w-3 h-3" />
-                        {getStaffName(apt.user_id)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {(apt.status === "pending" || apt.status === "confirmed") && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30"
-                          onClick={() => handleFinishAppointment(apt)}
-                          title="Concluir atendimento"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEditAppointment(apt)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive"
                         onClick={() => setDeleteAppointmentId(apt.id_agendamento)}
+                        title="Remover bloqueio"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <StatusBadge status={(apt.status || "pending") as "pending" | "confirmed" | "completed" | "cancelled"} />
-                    <Select
-                      value={apt.status || "pending"}
-                      onValueChange={(value) => handleStatusChange(apt.id_agendamento, value)}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-auto min-w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pendente</SelectItem>
-                        <SelectItem value="confirmed">Confirmado</SelectItem>
-                        <SelectItem value="completed">Concluído</SelectItem>
-                        <SelectItem value="cancelled">Cancelado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  ) : (
+                    // Renderização para agendamentos normais
+                    <>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium truncate">{apt.nome_cliente || "Cliente não informado"}</p>
+                            {apt.subscription_status === "active" && (
+                              <VipCrown 
+                                status={apt.subscription_status} 
+                                nextDueDate={apt.subscription_next_due_date || null} 
+                              />
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {formatTimeFromISO(apt.start_time)} - {getServiceName(apt.service_id)}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                            <User className="w-3 h-3" />
+                            {getStaffName(apt.user_id)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(apt.status === "pending" || apt.status === "confirmed") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30"
+                              onClick={() => handleFinishAppointment(apt)}
+                              title="Concluir atendimento"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleEditAppointment(apt)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => setDeleteAppointmentId(apt.id_agendamento)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <StatusBadge status={(apt.status || "pending") as "pending" | "confirmed" | "completed" | "cancelled"} />
+                        <Select
+                          value={apt.status || "pending"}
+                          onValueChange={(value) => handleStatusChange(apt.id_agendamento, value)}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-auto min-w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="confirmed">Confirmado</SelectItem>
+                            <SelectItem value="completed">Concluído</SelectItem>
+                            <SelectItem value="cancelled">Cancelado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
