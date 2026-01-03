@@ -8,6 +8,7 @@ import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { ReminderConfigModal } from "@/components/schedule/ReminderConfigModal";
 import { PublicShopModal } from "@/components/schedule/PublicShopModal";
 import { QuickActionModal } from "@/components/schedule/QuickActionModal";
+import { EditBlockModal } from "@/components/schedule/EditBlockModal";
 import { MonthView } from "@/components/schedule/MonthView";
 import { WeekView } from "@/components/schedule/WeekView";
 import { DayView } from "@/components/schedule/DayView";
@@ -190,6 +191,18 @@ export default function Schedule() {
     date: "",
   });
   const [isCreatingBlock, setIsCreatingBlock] = useState(false);
+
+  // Edit block modal states
+  const [isEditBlockModalOpen, setIsEditBlockModalOpen] = useState(false);
+  const [editingBlock, setEditingBlock] = useState<{
+    id: string;
+    startTime: string;
+    endTime: string;
+    date: string;
+    type: "blocked" | "early_leave";
+    reason: string;
+  } | null>(null);
+  const [isSavingBlock, setIsSavingBlock] = useState(false);
   // Sync slug with barbershop when it changes
   useEffect(() => {
     if (barbershopSlug) {
@@ -784,6 +797,82 @@ export default function Schedule() {
     setIsBookingModalOpen(true);
   };
 
+  const handleEditBlock = (apt: Appointment) => {
+    if (apt.status !== "blocked" && apt.status !== "early_leave") return;
+    
+    const startDate = new Date(apt.start_time);
+    const endDate = apt.end_time ? new Date(apt.end_time) : startDate;
+    
+    const formatTime = (d: Date) => 
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    
+    setEditingBlock({
+      id: apt.id_agendamento,
+      startTime: formatTime(startDate),
+      endTime: formatTime(endDate),
+      date: getDateFromISO(apt.start_time),
+      type: apt.status as "blocked" | "early_leave",
+      reason: apt.block_reason || "",
+    });
+    setIsEditBlockModalOpen(true);
+  };
+
+  const handleSaveBlock = async (data: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    type: "blocked" | "early_leave";
+    reason: string;
+  }) => {
+    if (!editingBlock) return;
+    
+    setIsSavingBlock(true);
+    
+    try {
+      const startDateTime = createISODateTime(editingBlock.date, data.startTime);
+      const endDateTime = createISODateTime(editingBlock.date, data.endTime);
+
+      const { error } = await supabase
+        .from("agendamentos")
+        .update({
+          start_time: startDateTime,
+          end_time: endDateTime,
+          status: data.type,
+          block_reason: data.reason || null,
+        })
+        .eq("id_agendamento", data.id);
+
+      if (error) throw error;
+
+      toast.success("Bloqueio atualizado");
+      invalidateAppointments();
+      setIsEditBlockModalOpen(false);
+      setEditingBlock(null);
+      
+      // Atualizar também a lista de agendamentos do dia se estiver aberta
+      if (isDayDialogOpen) {
+        setSelectedDayAppointments((prev) =>
+          prev.map((a) =>
+            a.id_agendamento === data.id
+              ? {
+                  ...a,
+                  start_time: startDateTime,
+                  end_time: endDateTime,
+                  status: data.type,
+                  block_reason: data.reason || null,
+                }
+              : a
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error updating block:", error);
+      toast.error("Erro ao atualizar bloqueio");
+    } finally {
+      setIsSavingBlock(false);
+    }
+  };
+
   return (
     <div className="min-h-screen min-w-0">
       <div className="p-4 lg:p-6">
@@ -928,6 +1017,16 @@ export default function Schedule() {
         isLoading={isCreatingBlock}
       />
 
+      {/* Edit Block Modal */}
+      <EditBlockModal
+        open={isEditBlockModalOpen}
+        onOpenChange={setIsEditBlockModalOpen}
+        blockData={editingBlock}
+        professionalName={user?.user_metadata?.nome || "Você"}
+        onSave={handleSaveBlock}
+        isLoading={isSavingBlock}
+      />
+
       {/* Day Detail Dialog */}
       <Dialog open={isDayDialogOpen} onOpenChange={setIsDayDialogOpen}>
         <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-h-[80vh] overflow-y-auto">
@@ -971,15 +1070,26 @@ export default function Schedule() {
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => setDeleteAppointmentId(apt.id_agendamento)}
-                        title="Remover bloqueio"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEditBlock(apt)}
+                          title="Editar bloqueio"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => setDeleteAppointmentId(apt.id_agendamento)}
+                          title="Remover bloqueio"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     // Renderização para agendamentos normais
