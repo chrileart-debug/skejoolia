@@ -14,6 +14,7 @@ import { PublicClubSection } from "@/components/public/PublicClubSection";
 import { ClientLoginModal } from "@/components/public/ClientLoginModal";
 import { ClientPortal } from "@/components/public/ClientPortal";
 import { ExistingAppointmentModal } from "@/components/public/ExistingAppointmentModal";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   ArrowLeft,
   Calendar as CalendarIcon,
@@ -80,6 +81,7 @@ interface StaffSchedule {
 interface TimeSlot {
   time: string;
   available: boolean;
+  reason?: "break" | "booked" | "past";
 }
 
 interface ClientData {
@@ -204,9 +206,9 @@ const PublicBooking = () => {
   const [clientSubscription, setClientSubscription] = useState<SubscriptionData | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(false);
 
-  // Wizard states
+  // Wizard states - Now with 4 steps: 0=phone, 1=service, 2=professional+calendar+time, 3=confirm
   const [activeTab, setActiveTab] = useState<string>("agendar");
-  const [currentStep, setCurrentStep] = useState(0); // 0 = phone, 1 = service, 2 = professional, 3 = time, 4 = confirm
+  const [currentStep, setCurrentStep] = useState(0);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] = useState<StaffMember | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayInBrasilia());
@@ -425,7 +427,7 @@ const PublicBooking = () => {
     }
   }, [loggedInClient]);
 
-  // Fetch appointments when date changes
+  // Fetch appointments when date or professional changes
   useEffect(() => {
     const fetchAppointments = async () => {
       if (!barbershop || !selectedDate) return;
@@ -634,16 +636,41 @@ const PublicBooking = () => {
     return staffMembers.filter((sm) => linkedUserIds.includes(sm.user_id));
   }, [selectedService, staffServices, staffMembers]);
 
-  // Check if professional is working on selected date
-  const isProfessionalWorking = (userId: string): boolean => {
-    const dayOfWeek = getDayOfWeek(selectedDate);
+  // Check if professional is working on a specific date
+  const isProfessionalWorkingOnDate = (userId: string, dateStr: string): boolean => {
+    const dayOfWeek = getDayOfWeek(dateStr);
     const schedule = staffSchedules.find(
       (s) => s.user_id === userId && s.day_of_week === dayOfWeek
     );
     return schedule?.is_working ?? false;
   };
 
-  // Get available time slots
+  // Get working days for a professional (returns array of day_of_week numbers 0-6)
+  const getProfessionalWorkingDays = (userId: string): number[] => {
+    return staffSchedules
+      .filter((s) => s.user_id === userId && s.is_working)
+      .map((s) => s.day_of_week);
+  };
+
+  // Find next available date for professional
+  const findNextAvailableDate = (userId: string, fromDate: string): string | null => {
+    const workingDays = getProfessionalWorkingDays(userId);
+    if (workingDays.length === 0) return null;
+
+    const startDate = new Date(fromDate + "T12:00:00");
+    for (let i = 0; i < 60; i++) { // Check next 60 days
+      const checkDate = new Date(startDate);
+      checkDate.setDate(checkDate.getDate() + i);
+      const dayOfWeek = checkDate.getDay();
+      
+      if (workingDays.includes(dayOfWeek)) {
+        return checkDate.toLocaleDateString("en-CA", { timeZone: BRASILIA_TIMEZONE });
+      }
+    }
+    return null;
+  };
+
+  // Get available time slots with reason for unavailability
   const availableTimeSlots = useMemo((): TimeSlot[] => {
     if (!selectedProfessional || !selectedDate || !selectedService) return [];
 
@@ -664,20 +691,24 @@ const PublicBooking = () => {
     const breakEndMinutes = schedule.break_end ? timeToMinutes(schedule.break_end) : null;
 
     const proAppointments = existingAppointments.filter(
-      (apt) => apt.user_id === selectedProfessional.user_id
+      (apt) => apt.user_id === selectedProfessional.user_id && 
+               apt.status !== "cancelado" && 
+               apt.status !== "cancelled"
     );
 
     for (let time = startMinutes; time + duration <= endMinutes; time += slotInterval) {
       const slotTime = minutesToTime(time);
       const slotEndMinutes = time + duration;
 
+      // Check if slot is during break
       if (breakStartMinutes !== null && breakEndMinutes !== null) {
         if (time < breakEndMinutes && slotEndMinutes > breakStartMinutes) {
-          slots.push({ time: slotTime, available: false });
+          slots.push({ time: slotTime, available: false, reason: "break" });
           continue;
         }
       }
 
+      // Check for conflicts with existing appointments
       let hasConflict = false;
       for (const apt of proAppointments) {
         // Skip the appointment being rescheduled
@@ -694,11 +725,20 @@ const PublicBooking = () => {
         }
       }
 
+      if (hasConflict) {
+        slots.push({ time: slotTime, available: false, reason: "booked" });
+        continue;
+      }
+
+      // Check if slot is in the past
       const now = new Date();
       const slotDate = new Date(`${selectedDate}T${slotTime}:00`);
-      const isInPast = slotDate < now;
+      if (slotDate < now) {
+        slots.push({ time: slotTime, available: false, reason: "past" });
+        continue;
+      }
 
-      slots.push({ time: slotTime, available: !hasConflict && !isInPast });
+      slots.push({ time: slotTime, available: true });
     }
 
     return slots;
@@ -732,8 +772,13 @@ const PublicBooking = () => {
           return;
         }
       }
-      if (currentStep === 2) setSelectedProfessional(null);
-      if (currentStep === 3) setSelectedTime(null);
+      if (currentStep === 2) {
+        setSelectedProfessional(null);
+        setSelectedTime(null);
+      }
+      if (currentStep === 3) {
+        // Nothing to reset
+      }
       setCurrentStep(currentStep - 1);
     }
   };
@@ -747,20 +792,21 @@ const PublicBooking = () => {
   };
 
   const handleProfessionalSelect = (pro: StaffMember) => {
-    if (!isProfessionalWorking(pro.user_id)) return;
     setSelectedProfessional(pro);
     setSelectedTime(null);
-    setCurrentStep(3);
+    
+    // If professional doesn't work on selected date, find next available date
+    if (!isProfessionalWorkingOnDate(pro.user_id, selectedDate)) {
+      const nextAvailable = findNextAvailableDate(pro.user_id, getTodayInBrasilia());
+      if (nextAvailable) {
+        setSelectedDate(nextAvailable);
+      }
+    }
   };
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    // If client is known, go directly to confirmation. Otherwise, show form
-    if (foundClient || loggedInClient) {
-      setCurrentStep(4);
-    } else {
-      setCurrentStep(4);
-    }
+    setCurrentStep(3);
   };
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -993,10 +1039,7 @@ const PublicBooking = () => {
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <User className="w-5 h-5 text-primary" />
               </div>
-              <div>
-                <p className="font-medium text-foreground">{selectedProfessional?.name}</p>
-                <p className="text-sm text-muted-foreground">Profissional</p>
-              </div>
+              <p className="font-medium text-foreground">{selectedProfessional?.name}</p>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1021,14 +1064,13 @@ const PublicBooking = () => {
     );
   }
 
-  // Step indicators for booking flow
+  // Step indicators for booking flow - Updated to 4 steps
   const getSteps = () => {
     const baseSteps = [
       { num: 0, label: "WhatsApp", icon: Phone },
       { num: 1, label: "Serviço", icon: Scissors },
-      { num: 2, label: "Profissional", icon: Users },
-      { num: 3, label: "Horário", icon: Clock },
-      { num: 4, label: "Confirmar", icon: Check },
+      { num: 2, label: "Horário", icon: Clock },
+      { num: 3, label: "Confirmar", icon: Check },
     ];
     
     // Skip phone step if logged in
@@ -1039,7 +1081,6 @@ const PublicBooking = () => {
   };
 
   const steps = getSteps();
-  const effectiveStep = loggedInClient ? currentStep - 1 : currentStep;
 
   return (
     <div className="min-h-screen bg-background">
@@ -1358,7 +1399,7 @@ const PublicBooking = () => {
                                     {isIncluded && (
                                       <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
                                         <Gift className="w-3 h-3" />
-                                        Incluso no Plano
+                                        Plano
                                       </span>
                                     )}
                                   </div>
@@ -1367,33 +1408,29 @@ const PublicBooking = () => {
                                       {service.description}
                                     </p>
                                   )}
-                                  <div className="flex items-center gap-3 mt-2">
+                                  <div className="flex items-center gap-2 mt-2">
                                     <span className={cn(
-                                      "text-lg font-bold",
-                                      isIncluded ? "text-success" : "text-primary"
+                                      "font-bold",
+                                      isIncluded ? "text-success" : "text-foreground"
                                     )}>
                                       {displayPrice}
                                     </span>
                                     {service.duration_minutes && (
-                                      <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        {formatDuration(service.duration_minutes)}
-                                      </span>
+                                      <>
+                                        <span className="text-muted-foreground">•</span>
+                                        <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {formatDuration(service.duration_minutes)}
+                                        </span>
+                                      </>
                                     )}
-                                    {/* Show remaining credits */}
                                     {credits && (
-                                      <span className={cn(
-                                        "text-sm font-semibold px-2 py-0.5 rounded-full",
-                                        credits.isUnlimited 
-                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
-                                          : credits.remaining > 0 
-                                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                      )}>
-                                        {credits.isUnlimited 
-                                          ? "∞ Ilimitado" 
-                                          : `${credits.remaining} restante${credits.remaining !== 1 ? 's' : ''}`}
-                                      </span>
+                                      <>
+                                        <span className="text-muted-foreground">•</span>
+                                        <span className="text-xs text-amber-600">
+                                          {credits.isUnlimited ? "∞" : `${credits.remaining}/${credits.limit}`}
+                                        </span>
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -1406,15 +1443,15 @@ const PublicBooking = () => {
                   );
                 })}
 
+                {/* Uncategorized services */}
                 {servicesByCategory.uncategorized.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                      Outros
+                      Outros Serviços
                     </h3>
                     <div className="grid gap-3">
                       {servicesByCategory.uncategorized.map((service) => {
                         const { price: displayPrice, isIncluded } = getDisplayPrice(service);
-                        const credits = getRemainingCredits(service.id);
                         return (
                           <button
                             key={service.id}
@@ -1425,45 +1462,52 @@ const PublicBooking = () => {
                             )}
                           >
                             <div className="flex items-start gap-4">
-                              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <Scissors className="w-6 h-6 text-primary" />
-                              </div>
+                              {service.image_url ? (
+                                <img
+                                  src={service.image_url}
+                                  alt={service.name}
+                                  className="w-16 h-16 rounded-lg object-cover"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                                  {service.is_package ? (
+                                    <Package className="w-6 h-6 text-primary" />
+                                  ) : (
+                                    <Scissors className="w-6 h-6 text-primary" />
+                                  )}
+                                </div>
+                              )}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
                                     {service.name}
                                   </p>
-                                  {isIncluded && (
-                                    <span className="px-2 py-0.5 text-xs font-medium bg-success/10 text-success rounded-full flex items-center gap-1">
-                                      <Gift className="w-3 h-3" />
-                                      Incluso
+                                  {service.is_package && (
+                                    <span className="px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary rounded-full">
+                                      Combo
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-3 mt-2">
-                                  <span className={cn("text-lg font-bold", isIncluded ? "text-success" : "text-primary")}>
+                                {service.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                    {service.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className={cn(
+                                    "font-bold",
+                                    isIncluded ? "text-success" : "text-foreground"
+                                  )}>
                                     {displayPrice}
                                   </span>
                                   {service.duration_minutes && (
-                                    <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      {formatDuration(service.duration_minutes)}
-                                    </span>
-                                  )}
-                                  {/* Show remaining credits */}
-                                  {credits && (
-                                    <span className={cn(
-                                      "text-sm font-semibold px-2 py-0.5 rounded-full",
-                                      credits.isUnlimited 
-                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
-                                        : credits.remaining > 0 
-                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                    )}>
-                                      {credits.isUnlimited 
-                                        ? "∞ Ilimitado" 
-                                        : `${credits.remaining} restante${credits.remaining !== 1 ? 's' : ''}`}
-                                    </span>
+                                    <>
+                                      <span className="text-muted-foreground">•</span>
+                                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {formatDuration(service.duration_minutes)}
+                                      </span>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1477,115 +1521,191 @@ const PublicBooking = () => {
               </div>
             )}
 
-            {/* Step 2: Professionals */}
+            {/* Step 2: Professional + Calendar + Time (UNIFIED) */}
             {currentStep === 2 && (
               <div className="animate-fade-in space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">Escolha o profissional</h2>
-                  <p className="text-muted-foreground">Quem você prefere para {selectedService?.name}?</p>
+                {/* Service Summary */}
+                <div className="bg-muted/50 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Scissors className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-foreground">{selectedService?.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatPrice(selectedService?.price || 0)} • {formatDuration(selectedService?.duration_minutes)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {professionalsForService.length === 0 ? (
-                  <div className="text-center py-12 bg-muted/50 rounded-xl">
-                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Nenhum profissional disponível para este serviço</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3">
-                    {professionalsForService.map((pro) => {
-                      const isWorking = isProfessionalWorking(pro.user_id);
-                      return (
-                        <button
-                          key={pro.user_id}
-                          onClick={() => handleProfessionalSelect(pro)}
-                          disabled={!isWorking}
-                          className={cn(
-                            "w-full bg-card rounded-xl border border-border p-4 text-left transition-all group",
-                            isWorking
-                              ? "hover:bg-accent hover:shadow-md"
-                              : "opacity-50 cursor-not-allowed"
-                          )}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                              <User className="w-7 h-7 text-primary" />
-                            </div>
-                            <div className="flex-1">
-                              <p className={cn(
-                                "font-semibold text-foreground transition-colors",
-                                isWorking && "group-hover:text-primary"
-                              )}>
-                                {pro.name || "Profissional"}
-                              </p>
-                              {!isWorking && (
-                                <p className="text-sm text-destructive">Não trabalha neste dia</p>
+                {/* Professionals Selector */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary" />
+                    Escolha o profissional
+                  </h3>
+                  
+                  {professionalsForService.length === 0 ? (
+                    <div className="text-center py-6 bg-muted/50 rounded-xl">
+                      <Users className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-muted-foreground">Nenhum profissional disponível</p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="w-full whitespace-nowrap">
+                      <div className="flex gap-3 pb-2">
+                        {professionalsForService.map((pro) => {
+                          const isWorkingToday = isProfessionalWorkingOnDate(pro.user_id, selectedDate);
+                          const isSelected = selectedProfessional?.user_id === pro.user_id;
+                          
+                          return (
+                            <button
+                              key={pro.user_id}
+                              onClick={() => handleProfessionalSelect(pro)}
+                              className={cn(
+                                "flex-shrink-0 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all min-w-[100px]",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground border-primary shadow-lg"
+                                  : isWorkingToday
+                                  ? "bg-card hover:bg-accent border-border hover:shadow-md"
+                                  : "bg-card/50 border-border/50 opacity-50"
                               )}
-                            </div>
-                            {isWorking && (
-                              <Sparkles className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                            >
+                              <div className={cn(
+                                "w-14 h-14 rounded-full flex items-center justify-center",
+                                isSelected ? "bg-primary-foreground/20" : "bg-primary/10"
+                              )}>
+                                <User className={cn(
+                                  "w-7 h-7",
+                                  isSelected ? "text-primary-foreground" : "text-primary"
+                                )} />
+                              </div>
+                              <div className="text-center">
+                                <p className={cn(
+                                  "font-medium text-sm",
+                                  isSelected ? "text-primary-foreground" : "text-foreground"
+                                )}>
+                                  {pro.name || "Profissional"}
+                                </p>
+                                {!isWorkingToday && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Não trabalha hoje
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <ScrollBar orientation="horizontal" />
+                    </ScrollArea>
+                  )}
+                </div>
+
+                {/* Calendar - Always visible after selecting professional */}
+                {selectedProfessional && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-primary" />
+                      Escolha a data
+                    </h3>
+                    <div className="bg-card rounded-xl border border-border p-4">
+                      <Calendar
+                        mode="single"
+                        selected={new Date(selectedDate + "T12:00:00")}
+                        onSelect={handleDateSelect}
+                        disabled={(date) => {
+                          // Disable past dates
+                          if (date < new Date(new Date().setHours(0, 0, 0, 0))) return true;
+                          return false;
+                        }}
+                        modifiers={{
+                          notWorking: (date) => {
+                            if (!selectedProfessional) return false;
+                            const dateStr = date.toLocaleDateString("en-CA", { timeZone: BRASILIA_TIMEZONE });
+                            return !isProfessionalWorkingOnDate(selectedProfessional.user_id, dateStr);
+                          }
+                        }}
+                        modifiersStyles={{
+                          notWorking: { opacity: 0.3 }
+                        }}
+                        className="rounded-md mx-auto"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Time Slots */}
+                {selectedProfessional && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-primary" />
+                      Horários disponíveis - {formatDateDisplay(selectedDate)}
+                    </h3>
+
+                    {!isProfessionalWorkingOnDate(selectedProfessional.user_id, selectedDate) ? (
+                      <div className="text-center py-8 bg-muted/50 rounded-xl">
+                        <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground font-medium">
+                          {selectedProfessional.name} não trabalha neste dia
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Selecione outra data no calendário
+                        </p>
+                      </div>
+                    ) : availableTimeSlots.length === 0 ? (
+                      <div className="text-center py-8 bg-muted/50 rounded-xl">
+                        <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">Nenhum horário disponível</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {availableTimeSlots.map((slot) => (
+                          <button
+                            key={slot.time}
+                            onClick={() => slot.available && handleTimeSelect(slot.time)}
+                            disabled={!slot.available}
+                            className={cn(
+                              "py-3 px-4 rounded-lg text-sm font-medium transition-all relative",
+                              slot.available
+                                ? "bg-card hover:bg-primary hover:text-primary-foreground border border-border"
+                                : "bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50"
                             )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                          >
+                            <span className={cn(!slot.available && "line-through")}>
+                              {slot.time}
+                            </span>
+                            {!slot.available && slot.reason === "booked" && (
+                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full" />
+                            )}
+                            {!slot.available && slot.reason === "break" && (
+                              <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Legend */}
+                    {availableTimeSlots.some(s => !s.available) && (
+                      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground pt-2">
+                        <div className="flex items-center gap-1">
+                          <span className="w-3 h-3 bg-destructive rounded-full" />
+                          <span>Ocupado</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="w-3 h-3 bg-amber-500 rounded-full" />
+                          <span>Intervalo</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Step 3: Date & Time */}
+            {/* Step 3: Confirmation */}
             {currentStep === 3 && (
-              <div className="animate-fade-in space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">Escolha o horário</h2>
-                  <p className="text-muted-foreground">Selecione a data e horário disponível</p>
-                </div>
-
-                <div className="bg-card rounded-xl border border-border p-4">
-                  <Calendar
-                    mode="single"
-                    selected={new Date(selectedDate + "T12:00:00")}
-                    onSelect={handleDateSelect}
-                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                    className="rounded-md mx-auto"
-                  />
-                </div>
-
-                <div>
-                  <h3 className="font-semibold text-foreground mb-3">
-                    Horários disponíveis - {formatDateDisplay(selectedDate)}
-                  </h3>
-
-                  {availableTimeSlots.length === 0 ? (
-                    <div className="text-center py-8 bg-muted/50 rounded-xl">
-                      <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">Nenhum horário disponível neste dia</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {availableTimeSlots.map((slot) => (
-                        <button
-                          key={slot.time}
-                          onClick={() => slot.available && handleTimeSelect(slot.time)}
-                          disabled={!slot.available}
-                          className={cn(
-                            "py-3 px-4 rounded-lg text-sm font-medium transition-all",
-                            slot.available
-                              ? "bg-card hover:bg-primary hover:text-primary-foreground border border-border"
-                              : "bg-muted text-muted-foreground cursor-not-allowed line-through"
-                          )}
-                        >
-                          {slot.time}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Confirmation */}
-            {currentStep === 4 && (
               <div className="animate-fade-in space-y-6">
                 <div>
                   <h2 className="text-xl font-bold text-foreground">
