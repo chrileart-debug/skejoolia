@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { SubscriptionCard } from "@/components/subscription/SubscriptionCard";
+import { CommissionsPanel } from "@/components/commissions/CommissionsPanel";
 
 import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
   CalendarDays,
   Rocket,
   ArrowRight,
+  TrendingUp,
 } from "lucide-react";
 import { startOfDay, endOfDay, subDays, format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -289,6 +291,38 @@ export default function Dashboard() {
       return data;
     },
     enabled: !!barbershop?.id,
+  });
+
+  // Fetch staff commissions (for non-owner users)
+  const { data: myCommissions } = useQuery({
+    queryKey: ["my-commissions", barbershop?.id, user?.id],
+    queryFn: async () => {
+      if (!barbershop?.id || !user?.id) return { pending: 0, paid: 0 };
+      
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      const { data, error } = await supabase
+        .from("commissions")
+        .select("commission_amount, status")
+        .eq("barbershop_id", barbershop.id)
+        .eq("user_id", user.id)
+        .gte("created_at", startOfMonth.toISOString());
+
+      if (error) throw error;
+
+      const pending = (data || [])
+        .filter(c => c.status === "pending")
+        .reduce((sum, c) => sum + Number(c.commission_amount), 0);
+      
+      const paid = (data || [])
+        .filter(c => c.status === "paid")
+        .reduce((sum, c) => sum + Number(c.commission_amount), 0);
+
+      return { pending, paid };
+    },
+    enabled: !!barbershop?.id && !!user?.id && !isOwner,
   });
 
   // Calculate KPIs
@@ -594,63 +628,134 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column - Sidebar (owner only) */}
-          {isOwner && (
-          <div className="space-y-4">
-            <SubscriptionCard />
-            <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Status do Agente IA
-              </h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl ${agent ? "bg-success/10" : "bg-muted"} flex items-center justify-center`}>
-                    <div className={`w-3 h-3 rounded-full ${agent ? "bg-success animate-pulse" : "bg-muted-foreground"}`} />
+          {/* Right Column - Sidebar */}
+          {isOwner ? (
+            <div className="space-y-4">
+              <SubscriptionCard />
+              <CommissionsPanel barbershopId={barbershop?.id || ""} />
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                  Status do Agente IA
+                </h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl ${agent ? "bg-success/10" : "bg-muted"} flex items-center justify-center`}>
+                      <div className={`w-3 h-3 rounded-full ${agent ? "bg-success animate-pulse" : "bg-muted-foreground"}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{agent ? "Ativo" : "Inativo"}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {agent?.nome || "Nenhum agente"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground">{agent ? "Ativo" : "Inativo"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {agent?.nome || "Nenhum agente"}
-                    </p>
-                  </div>
+                  <StatusBadge status={agent ? "online" : "offline"} />
                 </div>
-                <StatusBadge status={agent ? "online" : "offline"} />
               </div>
-            </div>
 
-            {/* Today's Summary */}
-            <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-              <h3 className="text-sm font-medium text-muted-foreground mb-4">
-                Resumo do Dia
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Confirmados</span>
-                  <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'confirmed').length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Pendentes</span>
-                  <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'pending').length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Concluídos</span>
-                  <span className="font-semibold text-foreground">
-                    {todayAppointments.filter(a => a.status === 'completed').length}
-                  </span>
-                </div>
-                <div className="border-t border-border pt-3 mt-3">
+              {/* Today's Summary */}
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                <h3 className="text-sm font-medium text-muted-foreground mb-4">
+                  Resumo do Dia
+                </h3>
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">Total</span>
-                    <span className="font-bold text-primary">{todayCount}</span>
+                    <span className="text-sm text-muted-foreground">Confirmados</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'confirmed').length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Pendentes</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'pending').length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Concluídos</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'completed').length}
+                    </span>
+                  </div>
+                  <div className="border-t border-border pt-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Total</span>
+                      <span className="font-bold text-primary">{todayCount}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Staff Commission Card */
+            <div className="space-y-4">
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-primary" />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mês Atual</span>
+                </div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                  Suas Comissões
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Pendentes</span>
+                    <span className="font-semibold text-amber-500">
+                      {formatCurrency(myCommissions?.pending || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Pagas</span>
+                    <span className="font-semibold text-green-500">
+                      {formatCurrency(myCommissions?.paid || 0)}
+                    </span>
+                  </div>
+                  <div className="border-t border-border pt-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Total do Mês</span>
+                      <span className="font-bold text-primary">
+                        {formatCurrency((myCommissions?.pending || 0) + (myCommissions?.paid || 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Today's Summary for Staff */}
+              <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                <h3 className="text-sm font-medium text-muted-foreground mb-4">
+                  Resumo do Dia
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Confirmados</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'confirmed').length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Pendentes</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'pending').length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Concluídos</span>
+                    <span className="font-semibold text-foreground">
+                      {todayAppointments.filter(a => a.status === 'completed').length}
+                    </span>
+                  </div>
+                  <div className="border-t border-border pt-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Total</span>
+                      <span className="font-bold text-primary">{todayCount}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

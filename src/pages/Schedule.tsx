@@ -636,7 +636,39 @@ export default function Schedule() {
           });
       }
 
-      toast.success("Atendimento concluído com sucesso!");
+      // STEP 3: Calculate and insert commission if applicable
+      let commissionAmount = 0;
+      if (finishFormData.amount > 0) {
+        // Get commission percentage for the professional
+        const { data: roleData } = await supabase
+          .from("user_barbershop_roles")
+          .select("commission_percentage")
+          .eq("user_id", finishingAppointment.user_id)
+          .eq("barbershop_id", barbershop.id)
+          .single();
+
+        const commissionPercentage = roleData?.commission_percentage;
+
+        if (commissionPercentage && commissionPercentage > 0) {
+          commissionAmount = finishFormData.amount * (commissionPercentage / 100);
+
+          await supabase.from("commissions").insert({
+            barbershop_id: barbershop.id,
+            user_id: finishingAppointment.user_id,
+            appointment_id: finishingAppointment.id_agendamento,
+            service_id: finishingAppointment.service_id,
+            service_amount: finishFormData.amount,
+            commission_percentage: commissionPercentage,
+            commission_amount: commissionAmount,
+            status: "pending",
+          });
+        }
+      }
+
+      const commissionMsg = commissionAmount > 0 
+        ? ` Comissão: R$ ${commissionAmount.toFixed(2)}` 
+        : "";
+      toast.success(`Atendimento concluído!${commissionMsg}`);
 
       // Update local state
       invalidateAppointments();
