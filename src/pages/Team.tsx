@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2 } from "lucide-react";
+import { Users, Mail, UserPlus, Crown, Shield, Loader2, Trash2, User, Phone, Pencil, Clock, CheckCircle2, RefreshCw, Settings2, Percent } from "lucide-react";
 import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { StaffConfigSheet } from "@/components/staff/StaffConfigSheet";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ interface TeamMember {
   email: string | null;
   phone: string | null;
   status: "active" | "pending";
+  commission_percentage: number | null;
 }
 
 type OutletContextType = {
@@ -116,10 +117,40 @@ export default function Team() {
   // Config sheet state
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const [configMember, setConfigMember] = useState<TeamMember | null>(null);
+  
+  // Commission state
+  const [savingCommission, setSavingCommission] = useState<string | null>(null);
 
   const handleOpenConfig = (member: TeamMember) => {
     setConfigMember(member);
     setConfigSheetOpen(true);
+  };
+
+  const handleUpdateCommission = async (userId: string, roleId: string, value: number | null) => {
+    if (!barbershop?.id) return;
+    
+    setSavingCommission(userId);
+    try {
+      const { error } = await supabase
+        .from("user_barbershop_roles")
+        .update({ commission_percentage: value })
+        .eq("id", roleId)
+        .eq("barbershop_id", barbershop.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setTeamMembers(prev => 
+        prev.map(m => m.user_id === userId ? { ...m, commission_percentage: value } : m)
+      );
+      
+      toast.success("Comissão atualizada");
+    } catch (error) {
+      console.error("Error updating commission:", error);
+      toast.error("Erro ao atualizar comissão");
+    } finally {
+      setSavingCommission(null);
+    }
   };
 
   useEffect(() => {
@@ -137,6 +168,24 @@ export default function Team() {
 
       if (error) throw error;
 
+      // Fetch commission percentages from user_barbershop_roles
+      const userIds = (data || []).map((m: any) => m.user_id);
+      let commissionMap: Record<string, number | null> = {};
+      
+      if (userIds.length > 0) {
+        const { data: rolesData } = await supabase
+          .from("user_barbershop_roles")
+          .select("user_id, commission_percentage")
+          .eq("barbershop_id", barbershop.id)
+          .in("user_id", userIds);
+        
+        if (rolesData) {
+          rolesData.forEach((r: any) => {
+            commissionMap[r.user_id] = r.commission_percentage;
+          });
+        }
+      }
+
       const members: TeamMember[] = (data || []).map((m: any) => ({
         role_id: m.role_id,
         user_id: m.user_id,
@@ -146,6 +195,7 @@ export default function Team() {
         email: m.email,
         phone: m.phone,
         status: m.status as "active" | "pending",
+        commission_percentage: commissionMap[m.user_id] ?? null,
       }));
 
       setTeamMembers(members);
@@ -453,6 +503,32 @@ export default function Team() {
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3" />
                             {member.phone}
+                          </span>
+                        )}
+                        {/* Commission Badge - Only show for staff or service providers */}
+                        {isOwner && member.status === "active" && member.role === "staff" && (
+                          <div className="flex items-center gap-1">
+                            <Percent className="w-3 h-3" />
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="--"
+                              value={member.commission_percentage ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? null : Number(e.target.value);
+                                handleUpdateCommission(member.user_id, member.role_id, val);
+                              }}
+                              disabled={savingCommission === member.user_id}
+                              className="w-12 h-6 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                            <span className="text-xs">%</span>
+                          </div>
+                        )}
+                        {!isOwner && member.commission_percentage !== null && (
+                          <span className="flex items-center gap-1 text-primary font-medium">
+                            <Percent className="w-3 h-3" />
+                            {member.commission_percentage}% comissão
                           </span>
                         )}
                       </div>

@@ -952,6 +952,77 @@ export type Database = {
           },
         ]
       }
+      commissions: {
+        Row: {
+          appointment_id: string
+          barbershop_id: string
+          commission_amount: number
+          commission_percentage: number
+          created_at: string | null
+          id: string
+          paid_at: string | null
+          service_amount: number
+          service_id: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          appointment_id: string
+          barbershop_id: string
+          commission_amount: number
+          commission_percentage: number
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          service_amount: number
+          service_id?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          appointment_id?: string
+          barbershop_id?: string
+          commission_amount?: number
+          commission_percentage?: number
+          created_at?: string | null
+          id?: string
+          paid_at?: string | null
+          service_amount?: number
+          service_id?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commissions_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id_agendamento"]
+          },
+          {
+            foreignKeyName: "commissions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "view_contexto_agente"
+            referencedColumns: ["barbershop_id"]
+          },
+          {
+            foreignKeyName: "commissions_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integracao_whatsapp: {
         Row: {
           api_integracao: string | null
@@ -1520,6 +1591,7 @@ export type Database = {
       user_barbershop_roles: {
         Row: {
           barbershop_id: string
+          commission_percentage: number | null
           created_at: string
           id: string
           is_service_provider: boolean | null
@@ -1530,6 +1602,7 @@ export type Database = {
         }
         Insert: {
           barbershop_id: string
+          commission_percentage?: number | null
           created_at?: string
           id?: string
           is_service_provider?: boolean | null
@@ -1540,6 +1613,7 @@ export type Database = {
         }
         Update: {
           barbershop_id?: string
+          commission_percentage?: number | null
           created_at?: string
           id?: string
           is_service_provider?: boolean | null
