@@ -27,6 +27,7 @@ export interface Permissions {
   can_manage_agents: boolean;
   can_manage_schedule: boolean;
   can_view_clients: boolean;
+  can_manage_services: boolean;
 }
 
 const DEFAULT_PERMISSIONS: Permissions = {
@@ -34,6 +35,7 @@ const DEFAULT_PERMISSIONS: Permissions = {
   can_manage_agents: false,
   can_manage_schedule: true,
   can_view_clients: true,
+  can_manage_services: false,
 };
 
 const OWNER_PERMISSIONS: Permissions = {
@@ -41,6 +43,7 @@ const OWNER_PERMISSIONS: Permissions = {
   can_manage_agents: true,
   can_manage_schedule: true,
   can_view_clients: true,
+  can_manage_services: true,
 };
 
 export function useBarbershop() {
@@ -126,6 +129,7 @@ export function useBarbershop() {
   const canManageAgents = role === "owner" || permissions.can_manage_agents;
   const canManageSchedule = role === "owner" || permissions.can_manage_schedule;
   const canViewClients = role === "owner" || permissions.can_view_clients;
+  const canManageServices = role === "owner" || permissions.can_manage_services;
 
   return {
     barbershop,
@@ -138,6 +142,7 @@ export function useBarbershop() {
     canManageAgents,
     canManageSchedule,
     canViewClients,
+    canManageServices,
     refreshBarbershop: fetchBarbershopData,
     refreshCategories,
   };

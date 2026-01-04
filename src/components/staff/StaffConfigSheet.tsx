@@ -111,8 +111,10 @@ export function StaffConfigSheet({
 
   if (!staffMember) return null;
 
-  // Staff can only view their own config, owners can edit anyone's
-  const isReadOnly = !isOwner;
+  // Staff can edit their own config (not read-only when viewing themselves)
+  // Owner can edit anyone's config
+  const isViewingOwnProfile = staffMember.user_id === (typeof window !== 'undefined' ? localStorage.getItem('current_user_id') : null);
+  const isReadOnly = false; // Staff can now edit their own services and schedules
   
   // Check if this is the owner configuring themselves
   const isOwnerSelfConfig = staffMember.role === "owner";

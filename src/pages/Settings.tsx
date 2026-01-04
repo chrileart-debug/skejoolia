@@ -41,6 +41,7 @@ import { LogoUploader } from "@/components/settings/LogoUploader";
 import { formatPhoneMask } from "@/lib/phoneMask";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -503,19 +504,21 @@ export default function Settings() {
               <div className="h-12 flex-1 bg-muted rounded animate-pulse" />
             </div>
           </div>
-        ) : isOwner && barbershopId ? (
+        ) : barbershopId ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className={cn("grid w-full", isOwner ? "grid-cols-2" : "grid-cols-1")}>
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">Perfil</span>
               </TabsTrigger>
-              <TabsTrigger value="company" className="flex items-center gap-2">
-                <Building2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Empresa</span>
-              </TabsTrigger>
+              {isOwner && (
+                <TabsTrigger value="company" className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Empresa</span>
+                </TabsTrigger>
+              )}
               {/* Banking tab hidden - keeping code for future reactivation */}
-              {false && (
+              {false && isOwner && (
                 <TabsTrigger value="banking" className="flex items-center gap-2">
                   <Landmark className="w-4 h-4" />
                   <span className="hidden sm:inline">Bancário</span>

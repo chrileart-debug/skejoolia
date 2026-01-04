@@ -8,6 +8,7 @@ import { SmartBookingModal } from "@/components/schedule/SmartBookingModal";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
@@ -77,9 +78,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { isOwner } = useBarbershop();
   const queryClient = useQueryClient();
   
-  useSetPageHeader("Dashboard", "Visão geral da sua barbearia");
+  useSetPageHeader("Dashboard", isOwner ? "Visão geral da sua barbearia" : "Seus agendamentos de hoje");
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const { trackCompleteRegistration } = useFacebookPixel();
   const hasHandledOAuthRef = useRef(false);
@@ -222,35 +224,49 @@ export default function Dashboard() {
     enabled: !!barbershop?.id,
   });
 
-  // Fetch today's appointments
+  // Fetch today's appointments (staff only sees their own)
   const { data: todayAppointments = [] } = useQuery({
-    queryKey: ["appointments-today", barbershop?.id, todayStart],
+    queryKey: ["appointments-today", barbershop?.id, todayStart, isOwner, user?.id],
     queryFn: async () => {
       if (!barbershop?.id) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("agendamentos")
         .select("*")
         .eq("barbershop_id", barbershop.id)
         .gte("start_time", todayStart)
         .lte("start_time", todayEnd)
         .order("start_time", { ascending: true });
+      
+      // Staff only sees their own appointments
+      if (!isOwner && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     enabled: !!barbershop?.id,
   });
 
-  // Fetch last 7 days appointments for chart
+  // Fetch last 7 days appointments for chart (staff only sees their own)
   const { data: weekAppointments = [] } = useQuery({
-    queryKey: ["appointments-week", barbershop?.id, weekStart],
+    queryKey: ["appointments-week", barbershop?.id, weekStart, isOwner, user?.id],
     queryFn: async () => {
       if (!barbershop?.id) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("agendamentos")
         .select("start_time")
         .eq("barbershop_id", barbershop.id)
         .gte("start_time", weekStart)
         .lte("start_time", todayEnd);
+      
+      // Staff only sees their own appointments
+      if (!isOwner && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -383,22 +399,26 @@ export default function Dashboard() {
             <Plus className="w-4 h-4" />
             Novo Agendamento
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/clients")}
-            className="gap-2"
-          >
-            <UserPlus className="w-4 h-4" />
-            Cadastrar Cliente
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/billing")}
-            className="gap-2"
-          >
-            <Receipt className="w-4 h-4" />
-            Ver Financeiro
-          </Button>
+          {isOwner && (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/clients")}
+                className="gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Cadastrar Cliente
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/billing")}
+                className="gap-2"
+              >
+                <Receipt className="w-4 h-4" />
+                Ver Financeiro
+              </Button>
+            </>
+          )}
         </div>
 
         {/* KPI Cards */}
@@ -574,11 +594,10 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column - Sidebar */}
+          {/* Right Column - Sidebar (owner only) */}
+          {isOwner && (
           <div className="space-y-4">
             <SubscriptionCard />
-
-            {/* Agent Status */}
             <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
                 Status do Agente IA
@@ -632,6 +651,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
 

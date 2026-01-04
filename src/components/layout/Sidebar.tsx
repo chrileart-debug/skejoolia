@@ -26,7 +26,7 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   href: string;
   ownerOnly: boolean;
-  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
+  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients" | "can_manage_services";
 }
 
 // Navigation items with role and permission restrictions
@@ -34,14 +34,14 @@ const allNavItems: NavItem[] = [
   { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard", ownerOnly: false, permissionKey: "can_view_dashboard" },
   { title: "Agentes", icon: Bot, href: "/agents", ownerOnly: false, permissionKey: "can_manage_agents" },
   { title: "Integrações", icon: MessageSquare, href: "/integrations", ownerOnly: false, permissionKey: "can_manage_agents" },
-  { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false },
+  { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false, permissionKey: "can_manage_services" },
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
-  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
+  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: false },
   { title: "Meu Clube", icon: Sparkles, href: "/club", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
-  { title: "Configurações", icon: Settings, href: "/settings", ownerOnly: true },
+  { title: "Configurações", icon: Settings, href: "/settings", ownerOnly: false },
 ];
 
 interface SidebarProps {
