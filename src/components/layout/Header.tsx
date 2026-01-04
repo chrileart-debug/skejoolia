@@ -214,7 +214,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
               </div>
               
               {hasNotifications ? (
-                <ScrollArea className="max-h-80">
+                <div className="max-h-80 overflow-y-auto">
                   <div className="divide-y divide-border">
                     {overdueAppointments.map((appointment) => (
                       <button
@@ -246,7 +246,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
                       </button>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               ) : (
                 <div className="p-6 text-center">
                   <Bell className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
