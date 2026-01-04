@@ -13,13 +13,13 @@ interface NavItem {
   title: string;
   icon: typeof LayoutDashboard;
   href: string;
-  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
+  permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients" | "can_manage_services";
 }
 
 const allNavItems: NavItem[] = [
   { title: "Home", icon: LayoutDashboard, href: "/dashboard", permissionKey: "can_view_dashboard" },
   { title: "Agenda", icon: Calendar, href: "/schedule", permissionKey: "can_manage_schedule" },
-  { title: "Serviços", icon: Scissors, href: "/services" },
+  { title: "Serviços", icon: Scissors, href: "/services", permissionKey: "can_manage_services" },
   { title: "Agentes", icon: Bot, href: "/agents", permissionKey: "can_manage_agents" },
   { title: "Ajuda", icon: HelpCircle, href: "/help" },
 ];

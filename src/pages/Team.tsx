@@ -51,6 +51,7 @@ export interface Permissions {
   can_manage_agents: boolean;
   can_manage_schedule: boolean;
   can_view_clients: boolean;
+  can_manage_services: boolean;
 }
 
 interface TeamMember {
@@ -76,6 +77,7 @@ const DEFAULT_PERMISSIONS: Permissions = {
   can_manage_agents: false,
   can_manage_schedule: true,
   can_view_clients: true,
+  can_manage_services: false,
 };
 
 export default function Team() {
@@ -359,21 +361,26 @@ export default function Team() {
             Ver Clientes
           </Label>
         </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="perm-services"
+            checked={permissions.can_manage_services}
+            onCheckedChange={(checked) => 
+              onChange({ ...permissions, can_manage_services: !!checked })
+            }
+          />
+          <Label htmlFor="perm-services" className="text-sm font-normal cursor-pointer">
+            Gerenciar Serviços
+          </Label>
+        </div>
       </div>
     </div>
   );
 
-  if (!isOwner) {
-    return (
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
-        <EmptyState
-          icon={<Users className="w-10 h-10 text-muted-foreground" />}
-          title="Acesso Restrito"
-          description="Apenas proprietários podem gerenciar a equipe."
-        />
-      </div>
-    );
-  }
+  // Filter team members: staff only sees themselves
+  const displayMembers = isOwner 
+    ? teamMembers 
+    : teamMembers.filter(m => m.user_id === user?.id);
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -383,13 +390,13 @@ export default function Team() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      ) : teamMembers.length === 0 ? (
+      ) : displayMembers.length === 0 ? (
         <EmptyState
           icon={<Users className="w-10 h-10 text-muted-foreground" />}
           title="Nenhum membro na equipe"
-          description={isBasicoPlan ? "Configure seu perfil profissional" : "Convide membros para sua equipe"}
+          description={isBasicoPlan ? "Configure seu perfil profissional" : (isOwner ? "Convide membros para sua equipe" : "Você ainda não foi configurado")}
           action={
-            !isBasicoPlan ? (
+            !isBasicoPlan && isOwner ? (
               <Button onClick={() => setInviteModalOpen(true)}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Convidar Membro
@@ -399,7 +406,7 @@ export default function Team() {
         />
       ) : (
         <div className="space-y-4">
-          {teamMembers.map((member) => (
+          {displayMembers.map((member) => (
             <Card key={member.role_id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -480,8 +487,21 @@ export default function Team() {
                       </Button>
                     )}
                     
-                    {/* Actions for staff members (only on corporativo plan or for non-self) */}
-                    {member.user_id !== user?.id && !isBasicoPlan && (
+                    {/* Config button for staff viewing themselves */}
+                    {!isOwner && member.user_id === user?.id && member.status === "active" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary"
+                        onClick={() => handleOpenConfig(member)}
+                        title="Configurar serviços e horários"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {/* Actions for staff members (owner only) */}
+                    {isOwner && member.user_id !== user?.id && !isBasicoPlan && (
                       <>
                         {/* Config button - for active members */}
                         {member.status === "active" && (
@@ -549,8 +569,8 @@ export default function Team() {
         </div>
       )}
 
-      {/* FAB - only show for corporativo plan */}
-      {teamMembers.length > 0 && !isBasicoPlan && (
+      {/* FAB - only show for corporativo plan and for owners */}
+      {isOwner && displayMembers.length > 0 && !isBasicoPlan && (
         <FAB onClick={() => setInviteModalOpen(true)} />
       )}
 

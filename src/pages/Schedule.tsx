@@ -60,6 +60,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { cn } from "@/lib/utils";
 
 interface Barbershop {
@@ -149,11 +150,12 @@ export default function Schedule() {
   // Get barbershop from AppLayout context - already loaded, no need to refetch
   const { onMenuClick, barbershop, barbershopSlug } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { isOwner } = useBarbershop();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Set page header
-  useSetPageHeader("Agenda", "Gerencie seus agendamentos", true);
+  useSetPageHeader("Agenda", isOwner ? "Gerencie seus agendamentos" : "Sua agenda de atendimentos", true);
 
   // Use barbershop ID directly from context
   const activeBarbershopId = barbershop?.id || null;
@@ -263,19 +265,28 @@ export default function Schedule() {
       activeBarbershopId,
       selectedDate.getMonth(),
       selectedDate.getFullYear(),
+      isOwner,
+      user?.id,
     ],
     queryFn: async () => {
       if (!activeBarbershopId) return [];
 
       const { start, end } = getMonthRange(selectedDate);
 
-      const { data: appointmentsRows, error } = await supabase
+      let query = supabase
         .from("agendamentos")
         .select("*")
         .eq("barbershop_id", activeBarbershopId)
         .gte("start_time", start)
         .lte("start_time", end)
         .order("start_time", { ascending: true });
+
+      // Staff only sees their own appointments
+      if (!isOwner && user?.id) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data: appointmentsRows, error } = await query;
 
       if (error) {
         console.error("Error fetching appointments:", error);

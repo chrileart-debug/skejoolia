@@ -1786,6 +1786,14 @@ export type Database = {
         Args: { _barbershop_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_permission: {
+        Args: {
+          _barbershop_id: string
+          _permission_key: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       barbershop_role: "owner" | "staff"
