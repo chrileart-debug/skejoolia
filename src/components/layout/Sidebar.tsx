@@ -15,6 +15,7 @@ import {
   UsersRound,
   Sparkles,
   HelpCircle,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const allNavItems: NavItem[] = [
   { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false, permissionKey: "can_manage_services" },
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
+  { title: "Comissões", icon: Wallet, href: "/commissions", ownerOnly: false },
   { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: false },
   { title: "Meu Clube", icon: Sparkles, href: "/club", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
