@@ -427,10 +427,9 @@ export default function Team() {
     </div>
   );
 
-  // Filter team members: staff only sees themselves
-  const displayMembers = isOwner 
-    ? teamMembers 
-    : teamMembers.filter(m => m.user_id === user?.id);
+  // All users see all team members
+  // But staff can only edit their own profile
+  const displayMembers = teamMembers;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
