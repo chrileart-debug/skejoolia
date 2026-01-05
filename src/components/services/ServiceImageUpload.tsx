@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
 
 interface ServiceImageUploadProps {
   serviceId?: string;
@@ -11,7 +12,7 @@ interface ServiceImageUploadProps {
   onImageRemoved: () => void;
 }
 
-const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB for initial selection (will be compressed after crop)
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export function ServiceImageUpload({
@@ -23,6 +24,8 @@ export function ServiceImageUpload({
 }: ServiceImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImage);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getFileExtension = (file: File): string => {
@@ -35,24 +38,43 @@ export function ServiceImageUpload({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so same file can be selected again
+    e.target.value = "";
+
     if (!ALLOWED_TYPES.includes(file.type)) {
       toast.error("Formato inválido. Use JPG, PNG ou WEBP.");
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 1MB.");
+      toast.error("Arquivo muito grande. Máximo 10MB.");
       return;
     }
 
+    // Open cropper with the selected image
     const objectUrl = URL.createObjectURL(file);
+    setImageToCrop(objectUrl);
+    setCropperOpen(true);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    // Check final size after cropping
+    if (croppedBlob.size > 1 * 1024 * 1024) {
+      toast.error("Imagem recortada muito grande. Tente recortar uma área menor.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(croppedBlob);
     setPreviewUrl(objectUrl);
 
     if (!serviceId) {
+      // For new services, just set preview
       onImageUploaded(objectUrl);
       return;
     }
 
+    // Upload cropped image
+    const file = new File([croppedBlob], `service-${serviceId}.jpg`, { type: "image/jpeg" });
     await uploadFile(file, serviceId);
   };
 
@@ -230,6 +252,20 @@ export function ServiceImageUpload({
       <p className="text-xs text-muted-foreground text-center">
         JPG, PNG ou WEBP (máx. 1MB)
       </p>
+
+      {imageToCrop && (
+        <ImageCropperModal
+          open={cropperOpen}
+          onClose={() => {
+            setCropperOpen(false);
+            setImageToCrop(null);
+          }}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+          aspectRatio={1}
+          title="Recortar Imagem do Serviço"
+        />
+      )}
     </div>
   );
 }
