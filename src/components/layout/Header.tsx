@@ -1,4 +1,4 @@
-import { Moon, Sun, Link, Check, Bell, Clock, AlertCircle, X, Calendar, CheckCircle } from "lucide-react";
+import { Moon, Sun, Link, Check, Bell, Clock, AlertCircle, X, Calendar, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -67,6 +67,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const { barbershop } = useBarbershop();
   const [userName, setUserName] = useState<string | null>(null);
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [copied, setCopied] = useState(false);
   const [overdueAppointments, setOverdueAppointments] = useState<OverdueAppointment[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -78,8 +79,12 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
 
   useEffect(() => {
     async function loadUserData() {
-      if (!user) return;
+      if (!user) {
+        setIsLoadingProfile(false);
+        return;
+      }
       
+      setIsLoadingProfile(true);
       const { data } = await supabase
         .from("user_settings")
         .select("nome, avatar_url")
@@ -95,6 +100,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
       if ((data as any)?.avatar_url) {
         setUserAvatarUrl((data as any).avatar_url);
       }
+      setIsLoadingProfile(false);
     }
     
     loadUserData();
@@ -394,7 +400,11 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
             onClick={() => navigate("/settings")}
             className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center hover:opacity-90 transition-opacity"
           >
-            {userAvatarUrl ? (
+            {isLoadingProfile ? (
+              <span className="w-full h-full gradient-primary flex items-center justify-center">
+                <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" />
+              </span>
+            ) : userAvatarUrl ? (
               <img 
                 src={userAvatarUrl} 
                 alt="Perfil" 
