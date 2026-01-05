@@ -187,7 +187,7 @@ export default function Help() {
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-4">
-                              <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                              <div className="aspect-square max-w-md mx-auto rounded-lg overflow-hidden bg-muted">
                                 <iframe
                                   src={getEmbedUrl(tutorial.video_url)}
                                   title={tutorial.title}
