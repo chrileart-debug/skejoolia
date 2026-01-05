@@ -1639,6 +1639,48 @@ export type Database = {
           },
         ]
       }
+      user_session_logs: {
+        Row: {
+          barbershop_id: string | null
+          created_at: string
+          id: string
+          session_end: string | null
+          session_start: string
+          user_id: string
+        }
+        Insert: {
+          barbershop_id?: string | null
+          created_at?: string
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id: string
+        }
+        Update: {
+          barbershop_id?: string | null
+          created_at?: string
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_session_logs_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_session_logs_barbershop_id_fkey"
+            columns: ["barbershop_id"]
+            isOneToOne: false
+            referencedRelation: "view_contexto_agente"
+            referencedColumns: ["barbershop_id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           created_at: string
@@ -1750,6 +1792,7 @@ export type Database = {
     }
     Functions: {
       activate_team_member_status: { Args: never; Returns: undefined }
+      auto_expire_trials: { Args: never; Returns: undefined }
       cancel_public_appointment: {
         Args: {
           p_appointment_id: string
@@ -1762,6 +1805,7 @@ export type Database = {
         Args: { p_resource: string; p_user_id: string }
         Returns: Json
       }
+      end_user_session: { Args: { p_session_id: string }; Returns: boolean }
       expire_trials: { Args: never; Returns: number }
       find_client_by_phone: {
         Args: { p_barbershop_id: string; p_phone: string }
@@ -1854,6 +1898,10 @@ export type Database = {
           p_start_time: string
           p_user_id: string
         }
+        Returns: string
+      }
+      start_user_session: {
+        Args: { p_barbershop_id?: string }
         Returns: string
       }
       user_belongs_to_barbershop: {

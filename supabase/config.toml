@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.asaas-subscription-actions]
 verify_jwt = true
+
+[functions.expire-trials]
+verify_jwt = false

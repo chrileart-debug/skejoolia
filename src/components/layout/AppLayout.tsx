@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useSessionTracker } from "@/hooks/useSessionTracker";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Category {
@@ -34,6 +35,9 @@ function AppLayoutContent() {
   } = useBarbershop();
   const { isTrialing, isExpired, loading: subscriptionLoading } = useSubscription();
   const { header } = usePageHeader();
+  
+  // Track user session for analytics
+  useSessionTracker();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
