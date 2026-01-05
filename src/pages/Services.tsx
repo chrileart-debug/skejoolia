@@ -94,7 +94,6 @@ interface Category {
   is_active: boolean;
 }
 
-const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 interface OutletContextType {
@@ -325,11 +324,7 @@ export default function Services() {
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 1MB.");
-      return;
-    }
-
+    // Não limita tamanho aqui - o ImageCropperModal compacta automaticamente para ≤1MB
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     setPendingFile(file);
