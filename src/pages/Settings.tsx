@@ -291,13 +291,13 @@ export default function Settings() {
     // Image is already compressed by the cropper to ≤1MB
     setIsUploadingPhoto(true);
     try {
-      const fileName = `${user.id}-${Date.now()}.jpg`;
-      const filePath = `profiles/${fileName}`;
+      const fileName = `${Date.now()}.jpg`;
+      const filePath = `profiles/${user.id}/${fileName}`;
       const file = new File([croppedBlob], "profile.jpg", { type: "image/jpeg" });
 
       const { error: uploadError } = await supabase.storage
         .from("barbershop-logos")
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
