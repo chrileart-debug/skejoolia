@@ -249,7 +249,7 @@ export function useSmartBooking() {
     professionalId: string,
     dateStr: string,
     durationMinutes: number,
-    slotInterval: number = 30
+    slotInterval?: number
   ): TimeSlot[] => {
     const workingHours = getWorkingHours(professionalId, dateStr);
     
@@ -266,7 +266,10 @@ export function useSmartBooking() {
     // Get appointments for this professional on this date
     const dayAppointments = existingAppointments.filter(apt => apt.user_id === professionalId);
 
-    for (let minutes = startMinutes; minutes + durationMinutes <= endMinutes; minutes += slotInterval) {
+    // Use service duration as default interval (same logic as PublicBooking)
+    const interval = slotInterval ?? Math.max(1, durationMinutes);
+
+    for (let minutes = startMinutes; minutes + durationMinutes <= endMinutes; minutes += interval) {
       const slotStart = minutesToTime(minutes);
       const slotEnd = minutes + durationMinutes;
 
