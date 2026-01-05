@@ -932,6 +932,9 @@ function Step1Client({
             className="h-12"
             required
           />
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Usado para lembretes automáticos e contato do agente
+          </p>
         </div>
       </div>
 
