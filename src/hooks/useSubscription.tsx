@@ -17,6 +17,7 @@ interface Plan {
 interface Subscription {
   id: string;
   user_id: string;
+  barbershop_id: string | null;
   plan_slug: string;
   status: "trialing" | "active" | "canceled" | "expired" | "past_due";
   price_at_signup: number | null;
@@ -41,6 +42,7 @@ interface SubscriptionContextType {
   plans: Plan[];
   isTrialing: boolean;
   isActive: boolean;
+  isExpired: boolean;
   daysRemaining: number;
   loading: boolean;
   checkLimit: (resource: "agents" | "whatsapp" | "services" | "appointments") => Promise<LimitCheckResult>;
@@ -83,17 +85,38 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
+    // First, try to get user's own subscription (for owners)
+    let { data, error } = await supabase
       .from("subscriptions")
       .select("*")
       .eq("user_id", user.id)
-      .in("status", ["active", "trialing"])
+      .in("status", ["active", "trialing", "expired"])
       .order("created_at", { ascending: false })
       .maybeSingle();
 
-    // No active/trialing subscription found
+    // If no direct subscription, check if user is staff and get barbershop's subscription
     if (!data) {
-      // No active subscription - set null and let UI handle fallback display
+      const { data: roleData } = await supabase
+        .from("user_barbershop_roles")
+        .select("barbershop_id, role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (roleData?.barbershop_id) {
+        const { data: barbershopSub } = await supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("barbershop_id", roleData.barbershop_id)
+          .in("status", ["active", "trialing", "expired"])
+          .order("created_at", { ascending: false })
+          .maybeSingle();
+
+        data = barbershopSub;
+      }
+    }
+
+    // No subscription found at all
+    if (!data) {
       setSubscription(null);
       setPlan(null);
       setLoading(false);
@@ -162,17 +185,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const isTrialing = subscription?.status === "trialing";
+  const isExpired = subscription?.status === "expired";
   const isActive = subscription?.status === "active" || isTrialing;
-
-  const daysRemaining = (() => {
-    if (!subscription?.trial_expires_at) return 0;
-    const now = new Date();
-    const expires = new Date(subscription.trial_expires_at);
-    const diffMs = expires.getTime() - now.getTime();
-    // Use floor to get complete days remaining (7 days + 23h = 7, not 8)
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    return Math.max(0, days);
-  })();
 
   const checkLimit = async (resource: "agents" | "whatsapp" | "services" | "appointments"): Promise<LimitCheckResult> => {
     if (!user) {
@@ -199,6 +213,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const daysRemaining = (() => {
+    if (!subscription?.trial_expires_at) return 0;
+    const now = new Date();
+    const expires = new Date(subscription.trial_expires_at);
+    const diffMs = expires.getTime() - now.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return Math.max(0, days);
+  })();
+
   return (
     <SubscriptionContext.Provider
       value={{
@@ -207,6 +230,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         plans,
         isTrialing,
         isActive,
+        isExpired,
         daysRemaining,
         loading,
         checkLimit,
