@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface NavItem {
   title: string;

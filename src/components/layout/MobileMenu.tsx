@@ -25,12 +25,14 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface NavItem {
   title: string;
   icon: typeof LayoutDashboard;
   href: string;
   ownerOnly: boolean;
+  corporativoOnly?: boolean;
   permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients";
 }
 
@@ -41,8 +43,8 @@ const allNavItems: NavItem[] = [
   { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false },
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
-  { title: "Comissões", icon: Wallet, href: "/commissions", ownerOnly: false },
-  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true },
+  { title: "Comissões", icon: Wallet, href: "/commissions", ownerOnly: false, corporativoOnly: true },
+  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: true, corporativoOnly: true },
   { title: "Meu Clube", icon: Sparkles, href: "/club", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
@@ -59,10 +61,15 @@ export function MobileMenu({ open, onOpenChange }: MobileMenuProps) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { isOwner, permissions } = useBarbershop();
+  const { subscription } = useSubscription();
 
-  // Filter nav items based on role and permissions
+  // Check if user is on basico plan
+  const isBasicoPlan = subscription?.plan_slug === "basico";
+
+  // Filter nav items based on role, permissions, and plan
   const navItems = allNavItems.filter(item => {
     if (item.ownerOnly && !isOwner) return false;
+    if (item.corporativoOnly && isBasicoPlan) return false;
     if (!isOwner && item.permissionKey) {
       return permissions[item.permissionKey];
     }

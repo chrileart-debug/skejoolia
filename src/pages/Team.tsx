@@ -505,8 +505,8 @@ export default function Team() {
                             {member.phone}
                           </span>
                         )}
-                        {/* Commission Badge - Staff can view their own commission */}
-                        {!isOwner && member.commission_percentage !== null && (
+                        {/* Commission Badge - Staff can view their own commission (corporativo plan only) */}
+                        {!isBasicoPlan && !isOwner && member.commission_percentage !== null && (
                           <span className="flex items-center gap-1 text-primary font-medium">
                             <Percent className="w-3 h-3" />
                             {member.commission_percentage}% comissão
