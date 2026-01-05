@@ -64,6 +64,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { UpgradeLimitModal } from "@/components/subscription/UpgradeLimitModal";
 import { CategoryManager } from "@/components/services/CategoryManager";
 import { ServiceSelector } from "@/components/services/ServiceSelector";
+import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
 
 interface Service {
   id: string;
@@ -138,6 +139,8 @@ export default function Services() {
     limit: 0,
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -342,19 +345,37 @@ export default function Services() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset input so same file can be selected again
+    e.target.value = "";
+
     if (!ALLOWED_TYPES.includes(file.type)) {
       toast.error("Formato inválido. Use JPG, PNG ou WEBP.");
       return;
     }
 
-    // Não limita tamanho aqui - o ImageCropperModal compacta automaticamente para ≤1MB
+    // Open cropper modal with selected image
     const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
-    setPendingFile(file);
+    setImageToCrop(objectUrl);
+    setCropperOpen(true);
+  };
 
-    if (editingService && user) {
-      uploadImage(file, editingService.id);
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    // Image is already compressed by the cropper to ≤1MB
+    const objectUrl = URL.createObjectURL(croppedBlob);
+    setPreviewUrl(objectUrl);
+    
+    // Create a File from the Blob for upload
+    const croppedFile = new File([croppedBlob], "service-image.jpg", { type: "image/jpeg" });
+    setPendingFile(croppedFile);
+
+    // If editing existing service, upload immediately
+    if (editingService && user && barbershop) {
+      await uploadImage(croppedFile, editingService.id);
     }
+    
+    // Clean up cropper state
+    setCropperOpen(false);
+    setImageToCrop(null);
   };
 
   const uploadImage = async (file: File, serviceId: string): Promise<string | null> => {
@@ -1174,6 +1195,21 @@ export default function Services() {
         currentCount={limitModal.current}
         limit={limitModal.limit}
       />
+
+      {/* Image Cropper Modal */}
+      {imageToCrop && (
+        <ImageCropperModal
+          open={cropperOpen}
+          onClose={() => {
+            setCropperOpen(false);
+            setImageToCrop(null);
+          }}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+          aspectRatio={1}
+          title="Recortar Imagem do Serviço"
+        />
+      )}
     </div>
   );
 }
