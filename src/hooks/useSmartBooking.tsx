@@ -50,6 +50,21 @@ const minutesToTime = (minutes: number): string => {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
+const getCurrentMinutesInBrasilia = (): number => {
+  const now = new Date();
+  const hours = parseInt(now.toLocaleString("en-US", { hour: "2-digit", hour12: false, timeZone: BRASILIA_TIMEZONE }));
+  const minutes = parseInt(now.toLocaleString("en-US", { minute: "2-digit", timeZone: BRASILIA_TIMEZONE }));
+  return hours * 60 + minutes;
+};
+
+const getTodayInBrasilia = (): string => {
+  const now = new Date();
+  const year = now.toLocaleString("en-CA", { year: "numeric", timeZone: BRASILIA_TIMEZONE });
+  const month = now.toLocaleString("en-CA", { month: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  const day = now.toLocaleString("en-CA", { day: "2-digit", timeZone: BRASILIA_TIMEZONE });
+  return `${year}-${month}-${day}`;
+};
+
 export function useSmartBooking() {
   const { barbershop } = useBarbershop();
   const [services, setServices] = useState<ServiceWithDetails[]>([]);
@@ -269,9 +284,19 @@ export function useSmartBooking() {
     // Use service duration as default interval (same logic as PublicBooking)
     const interval = slotInterval ?? Math.max(1, durationMinutes);
 
+    // Check if date is today to filter past slots
+    const isToday = dateStr === getTodayInBrasilia();
+    const currentMinutes = isToday ? getCurrentMinutesInBrasilia() : 0;
+
     for (let minutes = startMinutes; minutes + durationMinutes <= endMinutes; minutes += interval) {
       const slotStart = minutesToTime(minutes);
       const slotEnd = minutes + durationMinutes;
+
+      // Check if slot is in the past (only for today)
+      if (isToday && minutes <= currentMinutes) {
+        slots.push({ time: slotStart, available: false, reason: "Horário passado" });
+        continue;
+      }
 
       // Check if slot is during break
       if (breakStartMinutes !== null && breakEndMinutes !== null) {
