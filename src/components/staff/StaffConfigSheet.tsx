@@ -126,6 +126,8 @@ export function StaffConfigSheet({
   // Tabs should be disabled if owner has not enabled service provider mode (not on basico)
   const tabsDisabled = isOwnerSelfConfig && !isServiceProvider && !loadingProvider && !isBasicoPlan;
 
+  // Comissão só existe no plano corporativo
+  const showCommissionTab = !isBasicoPlan;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -178,8 +180,10 @@ export function StaffConfigSheet({
             </p>
           </div>
         ) : (
-        <Tabs defaultValue="services" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs defaultValue="services" className="w-full">
+            <TabsList
+              className={`grid w-full ${showCommissionTab ? "grid-cols-3" : "grid-cols-2"}`}
+            >
               <TabsTrigger value="services" className="flex items-center gap-1 text-xs sm:text-sm">
                 <Briefcase className="w-4 h-4" />
                 <span className="hidden sm:inline">Especialidades</span>
@@ -189,10 +193,12 @@ export function StaffConfigSheet({
                 <Calendar className="w-4 h-4" />
                 <span>Horários</span>
               </TabsTrigger>
-              <TabsTrigger value="commission" className="flex items-center gap-1 text-xs sm:text-sm">
-                <Percent className="w-4 h-4" />
-                <span>Comissão</span>
-              </TabsTrigger>
+              {showCommissionTab && (
+                <TabsTrigger value="commission" className="flex items-center gap-1 text-xs sm:text-sm">
+                  <Percent className="w-4 h-4" />
+                  <span>Comissão</span>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="services" className="mt-4">
@@ -211,13 +217,15 @@ export function StaffConfigSheet({
               />
             </TabsContent>
 
-            <TabsContent value="commission" className="mt-4">
-              <StaffCommissionTab
-                userId={staffMember.user_id}
-                barbershopId={barbershopId}
-                isReadOnly={!isOwner}
-              />
-            </TabsContent>
+            {showCommissionTab && (
+              <TabsContent value="commission" className="mt-4">
+                <StaffCommissionTab
+                  userId={staffMember.user_id}
+                  barbershopId={barbershopId}
+                  isReadOnly={!isOwner}
+                />
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </SheetContent>

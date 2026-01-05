@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useBarbershop } from "@/hooks/useBarbershop";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,11 +74,14 @@ interface CommissionSummary {
 export default function Commissions() {
   const { barbershop, isOwner } = useBarbershop();
   const { user } = useAuth();
+  const { subscription } = useSubscription();
   const queryClient = useQueryClient();
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isPaying, setIsPaying] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(0); // 0 = current, 1 = last month, etc.
 
+  const isBasicoPlan = subscription?.plan_slug === "basico";
+  if (isBasicoPlan) return <Navigate to="/dashboard" replace />;
   const currentDate = subMonths(new Date(), selectedMonth);
   const monthStart = startOfMonth(currentDate).toISOString();
   const monthEnd = endOfMonth(currentDate).toISOString();

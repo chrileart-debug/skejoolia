@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFacebookPixel, generateEventId } from "@/hooks/useFacebookPixel";
 
@@ -81,7 +82,10 @@ export default function Dashboard() {
   const { onMenuClick, barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
   const { isOwner } = useBarbershop();
+  const { subscription } = useSubscription();
   const queryClient = useQueryClient();
+
+  const isBasicoPlan = subscription?.plan_slug === "basico";
   
   useSetPageHeader("Dashboard", isOwner ? "Visão geral da sua barbearia" : "Seus agendamentos de hoje");
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -322,7 +326,7 @@ export default function Dashboard() {
 
       return { pending, paid };
     },
-    enabled: !!barbershop?.id && !!user?.id && !isOwner,
+    enabled: !!barbershop?.id && !!user?.id && !isOwner && !isBasicoPlan,
   });
 
   // Calculate KPIs
@@ -632,7 +636,7 @@ export default function Dashboard() {
           {isOwner ? (
             <div className="space-y-4">
               <SubscriptionCard />
-              <CommissionsPanel barbershopId={barbershop?.id || ""} />
+              {!isBasicoPlan && <CommissionsPanel barbershopId={barbershop?.id || ""} />}
               <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">
                   Status do Agente IA
@@ -687,41 +691,42 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            /* Staff Commission Card */
             <div className="space-y-4">
-              <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-primary" />
+              {!isBasicoPlan && (
+                <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-primary" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mês Atual</span>
                   </div>
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mês Atual</span>
-                </div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                  Suas Comissões
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Pendentes</span>
-                    <span className="font-semibold text-amber-500">
-                      {formatCurrency(myCommissions?.pending || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Pagas</span>
-                    <span className="font-semibold text-green-500">
-                      {formatCurrency(myCommissions?.paid || 0)}
-                    </span>
-                  </div>
-                  <div className="border-t border-border pt-3 mt-3">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                    Suas Comissões
+                  </h3>
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Total do Mês</span>
-                      <span className="font-bold text-primary">
-                        {formatCurrency((myCommissions?.pending || 0) + (myCommissions?.paid || 0))}
+                      <span className="text-sm text-muted-foreground">Pendentes</span>
+                      <span className="font-semibold text-amber-500">
+                        {formatCurrency(myCommissions?.pending || 0)}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Pagas</span>
+                      <span className="font-semibold text-green-500">
+                        {formatCurrency(myCommissions?.paid || 0)}
+                      </span>
+                    </div>
+                    <div className="border-t border-border pt-3 mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">Total do Mês</span>
+                        <span className="font-bold text-primary">
+                          {formatCurrency((myCommissions?.pending || 0) + (myCommissions?.paid || 0))}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Today's Summary for Staff */}
               <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
