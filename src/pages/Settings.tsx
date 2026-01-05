@@ -30,6 +30,7 @@ import {
   Store,
   CreditCard,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 
 import { useBarbershop } from "@/hooks/useBarbershop";
@@ -332,6 +333,29 @@ export default function Settings() {
     }
   };
 
+  const handleRemovePhoto = async () => {
+    if (!user) return;
+    
+    setIsUploadingPhoto(true);
+    try {
+      // Clear avatar_url in user_settings
+      const { error } = await supabase
+        .from("user_settings")
+        .update({ avatar_url: null })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setProfilePhotoUrl(null);
+      toast.success("Foto removida!");
+    } catch (error) {
+      console.error("Error removing photo:", error);
+      toast.error("Erro ao remover foto");
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!user) return;
     setIsLoading(true);
@@ -570,32 +594,44 @@ export default function Settings() {
                 <CardContent className="space-y-4">
                   {/* Profile Photo - Square 1:1 */}
                   <div className="flex items-center gap-4">
-                    <label className="relative cursor-pointer group">
-                      <Avatar className="w-20 h-20 rounded-xl">
-                        <AvatarImage 
-                          src={profilePhotoUrl || undefined} 
-                          className="object-cover aspect-square"
+                    <div className="relative">
+                      <label className="relative cursor-pointer group block">
+                        <Avatar className="w-20 h-20 rounded-xl">
+                          <AvatarImage 
+                            src={profilePhotoUrl || undefined} 
+                            className="object-cover aspect-square"
+                          />
+                          <AvatarFallback className="w-20 h-20 rounded-xl gradient-primary text-2xl font-bold text-primary-foreground">
+                            {profileData.name.charAt(0) || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          {isUploadingPhoto ? (
+                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                          ) : (
+                            <span className="text-white text-xs">Alterar</span>
+                          )}
+                        </div>
+                        <input
+                          ref={photoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoSelect}
+                          className="hidden"
+                          disabled={isUploadingPhoto}
                         />
-                        <AvatarFallback className="w-20 h-20 rounded-xl gradient-primary text-2xl font-bold text-primary-foreground">
-                          {profileData.name.charAt(0) || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        {isUploadingPhoto ? (
-                          <Loader2 className="w-6 h-6 text-white animate-spin" />
-                        ) : (
-                          <span className="text-white text-xs">Alterar</span>
-                        )}
-                      </div>
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoSelect}
-                        className="hidden"
-                        disabled={isUploadingPhoto}
-                      />
-                    </label>
+                      </label>
+                      {profilePhotoUrl && !isUploadingPhoto && (
+                        <button
+                          type="button"
+                          onClick={handleRemovePhoto}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90 transition-colors shadow-md"
+                          title="Remover foto"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Foto de perfil (1:1)</p>
                       <p className="text-xs text-muted-foreground">JPG, PNG ou WEBP. Máx 1MB</p>
