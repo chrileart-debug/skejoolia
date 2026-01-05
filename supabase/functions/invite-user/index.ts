@@ -60,7 +60,7 @@ serve(async (req) => {
     console.log('Authenticated user:', user.id);
 
     // Parse request body
-    const { email, name, phone, barbershop_id, permissions, resend } = await req.json();
+    const { email, name, phone, barbershop_id, permissions, resend, commission_percentage } = await req.json();
 
     if (!email || !barbershop_id) {
       return new Response(
@@ -218,7 +218,8 @@ serve(async (req) => {
           role: 'staff',
           permissions: memberPermissions,
           status: 'pending',  // <-- LOCAL STATUS: pending until they set password
-          is_service_provider: true  // Staff are always service providers
+          is_service_provider: true,  // Staff are always service providers
+          commission_percentage: commission_percentage ?? null
         });
 
       if (insertRoleError) {
@@ -348,7 +349,8 @@ serve(async (req) => {
           role: 'staff',
           permissions: memberPermissions,
           status: 'pending',  // <-- LOCAL STATUS: pending until they set password
-          is_service_provider: true  // Staff are always service providers
+          is_service_provider: true,  // Staff are always service providers
+          commission_percentage: commission_percentage ?? null
         });
 
       if (insertRoleError) {

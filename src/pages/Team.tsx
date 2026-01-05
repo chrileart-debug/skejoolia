@@ -99,6 +99,7 @@ export default function Team() {
   const [inviteName, setInviteName] = useState("");
   const [invitePhone, setInvitePhone] = useState("");
   const [invitePermissions, setInvitePermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
+  const [inviteCommission, setInviteCommission] = useState<number | null>(null);
   const [inviting, setInviting] = useState(false);
   
   // Edit modal state
@@ -221,7 +222,8 @@ export default function Team() {
           name: inviteName.trim(),
           phone: invitePhone.trim() || null,
           barbershop_id: barbershop.id,
-          permissions: invitePermissions
+          permissions: invitePermissions,
+          commission_percentage: inviteCommission
         },
         headers: {
           Authorization: `Bearer ${token}`
@@ -258,6 +260,7 @@ export default function Team() {
     setInviteName("");
     setInvitePhone("");
     setInvitePermissions(DEFAULT_PERMISSIONS);
+    setInviteCommission(null);
   };
 
   const handleEditMember = (member: TeamMember) => {
@@ -684,6 +687,25 @@ export default function Team() {
                   className="pl-10"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-commission">Comissão (%)</Label>
+              <div className="relative">
+                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="invite-commission"
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="Ex: 30"
+                  value={inviteCommission ?? ""}
+                  onChange={(e) => setInviteCommission(e.target.value ? Number(e.target.value) : null)}
+                  className="pl-10"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Porcentagem aplicada automaticamente nos serviços realizados
+              </p>
             </div>
             
             {/* Permissions */}
