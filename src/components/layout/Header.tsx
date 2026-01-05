@@ -172,21 +172,14 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
     navigate(`/schedule?date=${appointmentDate.toISOString().split('T')[0]}&highlight=${appointment.id_agendamento}`);
   };
 
-  const handleComplete = async (e: React.MouseEvent, appointmentId: string) => {
+  const handleComplete = (e: React.MouseEvent, appointment: OverdueAppointment) => {
     e.stopPropagation();
+    setIsNotificationOpen(false);
     
-    const { error } = await supabase
-      .from("agendamentos")
-      .update({ status: "completed" })
-      .eq("id_agendamento", appointmentId);
-    
-    if (error) {
-      toast.error("Erro ao concluir agendamento");
-      return;
-    }
-    
-    setOverdueAppointments(prev => prev.filter(a => a.id_agendamento !== appointmentId));
-    toast.success("Agendamento concluído!");
+    // Navigate to Schedule page with finish parameter to open the finalization modal
+    // This ensures proper transaction recording, commission calculation, etc.
+    const appointmentDate = new Date(appointment.start_time);
+    navigate(`/schedule?date=${appointmentDate.toISOString().split('T')[0]}&finish=${appointment.id_agendamento}`);
   };
 
   const handleDismiss = (e: React.MouseEvent, appointmentId: string) => {
@@ -325,7 +318,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs flex-1"
-                                onClick={(e) => handleComplete(e, appointment.id_agendamento)}
+                                onClick={(e) => handleComplete(e, appointment)}
                               >
                                 <CheckCircle className="w-3 h-3 mr-1" />
                                 Concluir

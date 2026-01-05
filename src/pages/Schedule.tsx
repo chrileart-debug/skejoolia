@@ -163,6 +163,7 @@ export default function Schedule() {
   // Parse URL params for navigation from notifications
   const urlDate = searchParams.get("date");
   const highlightId = searchParams.get("highlight");
+  const finishId = searchParams.get("finish");
   
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isDayDialogOpen, setIsDayDialogOpen] = useState(false);
@@ -362,6 +363,17 @@ export default function Schedule() {
     }
   }, [urlDate, highlightId, appointmentsData, setSearchParams]);
 
+  // Handle finish parameter from notifications - will be processed after services are loaded
+  const [pendingFinishId, setPendingFinishId] = useState<string | null>(finishId);
+  
+  useEffect(() => {
+    if (finishId) {
+      setPendingFinishId(finishId);
+      // Clear URL params immediately
+      setSearchParams({}, { replace: true });
+    }
+  }, [finishId, setSearchParams]);
+
   // Simplified loading state: show skeleton only when loading AND no cached data
   const showLoadingState = !activeBarbershopId || (isLoadingAppointments && !appointmentsData);
   
@@ -420,6 +432,22 @@ export default function Schedule() {
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
   });
+
+  // Process pending finish after services are loaded
+  useEffect(() => {
+    if (pendingFinishId && appointmentsData && barbershop?.id && services.length > 0) {
+      const appointmentToFinish = appointmentsData.find(
+        (a) => a.id_agendamento === pendingFinishId
+      );
+      
+      if (appointmentToFinish) {
+        // Open the finalization modal for this appointment
+        handleFinishAppointment(appointmentToFinish);
+      }
+      
+      setPendingFinishId(null);
+    }
+  }, [pendingFinishId, appointmentsData, barbershop?.id, services]);
 
   const invalidateAppointments = () => {
     if (!activeBarbershopId) return;
