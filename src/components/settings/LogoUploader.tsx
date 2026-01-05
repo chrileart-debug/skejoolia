@@ -24,9 +24,9 @@ export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChan
       return;
     }
 
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 2MB");
+    // Validate file size (max 1MB)
+    if (file.size > 1 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 1MB");
       return;
     }
 
