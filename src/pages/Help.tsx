@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Search, Mail, MessageCircle, PlayCircle, BookOpen } from "lucide-react";
 import { useTutorials } from "@/hooks/useTutorials";
 import { getEmbedUrl } from "@/lib/videoEmbed";
@@ -28,6 +30,7 @@ export default function Help() {
   useOutletContext<OutletContextType>();
   const { data: tutorials = [], isLoading } = useTutorials();
   const [search, setSearch] = useState("");
+  const [selectedTutorial, setSelectedTutorial] = useState<Tutorial | null>(null);
   
   useSetPageHeader("Central de Ajuda", "Tutoriais, perguntas frequentes e suporte");
   
@@ -166,40 +169,35 @@ export default function Help() {
                 {categories.map((category) => (
                   <TabsContent key={category} value={category} className="mt-4">
                     <ScrollArea className="max-h-[400px]">
-                      <Accordion type="single" collapsible className="space-y-2">
+                      <div className="space-y-2">
                         {getTutorialsByCategory(category).map((tutorial) => (
-                          <AccordionItem
+                          <div
                             key={tutorial.id}
-                            value={tutorial.id}
-                            className="border rounded-lg px-4"
+                            className="border rounded-lg p-4 flex items-center justify-between gap-3 hover:bg-muted/50 transition-colors"
                           >
-                            <AccordionTrigger className="hover:no-underline py-3">
-                              <div className="flex items-center gap-3 text-left">
-                                <PlayCircle className="w-5 h-5 text-primary shrink-0" />
-                                <div>
-                                  <p className="font-medium">{tutorial.title}</p>
-                                  {tutorial.description && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      {tutorial.description}
-                                    </p>
-                                  )}
-                                </div>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <PlayCircle className="w-5 h-5 text-primary shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{tutorial.title}</p>
+                                {tutorial.description && (
+                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                    {tutorial.description}
+                                  </p>
+                                )}
                               </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="pb-4">
-                              <div className="aspect-square max-w-md mx-auto rounded-lg overflow-hidden bg-muted">
-                                <iframe
-                                  src={getEmbedUrl(tutorial.video_url)}
-                                  title={tutorial.title}
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
-                                  className="w-full h-full"
-                                />
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedTutorial(tutorial)}
+                              className="shrink-0 gap-2"
+                            >
+                              <PlayCircle className="w-4 h-4" />
+                              Assistir
+                            </Button>
+                          </div>
                         ))}
-                      </Accordion>
+                      </div>
                     </ScrollArea>
                   </TabsContent>
                 ))}
@@ -236,6 +234,28 @@ export default function Help() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Video Modal */}
+      <Dialog open={!!selectedTutorial} onOpenChange={() => setSelectedTutorial(null)}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-0">
+            <DialogTitle>{selectedTutorial?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 pt-2">
+            <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+              {selectedTutorial && (
+                <iframe
+                  src={getEmbedUrl(selectedTutorial.video_url)}
+                  title={selectedTutorial.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
