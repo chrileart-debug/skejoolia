@@ -211,25 +211,45 @@ export default function Clients() {
         appointmentsData?.map((a) => a.client_id) || []
       );
 
-      // For staff: fetch completed appointments to calculate their own revenue per client
+      // For staff: fetch completed appointments and their transactions to calculate gross revenue per client
       let staffAppointmentsByClient: Map<string, { cortes: number; faturamento: number }> | null = null;
       if (!isOwner) {
+        // First, get all completed appointments for this staff member
         const { data: staffAppointments } = await supabase
           .from("agendamentos")
-          .select("client_id, services(price)")
+          .select("id_agendamento, client_id")
           .eq("barbershop_id", barbershop.id)
           .eq("user_id", user.id)
           .eq("status", "completed");
 
-        staffAppointmentsByClient = new Map();
-        staffAppointments?.forEach((apt) => {
-          const clientId = apt.client_id;
-          if (!clientId) return;
-          const current = staffAppointmentsByClient!.get(clientId) || { cortes: 0, faturamento: 0 };
-          current.cortes += 1;
-          current.faturamento += (apt.services as any)?.price || 0;
-          staffAppointmentsByClient!.set(clientId, current);
-        });
+        if (staffAppointments && staffAppointments.length > 0) {
+          const appointmentIds = staffAppointments.map(a => a.id_agendamento);
+          
+          // Get transactions for these appointments (gross revenue)
+          const { data: transactions } = await supabase
+            .from("client_transactions")
+            .select("appointment_id, client_id, amount")
+            .in("appointment_id", appointmentIds);
+
+          // Map appointment_id to client_id for reference
+          const appointmentClientMap = new Map(
+            staffAppointments.map(a => [a.id_agendamento, a.client_id])
+          );
+
+          staffAppointmentsByClient = new Map();
+          
+          // Group transactions by client
+          transactions?.forEach((tx) => {
+            const clientId = tx.client_id || appointmentClientMap.get(tx.appointment_id);
+            if (!clientId) return;
+            const current = staffAppointmentsByClient!.get(clientId) || { cortes: 0, faturamento: 0 };
+            current.cortes += 1;
+            current.faturamento += tx.amount || 0;
+            staffAppointmentsByClient!.set(clientId, current);
+          });
+        } else {
+          staffAppointmentsByClient = new Map();
+        }
       }
 
       // Map clients with agent names, appointment status, and subscription data
