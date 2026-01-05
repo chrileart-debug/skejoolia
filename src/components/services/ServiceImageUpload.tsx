@@ -11,7 +11,7 @@ interface ServiceImageUploadProps {
   onImageRemoved: () => void;
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export function ServiceImageUpload({
@@ -41,7 +41,7 @@ export function ServiceImageUpload({
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 50MB.");
+      toast.error("Arquivo muito grande. Máximo 1MB.");
       return;
     }
 
@@ -174,7 +174,7 @@ export function ServiceImageUpload({
       <div
         onClick={handleClick}
         className={`
-          relative h-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
+          relative aspect-square w-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
           ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
           ${isUploading ? "pointer-events-none" : ""}
         `}
@@ -228,7 +228,7 @@ export function ServiceImageUpload({
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        JPG, PNG ou WEBP (máx. 50MB)
+        JPG, PNG ou WEBP (máx. 1MB)
       </p>
     </div>
   );

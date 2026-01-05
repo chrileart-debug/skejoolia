@@ -94,7 +94,7 @@ interface Category {
   is_active: boolean;
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 interface OutletContextType {
@@ -326,7 +326,7 @@ export default function Services() {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 50MB.");
+      toast.error("Arquivo muito grande. Máximo 1MB.");
       return;
     }
 
@@ -706,7 +706,7 @@ export default function Services() {
       className="bg-card border border-border rounded-xl p-4 space-y-3"
     >
       {service.image && (
-        <div className="w-full h-32 rounded-lg overflow-hidden">
+        <div className="w-full aspect-square rounded-lg overflow-hidden">
           <img
             src={service.image}
             alt={service.name}
@@ -936,7 +936,7 @@ export default function Services() {
                 onChange={handleFileSelect}
               />
               {previewUrl ? (
-                <div className="relative w-full h-40 rounded-lg overflow-hidden">
+                <div className="relative w-full aspect-square max-w-[200px] rounded-lg overflow-hidden">
                   <img
                     src={previewUrl}
                     alt="Preview"
@@ -970,10 +970,11 @@ export default function Services() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-32 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/50 transition-colors"
+                  className="w-full aspect-square max-w-[200px] border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/50 transition-colors"
                 >
                   <ImageIcon className="w-8 h-8" />
-                  <span className="text-sm">Clique para adicionar imagem</span>
+                  <span className="text-sm">Clique para adicionar</span>
+                  <span className="text-xs">(Máx. 1MB)</span>
                 </button>
               )}
             </div>
