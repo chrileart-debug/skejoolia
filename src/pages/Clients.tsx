@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarbershop } from "@/hooks/useBarbershop";
 import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,9 @@ interface Cliente {
   subscription_status?: string | null;
   next_due_date?: string | null;
   payment_origin?: string | null;
+  // Staff-specific values
+  staff_cortes?: number;
+  staff_faturamento?: number;
 }
 
 interface Agente {
@@ -111,6 +115,7 @@ interface ServiceCredit {
 export default function Clients() {
   const { barbershop } = useOutletContext<OutletContextType>();
   const { user } = useAuth();
+  const { isOwner } = useBarbershop();
   
   useSetPageHeader("Clientes", "Gerencie seus clientes");
   const [clients, setClients] = useState<Cliente[]>([]);
@@ -206,10 +211,34 @@ export default function Clients() {
         appointmentsData?.map((a) => a.client_id) || []
       );
 
+      // For staff: fetch completed appointments to calculate their own revenue per client
+      let staffAppointmentsByClient: Map<string, { cortes: number; faturamento: number }> | null = null;
+      if (!isOwner) {
+        const { data: staffAppointments } = await supabase
+          .from("agendamentos")
+          .select("client_id, services(price)")
+          .eq("barbershop_id", barbershop.id)
+          .eq("user_id", user.id)
+          .eq("status", "completed");
+
+        staffAppointmentsByClient = new Map();
+        staffAppointments?.forEach((apt) => {
+          const clientId = apt.client_id;
+          if (!clientId) return;
+          const current = staffAppointmentsByClient!.get(clientId) || { cortes: 0, faturamento: 0 };
+          current.cortes += 1;
+          current.faturamento += (apt.services as any)?.price || 0;
+          staffAppointmentsByClient!.set(clientId, current);
+        });
+      }
+
       // Map clients with agent names, appointment status, and subscription data
       const enrichedClients: Cliente[] = (clientsData || []).map((client) => {
         const subscriptions = client.client_club_subscriptions as any[];
         const activeSubscription = subscriptions?.find((s) => s.status === "active");
+        
+        // Get staff-specific values if not owner
+        const staffStats = staffAppointmentsByClient?.get(client.client_id);
         
         return {
           ...client,
@@ -223,6 +252,8 @@ export default function Clients() {
           subscription_status: activeSubscription?.status || null,
           next_due_date: activeSubscription?.next_due_date || null,
           payment_origin: activeSubscription?.payment_origin || null,
+          staff_cortes: staffStats?.cortes || 0,
+          staff_faturamento: staffStats?.faturamento || 0,
         };
       });
 
@@ -570,9 +601,14 @@ export default function Clients() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">
-                    {clients.reduce((sum, c) => sum + (c.total_cortes || 0), 0)}
+                    {isOwner 
+                      ? clients.reduce((sum, c) => sum + (c.total_cortes || 0), 0)
+                      : clients.reduce((sum, c) => sum + (c.staff_cortes || 0), 0)
+                    }
                   </p>
-                  <p className="text-xs text-muted-foreground">Cortes</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOwner ? "Cortes" : "Meus Cortes"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -586,10 +622,14 @@ export default function Clients() {
                 <div>
                   <p className="text-lg font-bold">
                     {formatCurrency(
-                      clients.reduce((sum, c) => sum + (c.faturamento_total || 0), 0)
+                      isOwner
+                        ? clients.reduce((sum, c) => sum + (c.faturamento_total || 0), 0)
+                        : clients.reduce((sum, c) => sum + (c.staff_faturamento || 0), 0)
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground">Faturamento</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOwner ? "Faturamento" : "Meu Faturamento"}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -685,9 +725,11 @@ export default function Clients() {
 
                       {/* Stats */}
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>{client.total_cortes || 0} cortes</span>
+                        <span>
+                          {isOwner ? (client.total_cortes || 0) : (client.staff_cortes || 0)} cortes
+                        </span>
                         <span className="text-emerald-600 font-medium">
-                          {formatCurrency(client.faturamento_total)}
+                          {formatCurrency(isOwner ? client.faturamento_total : (client.staff_faturamento || 0))}
                         </span>
                       </div>
                     </div>
@@ -884,14 +926,27 @@ export default function Clients() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-muted/50 rounded-lg text-center">
-                <p className="text-2xl font-bold">{viewingClient?.total_cortes || 0}</p>
-                <p className="text-xs text-muted-foreground">Cortes</p>
+                <p className="text-2xl font-bold">
+                  {isOwner 
+                    ? (viewingClient?.total_cortes || 0) 
+                    : (viewingClient?.staff_cortes || 0)
+                  }
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {isOwner ? "Cortes" : "Meus Cortes"}
+                </p>
               </div>
               <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-lg font-bold text-emerald-600">
-                  {formatCurrency(viewingClient?.faturamento_total || 0)}
+                  {formatCurrency(
+                    isOwner 
+                      ? (viewingClient?.faturamento_total || 0) 
+                      : (viewingClient?.staff_faturamento || 0)
+                  )}
                 </p>
-                <p className="text-xs text-muted-foreground">Faturamento</p>
+                <p className="text-xs text-muted-foreground">
+                  {isOwner ? "Faturamento" : "Meu Faturamento"}
+                </p>
               </div>
             </div>
 
