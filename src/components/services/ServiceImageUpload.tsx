@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { ImageIcon, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
@@ -192,74 +192,71 @@ export function ServiceImageUpload({
         className="hidden"
       />
 
-      <div
-        onClick={handleClick}
-        className={`
-          relative aspect-square w-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all
-          ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
-          ${isUploading ? "pointer-events-none" : ""}
-        `}
-      >
-        {previewUrl ? (
-          <>
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="w-full h-full object-cover"
-            />
-            {!isUploading && (
-              <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleClick();
-                  }}
-                  className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                >
-                  <Upload className="w-5 h-5 text-white" />
-                </button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                    >
-                      <X className="w-5 h-5 text-white" />
-                    </button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remover imagem do serviço?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. A imagem será removida permanentemente.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleRemoveImage}>
-                        Remover
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center">
-            <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-            <span className="text-sm text-muted-foreground">
-              Clique para adicionar
-            </span>
-          </div>
-        )}
+      <div className="relative">
+        <div
+          onClick={handleClick}
+          className={`
+            relative aspect-square w-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all group
+            ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
+            ${isUploading ? "pointer-events-none" : ""}
+          `}
+        >
+          {previewUrl ? (
+            <>
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="w-full h-full object-cover"
+              />
+              {!isUploading && (
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">Alterar</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center">
+              <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+              <span className="text-sm text-muted-foreground">
+                Clique para adicionar
+              </span>
+            </div>
+          )}
 
-        {isUploading && (
-          <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
+          {isUploading && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          )}
+        </div>
+
+        {previewUrl && !isUploading && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-muted text-muted-foreground rounded-full flex items-center justify-center hover:bg-muted-foreground/20 transition-colors shadow-sm border border-border"
+                title="Remover imagem"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remover imagem do serviço?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. A imagem será removida permanentemente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleRemoveImage}>
+                  Remover
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </div>
 
