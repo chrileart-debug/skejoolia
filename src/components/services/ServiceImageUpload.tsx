@@ -3,6 +3,17 @@ import { ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ServiceImageUploadProps {
   serviceId?: string;
@@ -208,16 +219,31 @@ export function ServiceImageUpload({
                 >
                   <Upload className="w-5 h-5 text-white" />
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveImage();
-                  }}
-                  className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                >
-                  <X className="w-5 h-5 text-white" />
-                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remover imagem do serviço?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. A imagem será removida permanentemente.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleRemoveImage}>
+                        Remover
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </>
@@ -238,7 +264,7 @@ export function ServiceImageUpload({
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        JPG, PNG ou WEBP (máx. 1MB)
+        JPG, PNG ou WEBP
       </p>
 
       {imageToCrop && (
