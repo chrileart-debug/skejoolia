@@ -174,10 +174,12 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
 
   const handleComplete = (e: React.MouseEvent, appointment: OverdueAppointment) => {
     e.stopPropagation();
+    
+    // Remove notification immediately to prevent double-clicks
+    setOverdueAppointments(prev => prev.filter(a => a.id_agendamento !== appointment.id_agendamento));
     setIsNotificationOpen(false);
     
     // Navigate to Schedule page with finish parameter to open the finalization modal
-    // This ensures proper transaction recording, commission calculation, etc.
     const appointmentDate = new Date(appointment.start_time);
     navigate(`/schedule?date=${appointmentDate.toISOString().split('T')[0]}&finish=${appointment.id_agendamento}`);
   };
