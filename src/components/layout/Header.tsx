@@ -408,10 +408,10 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
               <img 
                 src={userAvatarUrl} 
                 alt="Perfil" 
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover animate-fade-in"
               />
             ) : (
-              <span className="w-full h-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+              <span className="w-full h-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm animate-fade-in">
                 {initials}
               </span>
             )}
