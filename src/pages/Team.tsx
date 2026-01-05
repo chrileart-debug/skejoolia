@@ -505,8 +505,8 @@ export default function Team() {
                             {member.phone}
                           </span>
                         )}
-                        {/* Commission Badge - Only show for staff or service providers */}
-                        {isOwner && member.status === "active" && member.role === "staff" && (
+                        {/* Commission Badge - For any active member (owner can edit, staff can view their own) */}
+                        {isOwner && member.status === "active" && (
                           <div className="flex items-center gap-1">
                             <Percent className="w-3 h-3" />
                             <input
