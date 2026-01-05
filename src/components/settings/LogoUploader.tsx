@@ -9,9 +9,10 @@ interface LogoUploaderProps {
   barbershopId: string;
   barbershopName: string;
   onLogoChange: (url: string) => void;
+  autoSave?: boolean;
 }
 
-export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChange }: LogoUploaderProps) {
+export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChange, autoSave = true }: LogoUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [cropperOpen, setCropperOpen] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -55,6 +56,18 @@ export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChan
       const { data: { publicUrl } } = supabase.storage
         .from("barbershop-logos")
         .getPublicUrl(fileName);
+
+      // Auto-save logo_url to barbershops table
+      if (autoSave) {
+        const { error: saveError } = await supabase
+          .from("barbershops")
+          .update({ logo_url: publicUrl })
+          .eq("id", barbershopId);
+
+        if (saveError) {
+          console.error("Error saving logo URL:", saveError);
+        }
+      }
 
       // Add cache buster to force refresh
       const urlWithCacheBuster = `${publicUrl}?t=${Date.now()}`;
