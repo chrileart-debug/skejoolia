@@ -16,6 +16,7 @@ const SAME_PATH_TIMEOUT_MS = 5000;
  * INITIALIZATION:
  * - Uses singleton pattern via initFacebookPixelOnce() to ensure pixel is loaded exactly once
  * - Safe across remounts, hot reloads, and iframe environments
+ * - Skips initialization entirely in iframe DEV mode to prevent duplicate alerts
  *
  * DEDUPE STRATEGY:
  * 1) Primary: dedupe by react-router `location.key` (1 per navigation)
@@ -27,8 +28,16 @@ export function FacebookPixel() {
   const lastTrackedNavRef = useRef<string | null>(null);
   const isPixelInitialized = useRef(false);
 
-  // Initialize pixel once on first render
+  // Initialize pixel once on first render (skip in iframe DEV to avoid duplicates)
   useEffect(() => {
+    // Skip initialization entirely in iframe during development
+    if (isInIframe() && import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        console.log("[FB Pixel] Skipping initialization in iframe (dev mode)");
+      }
+      return;
+    }
+
     if (!isPixelInitialized.current) {
       initFacebookPixelOnce();
       isPixelInitialized.current = true;

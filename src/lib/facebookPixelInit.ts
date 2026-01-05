@@ -6,12 +6,11 @@
  * - Multiple script loads in index.html
  * - React component remounts
  * - Iframe previews (Lovable, etc.)
+ * - HMR (Hot Module Replacement) in development
  */
 
 const PIXEL_ID = "916021168260117";
-
-// Global flag to prevent double initialization
-let isInitialized = false;
+const FB_SCRIPT_SRC = "https://connect.facebook.net/en_US/fbevents.js";
 
 // Extended fbq type for internal use
 interface FbqFunction {
@@ -23,6 +22,26 @@ interface FbqFunction {
   callMethod?: (...args: unknown[]) => void;
 }
 
+// Global state interface (persists across HMR/module reloads)
+interface FbPixelState {
+  initialized: boolean;
+  scriptInjected: boolean;
+  pixelIdsInitialized: Set<string>;
+}
+
+// Get or create global state on window (survives HMR)
+const getGlobalState = (): FbPixelState => {
+  const win = window as unknown as { __fbPixelState?: FbPixelState };
+  if (!win.__fbPixelState) {
+    win.__fbPixelState = {
+      initialized: false,
+      scriptInjected: false,
+      pixelIdsInitialized: new Set<string>(),
+    };
+  }
+  return win.__fbPixelState;
+};
+
 // Use type assertion for window properties
 const getWindowFbq = (): FbqFunction | undefined => {
   return (window as unknown as { fbq?: FbqFunction }).fbq;
@@ -33,24 +52,33 @@ const setWindowFbq = (fbq: FbqFunction): void => {
   (window as unknown as { fbq: FbqFunction; _fbq: FbqFunction })._fbq = fbq;
 };
 
+// Check if fbevents.js script already exists in the DOM
+const isScriptAlreadyInjected = (): boolean => {
+  return !!document.querySelector(`script[src="${FB_SCRIPT_SRC}"]`);
+};
+
 /**
  * Initialize Facebook Pixel exactly once.
  * Safe to call multiple times - subsequent calls are no-ops.
+ * Uses window-level state to survive HMR and module reloads.
  */
 export function initFacebookPixelOnce(): boolean {
-  // Already initialized by this module
-  if (isInitialized) {
+  const state = getGlobalState();
+
+  // Already fully initialized
+  if (state.initialized) {
     if (import.meta.env.DEV) {
-      console.log("[FB Pixel Init] Already initialized by singleton, skipping");
+      console.log("[FB Pixel Init] Already initialized (window state), skipping");
     }
     return false;
   }
 
   const existingFbq = getWindowFbq();
 
-  // Already initialized elsewhere (e.g., index.html legacy)
+  // Already initialized elsewhere (e.g., fbq.loaded is true)
   if (existingFbq?.loaded) {
-    isInitialized = true;
+    state.initialized = true;
+    state.pixelIdsInitialized.add(PIXEL_ID);
     if (import.meta.env.DEV) {
       console.log("[FB Pixel Init] fbq.loaded=true, marking as initialized");
     }
@@ -75,40 +103,53 @@ export function initFacebookPixelOnce(): boolean {
     setWindowFbq(fbq);
   }
 
-  // Inject the fbevents.js script
-  const script = document.createElement("script");
-  script.async = true;
-  script.src = "https://connect.facebook.net/en_US/fbevents.js";
-  
-  script.onload = () => {
-    if (import.meta.env.DEV) {
-      console.log("[FB Pixel Init] fbevents.js loaded successfully");
+  // Inject the fbevents.js script only if not already injected
+  if (!state.scriptInjected && !isScriptAlreadyInjected()) {
+    // Mark as injected immediately to prevent race conditions
+    state.scriptInjected = true;
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = FB_SCRIPT_SRC;
+    
+    script.onload = () => {
+      if (import.meta.env.DEV) {
+        console.log("[FB Pixel Init] fbevents.js loaded successfully");
+      }
+    };
+
+    script.onerror = () => {
+      console.error("[FB Pixel Init] Failed to load fbevents.js");
+      // Reset flag so it can retry
+      state.scriptInjected = false;
+    };
+
+    // Insert script into head
+    const firstScript = document.getElementsByTagName("script")[0];
+    if (firstScript?.parentNode) {
+      firstScript.parentNode.insertBefore(script, firstScript);
+    } else {
+      document.head.appendChild(script);
     }
-  };
-
-  script.onerror = () => {
-    console.error("[FB Pixel Init] Failed to load fbevents.js");
-  };
-
-  // Insert script into head
-  const firstScript = document.getElementsByTagName("script")[0];
-  if (firstScript?.parentNode) {
-    firstScript.parentNode.insertBefore(script, firstScript);
-  } else {
-    document.head.appendChild(script);
+  } else if (import.meta.env.DEV) {
+    console.log("[FB Pixel Init] Script already injected, skipping injection");
   }
 
-  // Initialize with Pixel ID
-  const fbq = getWindowFbq();
-  if (fbq) {
-    fbq("init", PIXEL_ID);
+  // Initialize with Pixel ID only if not already done for this ID
+  if (!state.pixelIdsInitialized.has(PIXEL_ID)) {
+    const fbq = getWindowFbq();
+    if (fbq) {
+      fbq("init", PIXEL_ID);
+      state.pixelIdsInitialized.add(PIXEL_ID);
+      if (import.meta.env.DEV) {
+        console.log(`[FB Pixel Init] Initialized Pixel ID: ${PIXEL_ID}`);
+      }
+    }
+  } else if (import.meta.env.DEV) {
+    console.log(`[FB Pixel Init] Pixel ID ${PIXEL_ID} already initialized, skipping`);
   }
   
-  isInitialized = true;
-  
-  if (import.meta.env.DEV) {
-    console.log(`[FB Pixel Init] Initialized with Pixel ID: ${PIXEL_ID}`);
-  }
+  state.initialized = true;
 
   return true;
 }
