@@ -326,6 +326,11 @@ export function SmartBookingModal({ open, onOpenChange, onSuccess, initialDate }
       toast.error("Digite o nome do cliente");
       return;
     }
+    const phoneDigits = newClientPhone.replace(/\D/g, "");
+    if (phoneDigits.length < 10) {
+      toast.error("WhatsApp é obrigatório");
+      return;
+    }
     setSelectedClient({
       client_id: "new",
       nome: newClientName,
@@ -919,12 +924,13 @@ function Step1Client({
           />
         </div>
         <div>
-          <label className="text-sm font-medium mb-1.5 block">WhatsApp (opcional)</label>
+          <label className="text-sm font-medium mb-1.5 block">WhatsApp *</label>
           <Input
             placeholder="(00) 00000-0000"
             value={newClientPhone}
             onChange={(e) => setNewClientPhone(formatPhoneMask(e.target.value))}
             className="h-12"
+            required
           />
         </div>
       </div>
