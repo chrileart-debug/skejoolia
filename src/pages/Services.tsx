@@ -55,6 +55,7 @@ import {
   FolderOpen,
   ListTree,
   MoreVertical,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -135,6 +136,7 @@ export default function Services() {
     current: 0,
     limit: 0,
   });
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -161,6 +163,18 @@ export default function Services() {
     return counts;
   }, [services]);
 
+  // Filter services by search query
+  const filteredServices = useMemo(() => {
+    if (!searchQuery.trim()) return services;
+    const query = searchQuery.toLowerCase().trim();
+    return services.filter(
+      (s) =>
+        s.name.toLowerCase().includes(query) ||
+        s.description?.toLowerCase().includes(query) ||
+        s.categoryName?.toLowerCase().includes(query)
+    );
+  }, [services, searchQuery]);
+
   // Group services by category
   const servicesByCategory = useMemo(() => {
     const grouped: Record<string, Service[]> = { uncategorized: [] };
@@ -169,7 +183,7 @@ export default function Services() {
       grouped[cat.id] = [];
     });
 
-    services.forEach((service) => {
+    filteredServices.forEach((service) => {
       if (service.categoryId && grouped[service.categoryId]) {
         grouped[service.categoryId].push(service);
       } else {
@@ -178,7 +192,7 @@ export default function Services() {
     });
 
     return grouped;
-  }, [services, categories]);
+  }, [filteredServices, categories]);
 
   // Get only single services (non-packages) for package selector
   const singleServices = useMemo(() => {
@@ -793,7 +807,7 @@ export default function Services() {
           </TabsList>
 
           {/* Services Tab */}
-          <TabsContent value="services" className="space-y-6">
+          <TabsContent value="services" className="space-y-4">
             {services.length === 0 ? (
               <EmptyState
                 icon={<Scissors className="w-10 h-10 text-muted-foreground" />}
@@ -809,6 +823,36 @@ export default function Services() {
               />
             ) : (
               <>
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar serviço..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 h-9"
+                  />
+                  {searchQuery && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* No results message */}
+                {filteredServices.length === 0 && searchQuery && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum serviço encontrado para "{searchQuery}"
+                  </div>
+                )}
+
+                {/* Services grouped by category */}
+                <div className="space-y-6">
                 {/* Services grouped by category */}
                 {categories.map((category) => {
                   const categoryServices = servicesByCategory[category.id] || [];
@@ -827,22 +871,23 @@ export default function Services() {
                   );
                 })}
 
-                {/* Uncategorized services */}
-                {servicesByCategory.uncategorized.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-semibold text-lg text-muted-foreground">
-                        Sem Categoria
-                      </h2>
-                      <Badge variant="secondary">
-                        {servicesByCategory.uncategorized.length}
-                      </Badge>
+                  {/* Uncategorized services */}
+                  {servicesByCategory.uncategorized.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold text-lg text-muted-foreground">
+                          Sem Categoria
+                        </h2>
+                        <Badge variant="secondary">
+                          {servicesByCategory.uncategorized.length}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {servicesByCategory.uncategorized.map(renderServiceCard)}
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      {servicesByCategory.uncategorized.map(renderServiceCard)}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </>
             )}
           </TabsContent>
