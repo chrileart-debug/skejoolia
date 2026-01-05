@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSetPageHeader } from "@/contexts/PageHeaderContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ import { formatPhoneMask } from "@/lib/phoneMask";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
 
 interface OutletContextType {
   onMenuClick: () => void;
@@ -66,6 +67,9 @@ export default function Settings() {
   // Profile photo upload
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   
   // User profile data (from user_settings)
   const [profileData, setProfileData] = useState({
@@ -260,10 +264,13 @@ export default function Settings() {
     }
   };
 
-  // Handle profile photo upload
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle profile photo selection - opens cropper
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+
+    // Reset input so same file can be selected again
+    e.target.value = "";
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
@@ -271,17 +278,33 @@ export default function Settings() {
       return;
     }
 
-    // Validate file size (max 1MB)
-    if (file.size > 1 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 1MB");
+    // Validate file size (max 10MB for initial selection)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 10MB");
+      return;
+    }
+
+    // Open cropper with the selected image
+    const objectUrl = URL.createObjectURL(file);
+    setImageToCrop(objectUrl);
+    setCropperOpen(true);
+  };
+
+  // Handle cropped photo upload
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    if (!user) return;
+
+    // Check final size after cropping
+    if (croppedBlob.size > 1 * 1024 * 1024) {
+      toast.error("Foto recortada muito grande. Tente recortar uma área menor.");
       return;
     }
 
     setIsUploadingPhoto(true);
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}-${Date.now()}.jpg`;
       const filePath = `profiles/${fileName}`;
+      const file = new File([croppedBlob], "profile.jpg", { type: "image/jpeg" });
 
       const { error: uploadError } = await supabase.storage
         .from("barbershop-logos")
@@ -559,18 +582,34 @@ export default function Settings() {
                         )}
                       </div>
                       <input
+                        ref={photoInputRef}
                         type="file"
                         accept="image/*"
-                        onChange={handlePhotoUpload}
+                        onChange={handlePhotoSelect}
                         className="hidden"
                         disabled={isUploadingPhoto}
                       />
                     </label>
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Foto de perfil (1:1)</p>
-                      <p className="text-xs text-muted-foreground">JPG, PNG ou GIF. Máx 5MB</p>
+                      <p className="text-xs text-muted-foreground">JPG, PNG ou WEBP. Máx 1MB</p>
                     </div>
                   </div>
+
+                  {/* Image Cropper Modal for profile photo */}
+                  {imageToCrop && (
+                    <ImageCropperModal
+                      open={cropperOpen}
+                      onClose={() => {
+                        setCropperOpen(false);
+                        setImageToCrop(null);
+                      }}
+                      imageSrc={imageToCrop}
+                      onCropComplete={handleCropComplete}
+                      aspectRatio={1}
+                      title="Recortar Foto de Perfil"
+                    />
+                  )}
 
                   {/* Name */}
                   <div className="space-y-2">

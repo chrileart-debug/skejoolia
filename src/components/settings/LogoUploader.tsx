@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
 
 interface LogoUploaderProps {
   logoUrl: string | null;
@@ -10,13 +11,20 @@ interface LogoUploaderProps {
   onLogoChange: (url: string) => void;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB for initial selection (will be compressed after crop)
+
 export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChange }: LogoUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Reset input so same file can be selected again
+    e.target.value = "";
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
@@ -24,17 +32,30 @@ export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChan
       return;
     }
 
-    // Validate file size (max 1MB)
-    if (file.size > 1 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 1MB");
+    // Validate file size (max 10MB for initial selection)
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("A imagem deve ter no máximo 10MB");
+      return;
+    }
+
+    // Open cropper with the selected image
+    const objectUrl = URL.createObjectURL(file);
+    setImageToCrop(objectUrl);
+    setCropperOpen(true);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    // Check final size after cropping
+    if (croppedBlob.size > 1 * 1024 * 1024) {
+      toast.error("Logo recortado muito grande. Tente recortar uma área menor.");
       return;
     }
 
     setIsUploading(true);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${barbershopId}/logo.${fileExt}`;
+      const fileName = `${barbershopId}/logo.jpg`;
+      const file = new File([croppedBlob], "logo.jpg", { type: "image/jpeg" });
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -101,6 +122,20 @@ export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChan
       <p className="text-xs text-muted-foreground text-center">
         Clique para alterar o logo
       </p>
+
+      {imageToCrop && (
+        <ImageCropperModal
+          open={cropperOpen}
+          onClose={() => {
+            setCropperOpen(false);
+            setImageToCrop(null);
+          }}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+          aspectRatio={1}
+          title="Recortar Logo"
+        />
+      )}
     </div>
   );
 }
