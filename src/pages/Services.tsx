@@ -85,6 +85,7 @@ interface PackageItem {
 
 interface Barbershop {
   id: string;
+  owner_id: string;
   name: string;
   slug: string | null;
   logo_url: string | null;
@@ -357,21 +358,23 @@ export default function Services() {
   };
 
   const uploadImage = async (file: File, serviceId: string): Promise<string | null> => {
-    if (!user) return null;
+    if (!user || !barbershop) return null;
     setIsUploading(true);
 
     try {
+      // Always use owner_id for consistent folder structure
+      const ownerId = barbershop.owner_id;
       const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const filePath = `${user.id}/servicos/${serviceId}.${extension}`;
+      const filePath = `${ownerId}/servicos/${serviceId}.${extension}`;
 
       const { data: existingFiles } = await supabase.storage
         .from("midia-imagens-cortes")
-        .list(`${user.id}/servicos`);
+        .list(`${ownerId}/servicos`);
 
       if (existingFiles) {
         const filesToDelete = existingFiles
           .filter((f) => f.name.startsWith(serviceId))
-          .map((f) => `${user.id}/servicos/${f.name}`);
+          .map((f) => `${ownerId}/servicos/${f.name}`);
 
         if (filesToDelete.length > 0) {
           await supabase.storage.from("midia-imagens-cortes").remove(filesToDelete);
@@ -411,21 +414,23 @@ export default function Services() {
   };
 
   const handleRemoveImage = async () => {
-    if (!editingService || !user) {
+    if (!editingService || !user || !barbershop) {
       setPreviewUrl(null);
       setPendingFile(null);
       return;
     }
 
     try {
+      // Always use owner_id for consistent folder structure
+      const ownerId = barbershop.owner_id;
       const { data: files } = await supabase.storage
         .from("midia-imagens-cortes")
-        .list(`${user.id}/servicos`);
+        .list(`${ownerId}/servicos`);
 
       if (files) {
         const filesToDelete = files
           .filter((f) => f.name.startsWith(editingService.id))
-          .map((f) => `${user.id}/servicos/${f.name}`);
+          .map((f) => `${ownerId}/servicos/${f.name}`);
 
         if (filesToDelete.length > 0) {
           await supabase.storage.from("midia-imagens-cortes").remove(filesToDelete);

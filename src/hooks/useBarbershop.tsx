@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 interface Barbershop {
   id: string;
+  owner_id: string;
   name: string;
   slug: string | null;
   logo_url: string | null;
