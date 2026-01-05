@@ -66,6 +66,7 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const { user } = useAuth();
   const { barbershop } = useBarbershop();
   const [userName, setUserName] = useState<string | null>(null);
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [overdueAppointments, setOverdueAppointments] = useState<OverdueAppointment[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -76,12 +77,12 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const [finishingAppointment, setFinishingAppointment] = useState<OverdueAppointment | null>(null);
 
   useEffect(() => {
-    async function loadUserName() {
+    async function loadUserData() {
       if (!user) return;
       
       const { data } = await supabase
         .from("user_settings")
-        .select("nome")
+        .select("nome, avatar_url")
         .eq("user_id", user.id)
         .maybeSingle();
       
@@ -90,9 +91,13 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
       } else if (user.user_metadata?.nome) {
         setUserName(user.user_metadata.nome);
       }
+      
+      if ((data as any)?.avatar_url) {
+        setUserAvatarUrl((data as any).avatar_url);
+      }
     }
     
-    loadUserName();
+    loadUserData();
   }, [user]);
 
   // Fetch overdue appointments
@@ -387,9 +392,19 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
           </Button>
           <button
             onClick={() => navigate("/settings")}
-            className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity"
+            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center hover:opacity-90 transition-opacity"
           >
-            {initials}
+            {userAvatarUrl ? (
+              <img 
+                src={userAvatarUrl} 
+                alt="Perfil" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="w-full h-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
+                {initials}
+              </span>
+            )}
           </button>
         </div>
       </div>

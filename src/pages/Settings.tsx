@@ -207,6 +207,10 @@ export default function Settings() {
           phone: userSettings.numero || "",
           email: userSettings.email || user.email || "",
         });
+        // Load avatar_url if present
+        if ((userSettings as any).avatar_url) {
+          setProfilePhotoUrl((userSettings as any).avatar_url);
+        }
       } else {
         setProfileData(prev => ({ ...prev, email: user.email || "" }));
       }
@@ -305,7 +309,20 @@ export default function Settings() {
         .from("barbershop-logos")
         .getPublicUrl(filePath);
 
-      setProfilePhotoUrl(publicUrl);
+      // Save avatar_url to user_settings to persist across refreshes
+      const { error: saveError } = await supabase
+        .from("user_settings")
+        .upsert({
+          user_id: user.id,
+          avatar_url: publicUrl,
+        });
+
+      if (saveError) {
+        console.error("Error saving avatar URL:", saveError);
+      }
+
+      // Add cache buster for display only
+      setProfilePhotoUrl(`${publicUrl}?t=${Date.now()}`);
       toast.success("Foto atualizada!");
     } catch (error) {
       console.error("Error uploading photo:", error);
