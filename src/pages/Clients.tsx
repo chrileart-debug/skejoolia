@@ -144,13 +144,22 @@ export default function Clients() {
   // Renewal modal state
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [renewalClient, setRenewalClient] = useState<Cliente | null>(null);
+  
+  // Period filter state for staff
+  const [periodFilter, setPeriodFilter] = useState<string>("all");
+  
+  // Staff commission summary
+  const [staffCommissionTotal, setStaffCommissionTotal] = useState(0);
 
   useEffect(() => {
     if (user && barbershop) {
       loadClients();
       loadAgents();
+      if (!isOwner) {
+        loadStaffCommission();
+      }
     }
-  }, [user, barbershop]);
+  }, [user, barbershop, periodFilter]);
 
   // Load credits when viewing a client with subscription
   useEffect(() => {
@@ -160,6 +169,57 @@ export default function Clients() {
       setClientCredits([]);
     }
   }, [viewingClient]);
+
+  // Helper function to get date range based on period filter
+  const getDateRangeForPeriod = () => {
+    const now = new Date();
+    let startDate: Date | null = null;
+    
+    switch (periodFilter) {
+      case "current_month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "previous_month":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { startDate, endDate: endOfPrevMonth };
+      case "last_3_months":
+        startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        break;
+      default:
+        return { startDate: null, endDate: null };
+    }
+    
+    return { startDate, endDate: now };
+  };
+
+  async function loadStaffCommission() {
+    if (!user || !barbershop || isOwner) return;
+    
+    try {
+      const { startDate, endDate } = getDateRangeForPeriod();
+      
+      let query = supabase
+        .from("commissions")
+        .select("commission_amount")
+        .eq("barbershop_id", barbershop.id)
+        .eq("user_id", user.id);
+      
+      if (startDate) {
+        query = query.gte("created_at", startDate.toISOString());
+      }
+      if (endDate) {
+        query = query.lte("created_at", endDate.toISOString());
+      }
+      
+      const { data } = await query;
+      
+      const total = data?.reduce((sum, c) => sum + (c.commission_amount || 0), 0) || 0;
+      setStaffCommissionTotal(total);
+    } catch (error) {
+      console.error("Error loading staff commission:", error);
+    }
+  }
 
   async function loadClients() {
     if (!user || !barbershop) return;
@@ -214,13 +274,24 @@ export default function Clients() {
       // For staff: fetch completed appointments and their transactions to calculate gross revenue per client
       let staffAppointmentsByClient: Map<string, { cortes: number; faturamento: number }> | null = null;
       if (!isOwner) {
+        const { startDate, endDate } = getDateRangeForPeriod();
+        
         // First, get all completed appointments for this staff member
-        const { data: staffAppointments } = await supabase
+        let appointmentsQuery = supabase
           .from("agendamentos")
-          .select("id_agendamento, client_id")
+          .select("id_agendamento, client_id, start_time")
           .eq("barbershop_id", barbershop.id)
           .eq("user_id", user.id)
           .eq("status", "completed");
+        
+        if (startDate) {
+          appointmentsQuery = appointmentsQuery.gte("start_time", startDate.toISOString());
+        }
+        if (endDate) {
+          appointmentsQuery = appointmentsQuery.lte("start_time", endDate.toISOString());
+        }
+        
+        const { data: staffAppointments } = await appointmentsQuery;
 
         if (staffAppointments && staffAppointments.length > 0) {
           const appointmentIds = staffAppointments.map(a => a.id_agendamento);
@@ -583,6 +654,24 @@ export default function Clients() {
           />
         </div>
 
+        {/* Period Filter for Staff */}
+        {!isOwner && (
+          <div className="flex items-center gap-3">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Período:</Label>
+            <Select value={periodFilter} onValueChange={setPeriodFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Selecionar período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo período</SelectItem>
+                <SelectItem value="current_month">Mês atual</SelectItem>
+                <SelectItem value="previous_month">Mês anterior</SelectItem>
+                <SelectItem value="last_3_months">Últimos 3 meses</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {/* Stats Summary */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Card className="bg-card/50">
@@ -655,6 +744,42 @@ export default function Clients() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Staff Revenue Summary Card */}
+        {!isOwner && (
+          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+            <CardContent className="p-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                Resumo Financeiro {periodFilter !== "all" && `(${
+                  periodFilter === "current_month" ? "Mês Atual" :
+                  periodFilter === "previous_month" ? "Mês Anterior" : "Últimos 3 Meses"
+                })`}
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Faturamento Bruto</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {formatCurrency(clients.reduce((sum, c) => sum + (c.staff_faturamento || 0), 0))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Minha Comissão</p>
+                  <p className="text-lg font-bold text-emerald-600">
+                    {formatCurrency(staffCommissionTotal)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Diferença</p>
+                  <p className="text-lg font-bold text-muted-foreground">
+                    {formatCurrency(
+                      clients.reduce((sum, c) => sum + (c.staff_faturamento || 0), 0) - staffCommissionTotal
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Clients List */}
         {loading ? (
