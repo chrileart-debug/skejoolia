@@ -5,6 +5,7 @@ import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
 import { MobileMenu } from "./MobileMenu";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { ExpiredSubscriptionBlock } from "@/components/subscription/ExpiredSubscriptionBlock";
 import { OnboardingModal } from "@/components/onboarding/OnboardingModal";
 import { PageHeaderProvider, usePageHeader } from "@/contexts/PageHeaderContext";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,7 @@ function AppLayoutContent() {
     refreshBarbershop, 
     refreshCategories 
   } = useBarbershop();
-  const { isTrialing } = useSubscription();
+  const { isTrialing, isExpired, loading: subscriptionLoading } = useSubscription();
   const { header } = usePageHeader();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -102,8 +103,8 @@ function AppLayoutContent() {
     refreshBarbershop();
   };
 
-  // Show loading spinner while barbershop is loading to prevent white flash
-  if (barbershopLoading) {
+  // Show loading spinner while barbershop or subscription is loading
+  if (barbershopLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -112,6 +113,11 @@ function AppLayoutContent() {
         </div>
       </div>
     );
+  }
+
+  // Show expired subscription block if subscription is expired
+  if (isExpired) {
+    return <ExpiredSubscriptionBlock />;
   }
 
   return (
