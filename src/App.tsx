@@ -39,6 +39,7 @@ import Plans from "./pages/Plans";
 import Team from "./pages/Team";
 import Club from "./pages/Club";
 import Help from "./pages/Help";
+import Commissions from "./pages/Commissions";
 import PublicBooking from "./pages/PublicBooking";
 import NotFound from "./pages/NotFound";
 
@@ -104,6 +105,7 @@ const App = () => {
                     <Route path="/billing" element={<Billing />} />
                     <Route path="/team" element={<Team />} />
                     <Route path="/club" element={<Club />} />
+                    <Route path="/commissions" element={<Commissions />} />
                     <Route path="/help" element={<Help />} />
                     <Route path="/settings" element={<Settings />} />
                   </Route>
