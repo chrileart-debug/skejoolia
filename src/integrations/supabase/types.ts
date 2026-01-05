@@ -1805,19 +1805,19 @@ export type Database = {
           vinculado_em: string
         }[]
       }
-      get_barbershop_team: {
-        Args: { p_barbershop_id: string }
-        Returns: {
-          email: string
-          name: string
-          permissions: Json
-          phone: string
-          role: string
-          role_id: string
-          status: string
-          user_id: string
-        }[]
-      }
+      get_barbershop_team:
+        | {
+            Args: { p_barbershop_id: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.get_barbershop_team(p_barbershop_id => text), public.get_barbershop_team(p_barbershop_id => uuid). Try renaming the parameters or the function itself in the database so function overloading can be resolved"[]
+          }
+        | {
+            Args: { p_barbershop_id: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.get_barbershop_team(p_barbershop_id => text), public.get_barbershop_team(p_barbershop_id => uuid). Try renaming the parameters or the function itself in the database so function overloading can be resolved"[]
+          }
       handle_public_booking: {
         Args: {
           p_barbershop_id: string
