@@ -11,8 +11,6 @@ interface ServiceImageUploadProps {
   onImageUploaded: (url: string) => void;
   onImageRemoved: () => void;
 }
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB for initial selection (will be compressed after crop)
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export function ServiceImageUpload({
@@ -46,24 +44,14 @@ export function ServiceImageUpload({
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error("Arquivo muito grande. Máximo 10MB.");
-      return;
-    }
-
-    // Open cropper with the selected image
+    // Open cropper with the selected image (no size limit - will compress after crop)
     const objectUrl = URL.createObjectURL(file);
     setImageToCrop(objectUrl);
     setCropperOpen(true);
   };
 
   const handleCropComplete = async (croppedBlob: Blob) => {
-    // Check final size after cropping
-    if (croppedBlob.size > 1 * 1024 * 1024) {
-      toast.error("Imagem recortada muito grande. Tente recortar uma área menor.");
-      return;
-    }
-
+    // Image is already compressed by the cropper to ≤1MB
     const objectUrl = URL.createObjectURL(croppedBlob);
     setPreviewUrl(objectUrl);
 

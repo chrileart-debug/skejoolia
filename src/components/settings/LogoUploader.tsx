@@ -11,8 +11,6 @@ interface LogoUploaderProps {
   onLogoChange: (url: string) => void;
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB for initial selection (will be compressed after crop)
-
 export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChange }: LogoUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [cropperOpen, setCropperOpen] = useState(false);
@@ -32,25 +30,14 @@ export function LogoUploader({ logoUrl, barbershopId, barbershopName, onLogoChan
       return;
     }
 
-    // Validate file size (max 10MB for initial selection)
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error("A imagem deve ter no máximo 10MB");
-      return;
-    }
-
-    // Open cropper with the selected image
+    // No size limit - cropper will compress to ≤1MB
     const objectUrl = URL.createObjectURL(file);
     setImageToCrop(objectUrl);
     setCropperOpen(true);
   };
 
   const handleCropComplete = async (croppedBlob: Blob) => {
-    // Check final size after cropping
-    if (croppedBlob.size > 1 * 1024 * 1024) {
-      toast.error("Logo recortado muito grande. Tente recortar uma área menor.");
-      return;
-    }
-
+    // Image is already compressed by the cropper to ≤1MB
     setIsUploading(true);
 
     try {

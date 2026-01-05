@@ -278,13 +278,7 @@ export default function Settings() {
       return;
     }
 
-    // Validate file size (max 10MB for initial selection)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("A imagem deve ter no máximo 10MB");
-      return;
-    }
-
-    // Open cropper with the selected image
+    // No size limit - cropper will compress to ≤1MB
     const objectUrl = URL.createObjectURL(file);
     setImageToCrop(objectUrl);
     setCropperOpen(true);
@@ -294,12 +288,7 @@ export default function Settings() {
   const handleCropComplete = async (croppedBlob: Blob) => {
     if (!user) return;
 
-    // Check final size after cropping
-    if (croppedBlob.size > 1 * 1024 * 1024) {
-      toast.error("Foto recortada muito grande. Tente recortar uma área menor.");
-      return;
-    }
-
+    // Image is already compressed by the cropper to ≤1MB
     setIsUploadingPhoto(true);
     try {
       const fileName = `${user.id}-${Date.now()}.jpg`;
