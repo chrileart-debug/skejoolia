@@ -166,41 +166,50 @@ export default function Help() {
                   ))}
                 </TabsList>
 
-                {categories.map((category) => (
-                  <TabsContent key={category} value={category} className="mt-4">
-                    <ScrollArea className="max-h-[400px]">
-                      <div className="space-y-2">
-                        {getTutorialsByCategory(category).map((tutorial) => (
-                          <div
-                            key={tutorial.id}
-                            className="border rounded-lg p-4 flex items-center justify-between gap-3 hover:bg-muted/50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <PlayCircle className="w-5 h-5 text-primary shrink-0" />
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{tutorial.title}</p>
-                                {tutorial.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                    {tutorial.description}
-                                  </p>
-                                )}
+                {categories.map((category) => {
+                  const categoryTutorials = getTutorialsByCategory(category);
+                  return (
+                    <TabsContent key={category} value={category} className="mt-4">
+                      <ScrollArea className="max-h-[400px]">
+                        {categoryTutorials.length === 0 ? (
+                          <p className="text-center text-muted-foreground py-8">
+                            Nenhum vídeo disponível nesta categoria
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {categoryTutorials.map((tutorial) => (
+                              <div
+                                key={tutorial.id}
+                                className="border rounded-lg p-3 sm:p-4 flex items-center justify-between gap-2 sm:gap-3 hover:bg-muted/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                  <PlayCircle className="w-5 h-5 text-primary shrink-0 hidden sm:block" />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-sm sm:text-base line-clamp-2 sm:truncate">{tutorial.title}</p>
+                                    {tutorial.description && (
+                                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 hidden sm:block">
+                                        {tutorial.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedTutorial(tutorial)}
+                                  className="shrink-0 gap-1.5 px-2 sm:px-3"
+                                >
+                                  <PlayCircle className="w-4 h-4" />
+                                  <span className="hidden xs:inline">Assistir</span>
+                                </Button>
                               </div>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedTutorial(tutorial)}
-                              className="shrink-0 gap-2"
-                            >
-                              <PlayCircle className="w-4 h-4" />
-                              Assistir
-                            </Button>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                ))}
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+                  );
+                })}
               </Tabs>
             )}
           </CardContent>
