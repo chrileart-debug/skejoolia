@@ -21,12 +21,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useBarbershop } from "@/hooks/useBarbershop";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface NavItem {
   title: string;
   icon: typeof LayoutDashboard;
   href: string;
   ownerOnly: boolean;
+  corporativoOnly?: boolean;
   permissionKey?: "can_view_dashboard" | "can_manage_agents" | "can_manage_schedule" | "can_view_clients" | "can_manage_services";
 }
 
@@ -38,8 +40,8 @@ const allNavItems: NavItem[] = [
   { title: "Serviços", icon: Scissors, href: "/services", ownerOnly: false, permissionKey: "can_manage_services" },
   { title: "Agenda", icon: Calendar, href: "/schedule", ownerOnly: false, permissionKey: "can_manage_schedule" },
   { title: "Clientes", icon: Users, href: "/clients", ownerOnly: false, permissionKey: "can_view_clients" },
-  { title: "Comissões", icon: Wallet, href: "/commissions", ownerOnly: false },
-  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: false },
+  { title: "Comissões", icon: Wallet, href: "/commissions", ownerOnly: false, corporativoOnly: true },
+  { title: "Equipe", icon: UsersRound, href: "/team", ownerOnly: false, corporativoOnly: true },
   { title: "Meu Clube", icon: Sparkles, href: "/club", ownerOnly: true },
   { title: "Planos", icon: Crown, href: "/plans", ownerOnly: true },
   { title: "Faturas", icon: Receipt, href: "/billing", ownerOnly: true },
@@ -56,11 +58,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { isOwner, permissions } = useBarbershop();
+  const { subscription } = useSubscription();
 
-  // Filter nav items based on role and permissions
+  // Check if user is on basico plan
+  const isBasicoPlan = subscription?.plan_slug === "basico";
+
+  // Filter nav items based on role, permissions, and plan
   const navItems = allNavItems.filter(item => {
     // Owner-only items require owner role
     if (item.ownerOnly && !isOwner) return false;
+    
+    // Corporativo-only items (like Comissões and Equipe) are hidden on basico plan
+    if (item.corporativoOnly && isBasicoPlan) return false;
     
     // For staff, check granular permissions
     if (!isOwner && item.permissionKey) {
