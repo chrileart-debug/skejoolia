@@ -65,46 +65,58 @@ export function ImageCropperModal({
     if (!completedCrop || !imgRef.current) return null;
 
     const image = imgRef.current;
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) return null;
-
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
 
-    // Set canvas size to the crop size (scaled to natural image dimensions)
     const cropWidth = completedCrop.width * scaleX;
     const cropHeight = completedCrop.height * scaleY;
 
-    // Use a maximum dimension for output to keep file size small
-    const maxDimension = 800;
-    const scale = Math.min(1, maxDimension / Math.max(cropWidth, cropHeight));
+    const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+    let maxDimension = 1200; // Start with higher quality
+    let quality = 0.92;
+    let blob: Blob | null = null;
 
-    canvas.width = cropWidth * scale;
-    canvas.height = cropHeight * scale;
+    // Iteratively reduce size/quality until under 1MB
+    while (maxDimension >= 200 && quality >= 0.3) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
 
-    ctx.imageSmoothingQuality = "high";
+      const scale = Math.min(1, maxDimension / Math.max(cropWidth, cropHeight));
+      canvas.width = cropWidth * scale;
+      canvas.height = cropHeight * scale;
 
-    ctx.drawImage(
-      image,
-      completedCrop.x * scaleX,
-      completedCrop.y * scaleY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => resolve(blob),
-        "image/jpeg",
-        0.85 // Quality for JPEG compression
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(
+        image,
+        completedCrop.x * scaleX,
+        completedCrop.y * scaleY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
       );
-    });
+
+      blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), "image/jpeg", quality);
+      });
+
+      if (blob && blob.size <= MAX_FILE_SIZE) {
+        return blob;
+      }
+
+      // Reduce quality first, then dimensions
+      if (quality > 0.5) {
+        quality -= 0.15;
+      } else {
+        quality = 0.85;
+        maxDimension -= 200;
+      }
+    }
+
+    return blob; // Return last attempt even if over 1MB
   }, [completedCrop]);
 
   const handleConfirm = async () => {
