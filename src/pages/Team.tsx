@@ -505,26 +505,7 @@ export default function Team() {
                             {member.phone}
                           </span>
                         )}
-                        {/* Commission Badge - For any active member (owner can edit, staff can view their own) */}
-                        {isOwner && member.status === "active" && (
-                          <div className="flex items-center gap-1">
-                            <Percent className="w-3 h-3" />
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              placeholder="--"
-                              value={member.commission_percentage ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value === "" ? null : Number(e.target.value);
-                                handleUpdateCommission(member.user_id, member.role_id, val);
-                              }}
-                              disabled={savingCommission === member.user_id}
-                              className="w-12 h-6 px-1 text-xs text-center border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <span className="text-xs">%</span>
-                          </div>
-                        )}
+                        {/* Commission Badge - Staff can view their own commission */}
                         {!isOwner && member.commission_percentage !== null && (
                           <span className="flex items-center gap-1 text-primary font-medium">
                             <Percent className="w-3 h-3" />

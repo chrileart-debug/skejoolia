@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Briefcase, Calendar, Loader2 } from "lucide-react";
+import { Briefcase, Calendar, Loader2, Percent } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { StaffServicesTab } from "./StaffServicesTab";
 import { StaffScheduleTab } from "./StaffScheduleTab";
+import { StaffCommissionTab } from "./StaffCommissionTab";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createDefaultStaffSchedules } from "@/lib/staffScheduleDefaults";
@@ -177,15 +178,20 @@ export function StaffConfigSheet({
             </p>
           </div>
         ) : (
-          <Tabs defaultValue="services" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="services" className="flex items-center gap-2">
+        <Tabs defaultValue="services" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="services" className="flex items-center gap-1 text-xs sm:text-sm">
                 <Briefcase className="w-4 h-4" />
-                Especialidades
+                <span className="hidden sm:inline">Especialidades</span>
+                <span className="sm:hidden">Serviços</span>
               </TabsTrigger>
-              <TabsTrigger value="schedule" className="flex items-center gap-2">
+              <TabsTrigger value="schedule" className="flex items-center gap-1 text-xs sm:text-sm">
                 <Calendar className="w-4 h-4" />
-                Horários
+                <span>Horários</span>
+              </TabsTrigger>
+              <TabsTrigger value="commission" className="flex items-center gap-1 text-xs sm:text-sm">
+                <Percent className="w-4 h-4" />
+                <span>Comissão</span>
               </TabsTrigger>
             </TabsList>
 
@@ -202,6 +208,14 @@ export function StaffConfigSheet({
                 userId={staffMember.user_id}
                 barbershopId={barbershopId}
                 isReadOnly={isReadOnly}
+              />
+            </TabsContent>
+
+            <TabsContent value="commission" className="mt-4">
+              <StaffCommissionTab
+                userId={staffMember.user_id}
+                barbershopId={barbershopId}
+                isReadOnly={!isOwner}
               />
             </TabsContent>
           </Tabs>
