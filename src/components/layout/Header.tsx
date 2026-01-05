@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { FinishAppointmentModal } from "@/components/schedule/FinishAppointmentModal";
 
 interface HeaderProps {
   title: string;
@@ -29,6 +30,9 @@ interface OverdueAppointment {
   nome_cliente: string | null;
   start_time: string;
   service_name: string | null;
+  service_id: string | null;
+  client_id: string | null;
+  user_id: string;
 }
 
 const DISMISSED_STORAGE_KEY = "dismissed_overdue_notifications";
@@ -66,6 +70,10 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const [overdueAppointments, setOverdueAppointments] = useState<OverdueAppointment[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>(loadDismissedIds);
+  
+  // Finish modal state
+  const [isFinishModalOpen, setIsFinishModalOpen] = useState(false);
+  const [finishingAppointment, setFinishingAppointment] = useState<OverdueAppointment | null>(null);
 
   useEffect(() => {
     async function loadUserName() {
@@ -100,7 +108,9 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
           id_agendamento,
           nome_cliente,
           start_time,
-          service_id
+          service_id,
+          client_id,
+          user_id
         `)
         .eq("barbershop_id", barbershop.id)
         .eq("status", "pending")
@@ -135,7 +145,12 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
         const filtered = data
           .filter(a => !currentDismissed.includes(a.id_agendamento))
           .map(a => ({
-            ...a,
+            id_agendamento: a.id_agendamento,
+            nome_cliente: a.nome_cliente,
+            start_time: a.start_time,
+            service_id: a.service_id,
+            client_id: a.client_id,
+            user_id: a.user_id,
             service_name: a.service_id ? serviceMap[a.service_id] || null : null
           }));
         
@@ -175,13 +190,19 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
   const handleComplete = (e: React.MouseEvent, appointment: OverdueAppointment) => {
     e.stopPropagation();
     
-    // Remove notification immediately to prevent double-clicks
-    setOverdueAppointments(prev => prev.filter(a => a.id_agendamento !== appointment.id_agendamento));
-    setIsNotificationOpen(false);
-    
-    // Navigate to Schedule page with finish parameter to open the finalization modal
-    const appointmentDate = new Date(appointment.start_time);
-    navigate(`/schedule?date=${appointmentDate.toISOString().split('T')[0]}&finish=${appointment.id_agendamento}`);
+    // Open finish modal directly
+    setFinishingAppointment(appointment);
+    setIsFinishModalOpen(true);
+  };
+
+  const handleFinishSuccess = () => {
+    // Remove the completed appointment from notifications
+    if (finishingAppointment) {
+      setOverdueAppointments(prev => 
+        prev.filter(a => a.id_agendamento !== finishingAppointment.id_agendamento)
+      );
+    }
+    setFinishingAppointment(null);
   };
 
   const handleDismiss = (e: React.MouseEvent, appointmentId: string) => {
@@ -372,6 +393,22 @@ export function Header({ title, subtitle, onMenuClick, showCopyLink, barbershopS
           </button>
         </div>
       </div>
+
+      {/* Finish Appointment Modal */}
+      <FinishAppointmentModal
+        open={isFinishModalOpen}
+        onOpenChange={setIsFinishModalOpen}
+        appointment={finishingAppointment ? {
+          id_agendamento: finishingAppointment.id_agendamento,
+          nome_cliente: finishingAppointment.nome_cliente,
+          service_id: finishingAppointment.service_id,
+          service_name: finishingAppointment.service_name,
+          client_id: finishingAppointment.client_id,
+          user_id: finishingAppointment.user_id,
+        } : null}
+        barbershopId={barbershop?.id || ""}
+        onSuccess={handleFinishSuccess}
+      />
     </header>
   );
 }
