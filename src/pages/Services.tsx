@@ -34,6 +34,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Scissors,
   Plus,
   Edit2,
@@ -47,6 +54,7 @@ import {
   Clock,
   FolderOpen,
   ListTree,
+  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -698,79 +706,74 @@ export default function Services() {
   const renderServiceCard = (service: Service) => (
     <div
       key={service.id}
-      className="bg-card border border-border rounded-xl p-4 space-y-3"
+      className="bg-card border border-border rounded-lg p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors"
     >
-      {service.image && (
-        <div className="w-full aspect-square rounded-lg overflow-hidden">
-          <img
-            src={service.image}
-            alt={service.name}
-            className="w-full h-full object-cover"
-          />
+      {/* Thumbnail */}
+      {service.image ? (
+        <img
+          src={service.image}
+          alt={service.name}
+          className="w-12 h-12 rounded-lg object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+          <Scissors className="w-5 h-5 text-muted-foreground" />
         </div>
       )}
 
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold truncate">{service.name}</h3>
-            {service.isPackage && (
-              <Badge variant="secondary" className="shrink-0">
-                <Package className="w-3 h-3 mr-1" />
-                Pacote
-              </Badge>
-            )}
-          </div>
-          {service.description && (
-            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-              {service.description}
-            </p>
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium truncate">{service.name}</h3>
+          {service.isPackage && (
+            <Badge variant="secondary" className="h-5 text-xs shrink-0">
+              Pacote
+            </Badge>
           )}
         </div>
-        <span className="font-bold text-primary shrink-0 ml-2">
-          R$ {service.price.toFixed(2)}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="outline">
-          <Clock className="w-3 h-3 mr-1" />
-          {service.duration_minutes} min
-        </Badge>
-        {service.agentEnabled ? (
-          <Badge className="bg-primary/10 text-primary border-primary/20">
-            <Bot className="w-3 h-3 mr-1" />
-            Agente ativo
-          </Badge>
-        ) : (
-          <Badge variant="secondary">
-            <Bot className="w-3 h-3 mr-1" />
-            Agente inativo
-          </Badge>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between pt-2 border-t border-border">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Agente IA</span>
-          <Switch
-            checked={service.agentEnabled}
-            onCheckedChange={() => handleToggleAgent(service.id)}
-          />
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {service.duration_minutes} min
+          </span>
+          <span className="flex items-center gap-1">
+            <Bot className={`w-3 h-3 ${service.agentEnabled ? "text-primary" : ""}`} />
+            {service.agentEnabled ? "IA ativo" : "IA inativo"}
+          </span>
         </div>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => handleEdit(service)}>
-            <Edit2 className="w-4 h-4" />
+      </div>
+
+      {/* Price */}
+      <span className="font-semibold text-primary shrink-0">
+        R$ {service.price.toFixed(2)}
+      </span>
+
+      {/* Actions Menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+            <MoreVertical className="w-4 h-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => handleEdit(service)}>
+            <Edit2 className="w-4 h-4 mr-2" />
+            Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleToggleAgent(service.id)}>
+            <Bot className="w-4 h-4 mr-2" />
+            {service.agentEnabled ? "Desativar IA" : "Ativar IA"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-destructive"
             onClick={() => handleDeleteClick(service)}
           >
-            <Trash2 className="w-4 h-4 text-destructive" />
-          </Button>
-        </div>
-      </div>
+            <Trash2 className="w-4 h-4 mr-2" />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 
@@ -817,7 +820,7 @@ export default function Services() {
                         <h2 className="font-semibold text-lg">{category.name}</h2>
                         <Badge variant="secondary">{categoryServices.length}</Badge>
                       </div>
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="space-y-2">
                         {categoryServices.map(renderServiceCard)}
                       </div>
                     </div>
@@ -835,7 +838,7 @@ export default function Services() {
                         {servicesByCategory.uncategorized.length}
                       </Badge>
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-2">
                       {servicesByCategory.uncategorized.map(renderServiceCard)}
                     </div>
                   </div>
