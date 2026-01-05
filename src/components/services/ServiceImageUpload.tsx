@@ -196,7 +196,7 @@ export function ServiceImageUpload({
         <div
           onClick={handleClick}
           className={`
-            relative aspect-square w-32 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all group
+            relative w-20 h-20 border-2 border-dashed rounded-xl overflow-hidden cursor-pointer transition-all group
             ${previewUrl ? "border-transparent" : "border-border hover:border-primary/50"}
             ${isUploading ? "pointer-events-none" : ""}
           `}
