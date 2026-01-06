@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { formatPhoneMask } from "@/lib/phoneMask";
 import { Clock, Eye, EyeOff, Mail, Lock, User, Phone, Building2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -382,7 +383,7 @@ export default function Register() {
                   className="pl-10 h-12"
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
+                    setFormData({ ...formData, phone: formatPhoneMask(e.target.value) })
                   }
                 />
               </div>
