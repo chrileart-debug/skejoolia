@@ -79,6 +79,28 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ========== TOKEN VERIFICATION ==========
+  const webhookSecret = Deno.env.get("ASAAS_WEBHOOK_SECRET");
+  const url = new URL(req.url);
+  const tokenParam = url.searchParams.get("token");
+
+  if (!webhookSecret) {
+    console.error("ASAAS_WEBHOOK_SECRET not configured");
+    return new Response(
+      JSON.stringify({ error: "Webhook not configured" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  if (!tokenParam || tokenParam !== webhookSecret) {
+    console.error("Invalid or missing webhook token");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  // ========================================
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
