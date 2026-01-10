@@ -241,8 +241,10 @@ Deno.serve(async (req) => {
     // ==========================================
     // 8. MONTAR PAYLOAD DO CHECKOUT
     // ==========================================
+    // PIX não é suportado para cobranças recorrentes no Asaas
+    // Apenas CREDIT_CARD é permitido para chargeTypes: ["RECURRENT"]
     const asaasPayload: Record<string, unknown> = {
-      billingTypes: ["CREDIT_CARD", "PIX"],
+      billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
       minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
       externalReference,
