@@ -1,3 +1,4 @@
+// Asaas Checkout Handler - v2.0.0 (Audit Complete)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -56,6 +57,26 @@ interface CheckoutRequest {
   origin?: string;
 }
 
+interface BarbershopData {
+  id: string;
+  name: string;
+  asaas_customer_id: string | null;
+  owner_id: string;
+}
+
+interface SubscriptionData {
+  id: string;
+  status: string;
+  plan_slug: string;
+  asaas_subscription_id: string | null;
+}
+
+interface UserData {
+  nome: string | null;
+  email: string | null;
+  numero: string | null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -67,7 +88,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body: CheckoutRequest = await req.json();
-    console.log("Checkout request:", JSON.stringify(body));
+    console.log("=== CHECKOUT REQUEST v2.0 ===");
+    console.log("Request:", JSON.stringify(body));
 
     const { action, user_id, barbershop_id, plan_slug, event_id, subscription_id, checkout_type, origin } = body;
 
@@ -79,7 +101,9 @@ Deno.serve(async (req) => {
       throw new Error("Dados obrigatórios faltando: user_id, barbershop_id, plan_slug");
     }
 
-    // 1. Buscar plano no banco de dados
+    // ==========================================
+    // 1. BUSCAR DADOS DO PLANO
+    // ==========================================
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
@@ -92,9 +116,75 @@ Deno.serve(async (req) => {
       throw new Error(`Plano não encontrado: ${plan_slug}`);
     }
 
-    console.log("Plano encontrado:", plan.name, "- Preço:", plan.price);
+    console.log("Plano:", plan.name, "- Preço:", plan.price);
 
-    // 2. Buscar sessão existente para este usuário/barbearia/plano (qualquer status)
+    // ==========================================
+    // 2. BUSCAR DADOS DA BARBEARIA E CLIENTE ASAAS
+    // ==========================================
+    const { data: barbershop, error: barbershopError } = await supabase
+      .from("barbershops")
+      .select("id, name, asaas_customer_id, owner_id")
+      .eq("id", barbershop_id)
+      .single();
+
+    if (barbershopError || !barbershop) {
+      console.error("Barbearia não encontrada:", barbershopError);
+      throw new Error("Barbearia não encontrada");
+    }
+
+    console.log("Barbearia:", barbershop.name);
+    console.log("asaas_customer_id existente:", barbershop.asaas_customer_id || "NENHUM");
+
+    // ==========================================
+    // 3. BUSCAR DADOS DO USUÁRIO PARA NOVO CLIENTE
+    // ==========================================
+    const { data: userData } = await supabase
+      .from("user_settings")
+      .select("nome, email, numero")
+      .eq("user_id", user_id)
+      .single();
+
+    // Buscar email do auth.users se não tiver em user_settings
+    let userEmail = userData?.email;
+    if (!userEmail) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(user_id);
+      userEmail = authUser?.user?.email || null;
+    }
+
+    console.log("Dados do usuário:", { nome: userData?.nome, email: userEmail, numero: userData?.numero });
+
+    // ==========================================
+    // 4. VERIFICAR ASSINATURA EXISTENTE
+    // ==========================================
+    const { data: existingSub } = await supabase
+      .from("subscriptions")
+      .select("id, status, plan_slug, asaas_subscription_id")
+      .eq("barbershop_id", barbershop_id)
+      .single();
+
+    console.log("Assinatura existente:", existingSub ? {
+      id: existingSub.id,
+      status: existingSub.status,
+      plan_slug: existingSub.plan_slug,
+      asaas_subscription_id: existingSub.asaas_subscription_id
+    } : "NENHUMA");
+
+    // VALIDAÇÃO: Se já está ativo no mesmo plano, bloquear
+    if (existingSub?.status === "active" && existingSub?.plan_slug === plan_slug) {
+      console.log("BLOQUEADO: Usuário já está ativo neste plano");
+      throw new Error("Você já está com uma assinatura ativa neste plano");
+    }
+
+    // Guardar ID da assinatura antiga para cancelar depois (se for upgrade)
+    const oldAsaasSubscriptionId = existingSub?.asaas_subscription_id;
+    const effectiveSubscriptionId = subscription_id || existingSub?.id;
+
+    console.log("ID assinatura antiga Asaas:", oldAsaasSubscriptionId || "NENHUM");
+    console.log("ID assinatura efetivo:", effectiveSubscriptionId);
+
+    // ==========================================
+    // 5. VERIFICAR SESSÃO DE CHECKOUT EXISTENTE
+    // ==========================================
     const { data: existingSession } = await supabase
       .from("session_checkout")
       .select("*")
@@ -105,7 +195,6 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // 3. Verificar se a sessão existente ainda é válida (pending e < 10 min)
     const tenMinutesAgo = new Date(Date.now() - CHECKOUT_EXPIRY_MINUTES * 60 * 1000);
     const sessionCreatedAt = existingSession?.created_at ? new Date(existingSession.created_at) : null;
     const isSessionValid = existingSession?.status === "pending" && 
@@ -125,9 +214,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4. URLs de callback (dinâmicas baseadas na origem)
+    // ==========================================
+    // 6. MONTAR URLs DE CALLBACK
+    // ==========================================
     const baseUrl = origin || "https://app.skejool.com.br";
-    console.log("Origin recebido:", origin, "| baseUrl final:", baseUrl);
+    console.log("Base URL:", baseUrl);
     
     const successParams = new URLSearchParams();
     if (event_id) successParams.set("event_id", event_id);
@@ -139,12 +230,18 @@ Deno.serve(async (req) => {
     const cancelUrl = `${baseUrl}/dashboard`;
     const expiredUrl = `${baseUrl}/dashboard`;
 
-    // 5. External reference no formato simples (pipe-separated para parsing no webhook)
+    // ==========================================
+    // 7. MONTAR EXTERNAL REFERENCE (inclui assinatura antiga para cancelamento)
+    // ==========================================
     const timestamp = formatTimestamp();
-    const externalReference = `skejool_${user_id}_${barbershop_id}_${plan_slug}_${subscription_id || 'new'}_${event_id || 'none'}_${checkout_type || 'subscribe'}_${timestamp}`;
+    const externalReference = `skejool_${user_id}_${barbershop_id}_${plan_slug}_${effectiveSubscriptionId || 'new'}_${event_id || 'none'}_${checkout_type || 'subscribe'}_${oldAsaasSubscriptionId || 'none'}_${timestamp}`;
 
-    // 6. Payload do checkout (seguindo o formato que funciona)
-    const asaasPayload = {
+    console.log("External Reference:", externalReference);
+
+    // ==========================================
+    // 8. MONTAR PAYLOAD DO CHECKOUT
+    // ==========================================
+    const asaasPayload: Record<string, unknown> = {
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
       minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
@@ -167,9 +264,28 @@ Deno.serve(async (req) => {
       },
     };
 
+    // ==========================================
+    // 9. ADICIONAR CUSTOMER OU CUSTOMERDATA
+    // ==========================================
+    if (barbershop.asaas_customer_id) {
+      // Cliente existente no Asaas - usar ID
+      asaasPayload.customer = barbershop.asaas_customer_id;
+      console.log("Usando cliente Asaas existente:", barbershop.asaas_customer_id);
+    } else {
+      // Cliente novo - enviar dados para criar
+      asaasPayload.customerData = {
+        name: userData?.nome || barbershop.name || "Cliente Skejool",
+        email: userEmail || undefined,
+        phone: userData?.numero?.replace(/\D/g, '') || undefined,
+      };
+      console.log("Criando novo cliente Asaas com dados:", asaasPayload.customerData);
+    }
+
     console.log("Payload Asaas:", JSON.stringify(asaasPayload));
 
-    // 7. Chamar API do Asaas diretamente
+    // ==========================================
+    // 10. CHAMAR API DO ASAAS
+    // ==========================================
     const asaasResponse = await callAsaas("POST", "/checkouts", asaasPayload);
     const asaasText = await asaasResponse.text();
     
@@ -188,15 +304,18 @@ Deno.serve(async (req) => {
       throw new Error("Resposta inválida do Asaas");
     }
 
-    // 8. Montar URL do checkout
+    // ==========================================
+    // 11. MONTAR URL DO CHECKOUT
+    // ==========================================
     const checkoutUrl = asaasData.link || asaasData.url || `https://www.asaas.com/c/${asaasData.id}`;
     console.log("Checkout URL:", checkoutUrl);
 
-    // 9. Salvar/Atualizar sessão no banco (UPSERT logic)
+    // ==========================================
+    // 12. SALVAR/ATUALIZAR SESSÃO NO BANCO
+    // ==========================================
     let sessionId: string | undefined;
 
     if (existingSession) {
-      // UPDATE na linha existente (mesmo que esteja EXPIRED)
       const { data: updatedSession, error: dbError } = await supabase
         .from("session_checkout")
         .update({
@@ -216,7 +335,6 @@ Deno.serve(async (req) => {
       sessionId = updatedSession?.id || existingSession.id;
       console.log("Sessão ATUALIZADA:", sessionId);
     } else {
-      // INSERT nova linha (primeiro checkout deste usuário/plano)
       const { data: newSession, error: dbError } = await supabase
         .from("session_checkout")
         .insert({
@@ -238,6 +356,8 @@ Deno.serve(async (req) => {
       console.log("Sessão CRIADA:", sessionId);
     }
 
+    console.log("=== CHECKOUT CRIADO COM SUCESSO ===");
+
     return new Response(
       JSON.stringify({
         checkout_url: checkoutUrl,
@@ -245,6 +365,7 @@ Deno.serve(async (req) => {
         checkout_id: asaasData.id,
         session_id: sessionId,
         is_existing: false,
+        has_existing_customer: !!barbershop.asaas_customer_id,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
