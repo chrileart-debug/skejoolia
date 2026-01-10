@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
     // 8. MONTAR PAYLOAD DO CHECKOUT
     // ==========================================
     const asaasPayload: Record<string, unknown> = {
-      billingTypes: ["CREDIT_CARD"],
+      billingTypes: ["CREDIT_CARD", "PIX"],
       chargeTypes: ["RECURRENT"],
       minutesToExpire: CHECKOUT_EXPIRY_MINUTES,
       externalReference,
