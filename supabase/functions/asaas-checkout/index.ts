@@ -267,20 +267,18 @@ Deno.serve(async (req) => {
     };
 
     // ==========================================
-    // 9. ADICIONAR CUSTOMER OU CUSTOMERDATA
+    // 9. ADICIONAR CUSTOMER APENAS SE JÁ EXISTIR
     // ==========================================
+    // Para novos clientes: NÃO enviar customer nem customerData
+    // O Asaas vai coletar todos os dados diretamente no checkout
+    // O webhook PAYMENT_CONFIRMED vai salvar o asaas_customer_id depois
     if (barbershop.asaas_customer_id) {
-      // Cliente existente no Asaas - usar ID
+      // Cliente já existe no Asaas - usar ID para preencher dados automaticamente
       asaasPayload.customer = barbershop.asaas_customer_id;
       console.log("Usando cliente Asaas existente:", barbershop.asaas_customer_id);
     } else {
-      // Cliente novo - enviar dados para criar
-      asaasPayload.customerData = {
-        name: userData?.nome || barbershop.name || "Cliente Skejool",
-        email: userEmail || undefined,
-        phone: userData?.numero?.replace(/\D/g, '') || undefined,
-      };
-      console.log("Criando novo cliente Asaas com dados:", asaasPayload.customerData);
+      // Novo cliente - deixar Asaas coletar dados completos no checkout
+      console.log("Novo cliente - Asaas vai coletar dados no checkout");
     }
 
     console.log("Payload Asaas:", JSON.stringify(asaasPayload));
