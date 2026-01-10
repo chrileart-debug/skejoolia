@@ -1,10 +1,35 @@
-// Asaas Webhook Handler - v1.0.1
+// Asaas Webhook Handler - v2.0.0 (Audit Complete)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const ASAAS_API_URL = "https://www.asaas.com/api/v3";
+
+// Helper para chamar API do Asaas
+async function callAsaas(method: string, endpoint: string, body: unknown | null = null): Promise<Response> {
+  const apiKey = Deno.env.get("ASAAS_API_KEY");
+  
+  if (!apiKey) {
+    throw new Error("ASAAS_API_KEY não configurada");
+  }
+
+  const url = `${ASAAS_API_URL}${endpoint}`;
+  console.log(`Asaas API: ${method} ${url}`);
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "access_token": apiKey,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  return response;
+}
 
 interface AsaasWebhookPayload {
   event: string;
@@ -27,6 +52,11 @@ interface AsaasWebhookPayload {
     status: string;
     externalReference?: string;
   };
+  checkout?: {
+    id: string;
+    status: string;
+    externalReference?: string;
+  };
   checkoutSession?: {
     id: string;
     status: string;
@@ -41,9 +71,10 @@ interface ExternalReference {
   subscription_id?: string;
   event_id?: string;
   checkout_type?: string;
+  old_asaas_subscription_id?: string;
 }
 
-// Parse externalReference no formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_timestamp
+// Parse externalReference no formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_oldAsaasSubId_timestamp
 function parseExternalReference(ref: string | undefined): ExternalReference | null {
   if (!ref) return null;
 
@@ -52,13 +83,13 @@ function parseExternalReference(ref: string | undefined): ExternalReference | nu
     const parsed = JSON.parse(ref);
     if (parsed.user_id) return parsed;
   } catch {
-    // Não é JSON, continua para formato pipe
+    // Não é JSON, continua para formato underscore
   }
 
-  // Formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_timestamp
+  // Formato: skejool_userId_barbershopId_planSlug_subscriptionId_eventId_checkoutType_oldAsaasSubId_timestamp
   if (ref.startsWith("skejool_")) {
     const parts = ref.split("_");
-    // skejool[0]_userId[1]_barbershopId[2]_planSlug[3]_subscriptionId[4]_eventId[5]_checkoutType[6]_timestamp[7+]
+    // skejool[0]_userId[1]_barbershopId[2]_planSlug[3]_subscriptionId[4]_eventId[5]_checkoutType[6]_oldAsaasSubId[7]_timestamp[8+]
     if (parts.length >= 7) {
       return {
         user_id: parts[1],
@@ -67,12 +98,29 @@ function parseExternalReference(ref: string | undefined): ExternalReference | nu
         subscription_id: parts[4] !== 'new' ? parts[4] : undefined,
         event_id: parts[5] !== 'none' ? parts[5] : undefined,
         checkout_type: parts[6],
+        old_asaas_subscription_id: parts.length >= 8 && parts[7] !== 'none' ? parts[7] : undefined,
       };
     }
   }
 
   console.error("Failed to parse externalReference:", ref);
   return null;
+}
+
+// Função para log de auditoria (apenas console para evitar problemas de tipo)
+function logAudit(
+  event: string,
+  ref: ExternalReference | null,
+  customerId: string | null | undefined,
+  asaasPaymentId: string | null | undefined,
+  asaasSubscriptionId: string | null | undefined,
+  success: boolean,
+  errorMessage: string | null = null
+) {
+  console.log(`[AUDIT] Event: ${event} | User: ${ref?.user_id} | Barbershop: ${ref?.barbershop_id} | Customer: ${customerId ?? 'N/A'} | Payment: ${asaasPaymentId ?? 'N/A'} | Sub: ${asaasSubscriptionId ?? 'N/A'} | Success: ${success}`);
+  if (errorMessage) {
+    console.error(`[AUDIT ERROR] ${errorMessage}`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -108,7 +156,9 @@ Deno.serve(async (req) => {
 
   try {
     const payload: AsaasWebhookPayload = await req.json();
-    console.log("Asaas webhook received:", JSON.stringify(payload));
+    console.log("=== ASAAS WEBHOOK v2.0 ===");
+    console.log("Event:", payload.event);
+    console.log("Full payload:", JSON.stringify(payload));
 
     const { event } = payload;
 
@@ -121,7 +171,8 @@ Deno.serve(async (req) => {
 
       case "CHECKOUT_EXPIRED": {
         console.log("Processing CHECKOUT_EXPIRED");
-        const checkoutId = payload.checkoutSession?.id;
+        const checkout = payload.checkoutSession || payload.checkout;
+        const checkoutId = checkout?.id;
         
         if (checkoutId) {
           const { error } = await supabase
@@ -145,9 +196,37 @@ Deno.serve(async (req) => {
         if (!payment) break;
 
         const ref = parseExternalReference(payment.externalReference);
+        const customerId = payment.customer;
+
+        console.log("Customer ID from payment:", customerId);
+        console.log("Parsed reference:", ref);
+
         if (!ref) {
           console.log("No valid externalReference, skipping");
+          logAudit(event, null, customerId, payment.id, null, false, "No valid externalReference");
           break;
+        }
+
+        // Salvar asaas_customer_id na barbearia se ainda não tiver
+        if (customerId && ref.barbershop_id) {
+          const { data: barbershop } = await supabase
+            .from("barbershops")
+            .select("asaas_customer_id")
+            .eq("id", ref.barbershop_id)
+            .single();
+
+          if (!barbershop?.asaas_customer_id) {
+            const { error: updateError } = await supabase
+              .from("barbershops")
+              .update({ asaas_customer_id: customerId })
+              .eq("id", ref.barbershop_id);
+
+            if (updateError) {
+              console.error("Error saving asaas_customer_id:", updateError);
+            } else {
+              console.log("asaas_customer_id saved to barbershop:", customerId);
+            }
+          }
         }
 
         // Insert payment record with pending status
@@ -166,8 +245,10 @@ Deno.serve(async (req) => {
 
         if (error) {
           console.error("Error inserting payment:", error);
+          logAudit(event, ref, customerId, payment.id, null, false, error.message);
         } else {
           console.log("Payment record created:", payment.id);
+          logAudit(event, ref, customerId, payment.id, null, true);
         }
         break;
       }
@@ -179,12 +260,48 @@ Deno.serve(async (req) => {
         if (!payment) break;
 
         const ref = parseExternalReference(payment.externalReference);
+        const customerId = payment.customer;
+        const asaasSubscriptionId = payment.subscription;
+
+        console.log("Customer ID:", customerId);
+        console.log("Asaas Subscription ID:", asaasSubscriptionId);
+        console.log("Parsed reference:", ref);
+
         if (!ref) {
           console.log("No valid externalReference, skipping");
+          logAudit(event, null, customerId, payment.id, asaasSubscriptionId, false, "No valid externalReference");
           break;
         }
 
-        // 1. Update or insert payment record
+        // ==========================================
+        // 1. SALVAR CUSTOMER ID NA BARBEARIA
+        // ==========================================
+        if (customerId && ref.barbershop_id) {
+          const { data: barbershop } = await supabase
+            .from("barbershops")
+            .select("asaas_customer_id")
+            .eq("id", ref.barbershop_id)
+            .single();
+
+          if (!barbershop?.asaas_customer_id) {
+            const { error: updateError } = await supabase
+              .from("barbershops")
+              .update({ asaas_customer_id: customerId })
+              .eq("id", ref.barbershop_id);
+
+            if (updateError) {
+              console.error("Error saving asaas_customer_id:", updateError);
+            } else {
+              console.log("asaas_customer_id SAVED to barbershop:", customerId);
+            }
+          } else {
+            console.log("asaas_customer_id already exists:", barbershop.asaas_customer_id);
+          }
+        }
+
+        // ==========================================
+        // 2. ATUALIZAR OU INSERIR PAGAMENTO
+        // ==========================================
         const { data: existingPayment } = await supabase
           .from("payments")
           .select("id")
@@ -218,16 +335,33 @@ Deno.serve(async (req) => {
           console.log("Payment record inserted as paid:", payment.id);
         }
 
-        // 2. Update subscription status to active
+        // ==========================================
+        // 3. ATIVAR ASSINATURA E SALVAR ASAAS_SUBSCRIPTION_ID
+        // ==========================================
+        const now = new Date();
+        const periodEnd = new Date(now);
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+        const subscriptionUpdate = {
+          status: "active",
+          plan_slug: ref.plan_slug,
+          asaas_subscription_id: asaasSubscriptionId || undefined,
+          current_period_start: now.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+          updated_at: now.toISOString(),
+        };
+
+        // Remove undefined values
+        Object.keys(subscriptionUpdate).forEach(key => {
+          if (subscriptionUpdate[key as keyof typeof subscriptionUpdate] === undefined) {
+            delete subscriptionUpdate[key as keyof typeof subscriptionUpdate];
+          }
+        });
+
         if (ref.subscription_id) {
           const { error: subError } = await supabase
             .from("subscriptions")
-            .update({
-              status: "active",
-              plan_slug: ref.plan_slug,
-              current_period_start: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+            .update(subscriptionUpdate)
             .eq("id", ref.subscription_id);
 
           if (subError) {
@@ -236,15 +370,9 @@ Deno.serve(async (req) => {
             console.log("Subscription activated:", ref.subscription_id);
           }
         } else {
-          // Try to find subscription by user_id and barbershop_id
           const { error: subError } = await supabase
             .from("subscriptions")
-            .update({
-              status: "active",
-              plan_slug: ref.plan_slug,
-              current_period_start: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+            .update(subscriptionUpdate)
             .eq("user_id", ref.user_id)
             .eq("barbershop_id", ref.barbershop_id);
 
@@ -255,7 +383,29 @@ Deno.serve(async (req) => {
           }
         }
 
-        // 3. Update session_checkout to COMPLETED
+        // ==========================================
+        // 4. CANCELAR ASSINATURA ANTIGA NO ASAAS (SE UPGRADE)
+        // ==========================================
+        if (ref.checkout_type === "upgrade" && ref.old_asaas_subscription_id) {
+          console.log("Upgrade detected - canceling old subscription:", ref.old_asaas_subscription_id);
+          
+          try {
+            const deleteResponse = await callAsaas("DELETE", `/subscriptions/${ref.old_asaas_subscription_id}`);
+            const deleteText = await deleteResponse.text();
+            
+            if (deleteResponse.ok) {
+              console.log("Old Asaas subscription CANCELED successfully:", ref.old_asaas_subscription_id);
+            } else {
+              console.error("Failed to cancel old subscription:", deleteResponse.status, deleteText);
+            }
+          } catch (err) {
+            console.error("Error canceling old subscription:", err);
+          }
+        }
+
+        // ==========================================
+        // 5. ATUALIZAR SESSION_CHECKOUT PARA COMPLETED
+        // ==========================================
         const { error: sessionError } = await supabase
           .from("session_checkout")
           .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
@@ -269,6 +419,7 @@ Deno.serve(async (req) => {
           console.log("session_checkout marked as COMPLETED");
         }
 
+        logAudit(event, ref, customerId, payment.id, asaasSubscriptionId, true);
         break;
       }
 
@@ -278,7 +429,10 @@ Deno.serve(async (req) => {
         if (!payment) break;
 
         const ref = parseExternalReference(payment.externalReference);
-        if (!ref) break;
+        if (!ref) {
+          logAudit(event, null, payment.customer, payment.id, null, false, "No valid externalReference");
+          break;
+        }
 
         // Update payment status
         await supabase
@@ -301,6 +455,7 @@ Deno.serve(async (req) => {
         }
 
         console.log("Payment and subscription marked as overdue/past_due");
+        logAudit(event, ref, payment.customer, payment.id, null, true);
         break;
       }
 
@@ -327,7 +482,33 @@ Deno.serve(async (req) => {
         if (!subscription) break;
 
         const ref = parseExternalReference(subscription.externalReference);
-        if (!ref) break;
+        const customerId = subscription.customer;
+
+        console.log("Subscription customer ID:", customerId);
+        console.log("Subscription Asaas ID:", subscription.id);
+
+        if (!ref) {
+          console.log("No valid externalReference for SUBSCRIPTION_CREATED");
+          logAudit(event, null, customerId, null, subscription.id, false, "No valid externalReference");
+          break;
+        }
+
+        // Salvar asaas_customer_id na barbearia
+        if (customerId && ref.barbershop_id) {
+          const { data: barbershop } = await supabase
+            .from("barbershops")
+            .select("asaas_customer_id")
+            .eq("id", ref.barbershop_id)
+            .single();
+
+          if (!barbershop?.asaas_customer_id) {
+            await supabase
+              .from("barbershops")
+              .update({ asaas_customer_id: customerId })
+              .eq("id", ref.barbershop_id);
+            console.log("asaas_customer_id saved from SUBSCRIPTION_CREATED:", customerId);
+          }
+        }
 
         // Update subscription with Asaas subscription ID
         if (ref.subscription_id) {
@@ -350,6 +531,28 @@ Deno.serve(async (req) => {
         }
 
         console.log("Subscription linked to Asaas:", subscription.id);
+        logAudit(event, ref, customerId, null, subscription.id, true);
+        break;
+      }
+
+      case "SUBSCRIPTION_UPDATED": {
+        console.log("Processing SUBSCRIPTION_UPDATED");
+        const subscription = payload.subscription;
+        if (!subscription) break;
+
+        const ref = parseExternalReference(subscription.externalReference);
+
+        if (ref) {
+          // Atualizar dados da assinatura se necessário
+          await supabase
+            .from("subscriptions")
+            .update({
+              updated_at: new Date().toISOString(),
+            })
+            .eq("asaas_subscription_id", subscription.id);
+
+          console.log("Subscription updated:", subscription.id);
+        }
         break;
       }
 
@@ -375,6 +578,7 @@ Deno.serve(async (req) => {
         }
 
         console.log("Subscription canceled:", subscription.id);
+        logAudit(event, ref, subscription.customer, null, subscription.id, true);
         break;
       }
 
@@ -382,6 +586,7 @@ Deno.serve(async (req) => {
         console.log(`Unhandled event type: ${event}`);
     }
 
+    console.log("=== WEBHOOK PROCESSED SUCCESSFULLY ===");
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
